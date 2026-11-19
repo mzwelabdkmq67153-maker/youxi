@@ -100,7 +100,10 @@ const SFX = {
   dash: () => tone(880, 0.1, 'sine', 0.035, 420),
   enemyShot: () => tone(520, 0.05, 'square', 0.022, 200),
   start: () => tone(300, 0.3, 'sine', 0.055, 900),
-  cast: () => tone(660, 0.14, 'triangle', 0.045, 300)
+  cast: () => tone(660, 0.14, 'triangle', 0.045, 300),
+  // 打击三轨：破空（蓄力末帧，空挥唯一保留）／撞击（判定帧）／余波（判定后两帧低频衰减）
+  whoosh: () => tone(300, 0.13, 'sine', 0.028, 640),
+  tail: () => tone(140, 0.24, 'sine', 0.05, 52)
 };
 function sfx(name) { if (SFX[name]) SFX[name](); }
 
@@ -131,7 +134,12 @@ const obstacles = [];
 
 let lockActive = false;
 let shake = 0;
+// 顿帧剩余（真实秒）：仅用于调试读取与旧逻辑兼容，时间倍率由 HitFeel 决定
 let hitStop = 0;
+// 连段计数：用于第三段抬档（表13「轻、轻、重」）
+let comboT = -9, comboN = 0;
+const _v1 = new THREE.Vector3();
+const _v2 = new THREE.Vector3();
 let hitTimer = null;
 
 const sparkGeo = new THREE.SphereGeometry(0.07, 6, 6);
@@ -166,6 +174,13 @@ function init() {
   renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
+  // 影子是场景层次的一半：柱列与角色有了接触阴影才不“浮”在地面上
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // 上屏色彩走 sRGB + ACES：高光不过曝、暗部不糊成一团黑
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.80;
 
   scene = new THREE.Scene();
   if (window.ArenaFX) ArenaFX.init(scene);
@@ -305,6 +320,17 @@ function buildLights() {
   scene.add(new THREE.HemisphereLight(0x7fb4ff, 0x0a1018, 0.62));
   const key = new THREE.DirectionalLight(0xaee4ff, 0.85);
   key.position.set(24, 34, 16);
+  // 主光投阴影：正交范围盖住半径 22.6 的台面，贴图 1024 够看清柱影
+  key.castShadow = true;
+  key.shadow.mapSize.set(1024, 1024);
+  key.shadow.camera.near = 1;
+  key.shadow.camera.far = 110;
+  key.shadow.camera.left = -32;
+  key.shadow.camera.right = 32;
+  key.shadow.camera.top = 32;
+  key.shadow.camera.bottom = -32;
+  key.shadow.bias = -0.0009;
+  key.shadow.normalBias = 0.02;
   scene.add(key);
   const fill = new THREE.DirectionalLight(0x2a6cff, 0.35);
   fill.position.set(-22, 14, -20);
@@ -600,6 +626,12 @@ function meleeAttack(dmg) {
   const fx = -Math.sin(yawObj.rotation.y);
   const fz = -Math.cos(yawObj.rotation.y);
   let hits = 0;
+  let hitPoint = null;
+  let hitTarget = null;
+
+  // 连段：0.75 秒内接续才算同一套（表13 轻、轻、重）
+  comboN = (state.time - comboT < 0.75) ? comboN + 1 : 1;
+  comboT = state.time;
 
   for (let i = 0; i < enemies.length; i++) {
     const e = enemies[i];
@@ -613,6 +645,7 @@ function meleeAttack(dmg) {
     // arcDeg 按"半角"解释：66 表示左右各 66°，总张角 132°
     if (ang > A.arcDeg * Math.PI / 180) continue;
     damageEnemy(e, dmg);
+    if (!hitPoint) { hitPoint = new THREE.Vector3(e.pos.x, 1.15, e.pos.z); hitTarget = e.id; }
     hits++;
   }
 
@@ -626,7 +659,10 @@ function meleeAttack(dmg) {
       const dot = d > 0.0001 ? (dx / d) * fx + (dz / d) * fz : 1;
       const ang = Math.acos(clamp(dot, -1, 1));
       if (d <= A.range + 0.55 && ang <= A.arcDeg * Math.PI / 180) {
-        if (netApplyLocalHit(rm, dmg, false)) hits++;
+        if (netApplyLocalHit(rm, dmg, false)) {
+          if (!hitPoint) { hitPoint = new THREE.Vector3(rm.x, 1.15, rm.z); hitTarget = rm.id; }
+          hits++;
+        }
       }
     }
   }
@@ -635,12 +671,17 @@ function meleeAttack(dmg) {
   spawnRing(ox + fx * 1.6, 1.1, oz + fz * 1.6, 0x9fe8ff, 1.3);
   if (hits > 0) {
     flashHit();
-    sfx('hit');
+    // 第三段抬档：额外补一次重击级反馈，让连段收尾有明确的落点感
+    if (comboN >= 3 && window.HitFeel && hitPoint) {
+      HitFeel.hit({ tier: 'heavy', dmg: dmg, targetId: hitTarget, point: hitPoint, dirX: fx, dirZ: fz });
+    }
     yawObj.position.x += fx * 0.22;
     yawObj.position.z += fz * 0.22;
     clampPos(yawObj.position, 0.55);
   } else {
-    sfx('slash');
+    // 空挥：只留破空音，不给震屏、冲击波与闪白
+    if (window.HitFeel) HitFeel.whiff({ dist: 0 });
+    else sfx('slash');
   }
 }
 
@@ -693,15 +734,15 @@ function hitscanAttack(dmg, A) {
     const crit = Math.random() < 0.16;
     damageEnemy(best, dmg * (crit ? A.headMul : 1), crit);
     flashHit();
-    sfx('hit');
   } else if (bestRemote) {
     const crit = Math.random() < 0.16;
     if (netApplyLocalHit(bestRemote, dmg * (crit ? A.headMul : 1), crit)) {
       flashHit();
-      sfx('hit');
     }
   } else {
+    // 打空：只有枪声与曳光，不震屏不闪白
     sfx('shot');
+    if (window.HitFeel) HitFeel.whiff({ dist: len });
   }
 }
 
@@ -1212,10 +1253,36 @@ function bossBurst(e) {
 }
 
 /* ---------------- 弹丸与特效 ---------------- */
+/* 弹丸光斑：一张径向渐变的加法贴图，让飞行中的球看起来在“发光”而不是一颗塑料珠 */
+let _glowTex = null;
+function glowTex() {
+  if (_glowTex) return _glowTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(64, 64, 2, 64, 64, 62);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.28, 'rgba(255,255,255,0.72)');
+  grad.addColorStop(0.62, 'rgba(255,255,255,0.22)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  _glowTex = new THREE.CanvasTexture(c);
+  return _glowTex;
+}
+
 function spawnProjectile(origin, dir, speed, dmg, owner, splash, color) {
   const mesh = new THREE.Mesh(sparkGeo, new THREE.MeshBasicMaterial({ color: color }));
   mesh.scale.setScalar(splash > 0 ? 2.2 : 1.6);
   mesh.position.copy(origin);
+  // 外挂一层加法光斑，尺寸跟着弹丸走
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTex(), color: color, transparent: true,
+    blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.75
+  }));
+  // sprite 的 scale 会乘上父级（弹丸 1.6 倍），这里只给 0.34，实际 ≈0.55m 的光晕
+  halo.scale.setScalar(splash > 0 ? 0.42 : 0.34);
+  mesh.add(halo);
   scene.add(mesh);
   projectiles.push({
     mesh: mesh,
@@ -1231,7 +1298,10 @@ function spawnProjectile(origin, dir, speed, dmg, owner, splash, color) {
 function removeProjectile(i) {
   const pr = projectiles[i];
   scene.remove(pr.mesh);
-  if (pr.mesh.material) pr.mesh.material.dispose();
+  // 弹丸身上挂了光斑 sprite，两个材质都要还回去
+  pr.mesh.traverse(function (o) {
+    if (o.material && o.material !== sparkGeo) o.material.dispose();
+  });
   projectiles.splice(i, 1);
 }
 
@@ -1569,11 +1639,22 @@ function damageEnemy(e, dmg, crit) {
   if (e.dead) return;
   e.hp -= dmg;
   e.flash = 0.12;
-  hitStop = 0.05;
   spawnDamageText(e.pos, dmg, !!crit);
-  if (window.ArenaFX) ArenaFX.hit(new THREE.Vector3(e.pos.x, 1.15, e.pos.z), yawObj.rotation.y + Math.PI);
-  spawnBrush(e.pos.x, 1.15, e.pos.z, CLASSES[state.cls].color, rand(-0.5, 0.5), crit ? 1.35 : 1.0);
-  for (let i = 0; i < (crit ? 3 : 2); i++) spawnParticle(e.pos.x, 1.1, e.pos.z, CLASSES[state.cls].color);
+  // 打击感统一入口：按伤害与暴击判档，方向取玩家视线，位置取命中点
+  const fwd = camera.getWorldDirection(_v2);
+  const dist = hyp(e.pos.x - yawObj.position.x, e.pos.z - yawObj.position.z);
+  if (window.HitFeel) {
+    HitFeel.hit({
+      tier: HitFeel.tierFor(dmg, crit, 'normal'),
+      dmg: dmg, crit: !!crit, targetId: e.id, dist: dist,
+      point: _v1.set(e.pos.x, 1.15, e.pos.z),
+      dirX: fwd.x, dirZ: fwd.z
+    });
+  } else {
+    if (window.ArenaFX) ArenaFX.hit(new THREE.Vector3(e.pos.x, 1.15, e.pos.z), yawObj.rotation.y + Math.PI);
+    spawnBrush(e.pos.x, 1.15, e.pos.z, CLASSES[state.cls].color, rand(-0.5, 0.5), crit ? 1.35 : 1.0);
+    for (let i = 0; i < (crit ? 3 : 2); i++) spawnParticle(e.pos.x, 1.1, e.pos.z, CLASSES[state.cls].color);
+  }
   if (e.hp <= 0) killEnemy(e);
 }
 
@@ -1619,7 +1700,17 @@ function damagePlayer(dmg) {
   if (window.ArenaFX) ArenaFX.vignette();
   else flashEl.classList.add('show');
   if (!window.ArenaFX) window.setTimeout(() => flashEl.classList.remove('show'), 200);
-  shake = Math.min(0.5, shake + 0.2);
+  // 挨打反馈：方向取视线反向（伤害从正面来），档位按伤害给重击
+  if (window.HitFeel) {
+    const fwd = camera.getWorldDirection(_v2);
+    HitFeel.hit({
+      tier: dmg >= 30 ? 'crit' : 'heavy', dmg: dmg, targetId: 'player',
+      point: _v1.set(yawObj.position.x, 1.4, yawObj.position.z),
+      dirX: -fwd.x, dirZ: -fwd.z
+    });
+  } else {
+    shake = Math.min(0.5, shake + 0.2);
+  }
   sfx('hurt');
 
   if (player.hp <= 0) {
@@ -1725,8 +1816,10 @@ function updatePvpRespawn(dt) {
   }
 }
 
-function updateSkills(dt) {
-  for (let i = 0; i < 3; i++) player.skillCd[i] = Math.max(0, player.skillCd[i] - dt);
+function updateSkills(dt, cdDt) {
+  // 冷却走不受顿帧膨胀的计时源（规格第 6 节：结算与冷却不得被顿帧拉长）
+  const cd = cdDt === undefined ? dt : cdDt;
+  for (let i = 0; i < 3; i++) player.skillCd[i] = Math.max(0, player.skillCd[i] - cd);
   if (player.overdrive > 0) player.overdrive -= dt;
   if (player.domain > 0) {
     player.domain -= dt;
@@ -1748,7 +1841,14 @@ function updateSkills(dt) {
 /* ---------------- 对局流程 ---------------- */
 function startGame() {
   // PVE 进首领厅、PVP 留在竞技场：换场只换视觉与障碍，玩法占地仍是 ±HALF
-  syncScene();
+  // 开局无条件重建一次，避免沿用上一局残留的另一个场景
+  if (window.ArenaScene) {
+    obstacles.length = 0;
+    ArenaScene.build(wantScene(), scene, obstacles);
+    ArenaScene.tuneLights(scene);
+  } else {
+    syncScene();
+  }
   resetWorld();
   state.phase = 'playing';
   state.elapsed = 0;
@@ -1969,6 +2069,9 @@ function bindUI() {
       modeBtns.forEach(x => x.classList.remove('on'));
       b.classList.add('on');
       state.mode = b.dataset.mode;
+      // 模式决定场景：PVP/联机是白日竞技场，PVE 是首领厅。
+      // 只在菜单里改模式而不换场，会带着上一局的厅壁直接开局（PVP 开局落在首领厅）。
+      if (state.phase === 'menu') syncScene();
       // 联机模式要先填房间号，房间行展开
       const row = document.getElementById('onlineRow');
       if (row) row.classList.toggle('hidden', state.mode !== 'online');
@@ -2108,19 +2211,32 @@ function updateWeaponVisual(dt) {
 }
 
 function applyShake(dt) {
-  if (shake > 0) shake = Math.max(0, shake - dt * 1.6);
-  const s = shake * 0.018;
-  camera.position.x = rand(-s, s);
-  camera.position.y = rand(-s, s);
-  camera.position.z = rand(-s, s) * 0.4;
+  let ox = 0, oy = 0, oz = 0;
+  // 旧式爆炸震动仍然保留（环境震），命中震动改由 HitFeel 的方向性震屏承担
+  if (shake > 0) {
+    shake = Math.max(0, shake - dt * 1.6);
+    const s = shake * 0.018;
+    ox += rand(-s, s); oy += rand(-s, s); oz += rand(-s, s) * 0.4;
+  }
+  if (window.HitFeel) {
+    HitFeel.applyCamera(camera, dt);
+    camera.position.x += ox; camera.position.y += oy; camera.position.z += oz;
+  } else {
+    camera.position.set(ox, oy, oz);
+  }
 }
 
 function animate() {
   requestAnimationFrame(animate);
   const raw = Math.min(clock.getDelta(), 0.05);
+  // 顿帧改为角色级时间膨胀：只压表现层，冷却与网络走 raw（规格第 6 节红线）
+  if (hitStop > 0) hitStop = Math.max(0, hitStop - raw);
   let dt = raw;
-  // 顿帧：命中后 50ms 内时间压到 12%，其余系统照常
-  if (hitStop > 0) { hitStop -= raw; dt = raw * 0.12; }
+  if (window.HitFeel) {
+    const dil = HitFeel.dilation();
+    if (dil < 1) dt = raw * dil;
+    HitFeel.tick(raw, state.time * 60);
+  }
   state.time += raw;
 
   if (state.phase === 'playing') {
@@ -2128,13 +2244,13 @@ function animate() {
     updatePlayer(dt);
     updateEnemies(dt);
     updateProjectiles(dt);
-    updateSkills(dt);
+    updateSkills(dt, raw);
     updateWave(dt);
     updatePvpRespawn(dt);
     updateWeaponVisual(dt);
     updateHUD();
     if (state.mode === 'online') {
-      updateOnlineTimers(dt);
+      updateOnlineTimers(raw);
       netPump();
     }
   }
@@ -2298,7 +2414,17 @@ function onNetHurt(m) {
   player.hurtT = 0.2;
   flashEl.classList.add('show');
   window.setTimeout(() => flashEl.classList.remove('show'), 200);
-  shake = Math.min(0.5, shake + 0.2);
+  // 联机挨打：按伤害判档，方向取视线反向
+  if (window.HitFeel) {
+    const fwd = camera.getWorldDirection(_v2);
+    HitFeel.hit({
+      tier: m.dmg >= 30 ? 'crit' : 'heavy', dmg: m.dmg || 0, targetId: 'player',
+      point: _v1.set(yawObj.position.x, 1.4, yawObj.position.z),
+      dirX: -fwd.x, dirZ: -fwd.z
+    });
+  } else {
+    shake = Math.min(0.5, shake + 0.2);
+  }
   sfx('hurt');
   spawnDamageText(new THREE.Vector3(yawObj.position.x, 1.5, yawObj.position.z), m.dmg, false);
   if (player.hp <= 0) onlineKnockdown();
@@ -2621,7 +2747,17 @@ function netApplyLocalHit(target, dmg, crit) {
   if (!n || !target) return false;
   n.sendHit(target.id, dmg);
   spawnDamageText(new THREE.Vector3(target.x, 1.45, target.z), Math.round(dmg), !!crit);
-  hitStop = Math.max(hitStop, 0.045);
+  if (window.HitFeel) {
+    const fwd = camera.getWorldDirection(_v2);
+    HitFeel.hit({
+      tier: HitFeel.tierFor(dmg, crit, 'normal'), dmg: dmg, crit: !!crit, targetId: target.id,
+      dist: hyp(target.x - yawObj.position.x, target.z - yawObj.position.z),
+      point: _v1.set(target.x, 1.15, target.z),
+      dirX: fwd.x, dirZ: fwd.z
+    });
+  } else {
+    hitStop = Math.max(hitStop, 0.045);
+  }
   if (remoteGroup) remoteGroup.userData.flashT = 1;
   return true;
 }
@@ -2648,6 +2784,7 @@ window.__arenaDebug = {
   fx: function () { return window.ArenaFX ? ArenaFX.stats() : null; },
   slash: function () { spawnSlashArc(CLASSES[state.cls].color); },
   orb: function (x, y, z) { if (window.ArenaFX) ArenaFX.orbBurst(new THREE.Vector3(x, y, z), 0); },
+  hitfeel: function () { return window.HitFeel || null; },
   // 手动推进一帧，供无 rAF 的环境（远程/无头）做确定性验证
   step: function (dt) {
     updatePlayer(dt);
@@ -2656,6 +2793,55 @@ window.__arenaDebug = {
     if (window.ArenaScene) ArenaScene.update(dt);
   }
 };
+
+/* ---------------- 打击感接线（规格第 8/9 节：分层特效与三轨音频） ---------------- */
+(function wireHitFeel() {
+  if (!window.HitFeel) return;
+  // 距离衰减：内圈 0.6m 满音量，外圈 3m 衰减到 35%
+  function distGain(dist) {
+    if (!dist || dist <= 0.6) return 1;
+    if (dist >= 3) return 0.35;
+    return 1 - (dist - 0.6) / 2.4 * 0.65;
+  }
+
+  HitFeel.init({
+    hooks: {
+      // 破空轨：按武器材质给不同风声，空挥唯一保留的轨道
+      whoosh: function () {
+        if (state.cls === 'gunner') { sfx('shot'); return; }
+        sfx(state.cls === 'mage' ? 'cast' : 'slash');
+      },
+      // 撞击轨：判定帧同帧，按档位与距离混音
+      impact: function (o, tier) {
+        const g = distGain(o.dist);
+        if (tier === 'crit') tone(220, 0.16, 'sawtooth', 0.07 * g, 60);
+        else if (tier === 'heavy') tone(300, 0.09, 'square', 0.055 * g, 90);
+        else tone(480, 0.05, 'triangle', 0.038 * g, 190);
+      },
+      // 余波轨：判定后两帧，低频快速衰减
+      tail: function (o) {
+        const g = distGain(o.dist);
+        tone(140, 0.24, 'sine', 0.05 * g, 52);
+      },
+      // 接触层：命中爆发，0.25 秒内，全部档位
+      contact: function (pt, o) {
+        const col = CLASSES[state.cls].color;
+        spawnBrush(pt.x, pt.y, pt.z, col, rand(-0.5, 0.5), o.crit ? 1.35 : 1.0);
+        if (window.ArenaFX) ArenaFX.hit(pt, yawObj.rotation.y + Math.PI);
+        spawnParticle(pt.x, pt.y - 0.05, pt.z, col);
+      },
+      // 冲击层：0.30 秒内的贴面冲击环，位置取命中点
+      shock: function (pt, o) {
+        spawnRing(pt.x, Math.max(0.35, pt.y - 0.15), pt.z, o.crit ? 0xffe08a : 0xaef0ff, o.crit ? 1.5 : 1.0);
+      },
+      // 碎屑层：0.40 秒内的碎片，高与暴击档
+      debris: function (pt) {
+        spawnShards(new THREE.Vector3(pt.x, pt.y, pt.z), 5, 0xffd9a0);
+      },
+      post: function () { /* 后置层的闪白由 HitFeel 直接接管 DOM */ }
+    }
+  });
+})();
 
 /* ---------------- 启动 ---------------- */
 init();

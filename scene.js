@@ -50,6 +50,9 @@
     if (!list.length) return null;
     var mesh = new THREE.Mesh(merge(list), mat);
     mesh.userData.tag = tag;
+    // 只有实体件投射阴影：透明面片、穹顶、远山不参与，避免脏影与多余开销
+    mesh.castShadow = /colonnade|brokenPillar|covers|dPillars|dCovers|altar|wallCols|bowls|gate/.test(tag || '');
+    mesh.receiveShadow = true;
     group.add(mesh);
     return mesh;
   }
@@ -236,7 +239,8 @@
       return new THREE.MeshStandardMaterial({ color: 0x5a6368, roughness: 0.95, metalness: 0.05, side: THREE.DoubleSide });
     });
     var colMat = mat('aCol', function () {
-      return new THREE.MeshStandardMaterial({ color: 0x8a4038, roughness: 0.66, metalness: 0.14, emissive: 0x1a0705 });
+      // 石柱本色：原来赭红一片，远看成排红条压住了场景，红只留给旗帜
+      return new THREE.MeshStandardMaterial({ color: 0x5f5b54, roughness: 0.92, metalness: 0.05, emissive: 0x090a0c });
     });
     var roofMat = mat('aRoof', function () {
       return new THREE.MeshStandardMaterial({
@@ -259,14 +263,15 @@
       seat.rotation.x = -Math.PI / 2;
       seat.position.y = y + 0.001;
       group.add(seat);
-      // 柱列（合批）
+      // 柱列（合批）：柱顶正好托住檐口压条（y+3.86），不再穿进瓦顶斜面
       var n = 28;
       for (var i = 0; i < n; i++) {
         var a = (i / n) * TAU + t * 0.11;
         var x = Math.cos(a) * (r0 + 2.0);
         var z = Math.sin(a) * (r0 + 2.0);
-        cyl(cols, 0.24, 0.30, 5.0, x, y + 2.5, z, 8);
-        box(cols, 0.62, 0.22, 0.62, x, y + 5.12, z);
+        // 柱身从座面（y）起、顶到檐口压条下方 3.74；柱头帽压在檐下，不穿瓦顶
+        cyl(cols, 0.24, 0.30, 3.74, x, y + 1.87, z, 8);
+        box(cols, 0.62, 0.22, 0.62, x, y + 3.74, z);
       }
       // 瓦顶：斜面壳体，从场内看是一条压檐，不是一根线
       roofs.push({ geo: new THREE.CylinderGeometry(r0 + 0.5, r0 + 3.8, 1.7, 64, 1, true), pos: [0, y + 4.75, 0] });
@@ -307,14 +312,14 @@
       cyl(pilList, 0.52, 0.66, 8.4, x, 4.2, z, 10);
       box(pilList, 1.5, 0.34, 1.5, x, 0.17, z);
       box(pilList, 1.1, 0.24, 1.1, x, 8.5, z);
-      // 断口：三块倾斜碎石
-      box(pilList, 0.72, 0.42, 0.60, x + 0.12, 9.0, z, 0.22, 0.3, 0.16);
-      box(pilList, 0.44, 0.30, 0.40, x - 0.26, 9.2, z + 0.10, -0.3, 0.5, 0.1);
-      box(pilList, 0.30, 0.46, 0.26, x + 0.30, 9.34, z - 0.16, 0.4, -0.2, 0.3);
+      // 断口：三块倾斜碎石压在柱顶上，底部与柱头贴合，不留悬空缝
+      box(pilList, 0.72, 0.42, 0.60, x + 0.12, 8.62, z, 0.22, 0.3, 0.16);
+      box(pilList, 0.44, 0.30, 0.40, x - 0.26, 8.74, z + 0.10, -0.3, 0.5, 0.1);
+      box(pilList, 0.30, 0.46, 0.26, x + 0.30, 8.82, z - 0.16, 0.4, -0.2, 0.3);
       obstacles.push({ x: x, z: z, r: 0.86 });
-      // 挂旗
+      // 挂旗：沿径向推到柱面之外（柱半径 0.66），旗面贴柱不嵌进去
       var ang = Math.atan2(z, x);
-      box(flagCloth, 0.44, 1.90, 0.03, x + Math.cos(ang) * 0.56, 6.55, z + Math.sin(ang) * 0.56, 0, -ang, 0.06);
+      box(flagCloth, 0.44, 1.90, 0.03, x + Math.cos(ang) * 0.86, 6.55, z + Math.sin(ang) * 0.86, 0, -ang, 0.06);
     });
     add(pilList, pillarMat, 'brokenPillar');
     add(flagCloth, flagMat, 'banner');
@@ -467,8 +472,9 @@
       var x = Math.cos(a) * 12.6, z = Math.sin(a) * 12.6;
       cyl(pils, 0.50, 0.62, 6.6, x, 3.3, z, 10);
       box(pils, 1.3, 0.3, 1.3, x, 0.15, z);
-      box(pils, 0.62, 0.44, 0.56, x + 0.10, 7.0, z, 0.2, 0.3, 0.14);
-      box(pils, 0.36, 0.30, 0.34, x - 0.24, 7.2, z + 0.12, -0.28, 0.4, 0.2);
+      // 断口碎石压在柱顶（柱顶 6.6），原来停在 7.0 会悬空 18cm
+      box(pils, 0.62, 0.44, 0.56, x + 0.10, 6.72, z, 0.2, 0.3, 0.14);
+      box(pils, 0.36, 0.30, 0.34, x - 0.24, 6.94, z + 0.12, -0.28, 0.4, 0.2);
       obstacles.push({ x: x, z: z, r: 0.8 });
     }
     add(pils, pilMat, 'dPillars');
@@ -498,7 +504,8 @@
     for (var b = 0; b < 4; b++) {
       var ba = (b / 4) * TAU + Math.PI / 4;
       var bm = new THREE.Mesh(new THREE.PlaneGeometry(7.4, 7.4), beastMat);
-      bm.position.set(Math.cos(ba) * 21.7, 5.4, Math.sin(ba) * 21.7);
+      // 贴到内壁上（壁半径 22.6），原来留了 0.9m 悬空
+      bm.position.set(Math.cos(ba) * 22.30, 5.4, Math.sin(ba) * 22.30);
       bm.lookAt(0, 5.4, 0);
       group.add(bm);
     }
@@ -510,8 +517,9 @@
     var drapes = [];
     for (var d = 0; d < 6; d++) {
       var da = (d / 6) * TAU + 0.4;
-      var dx = Math.cos(da) * 20.4, dz = Math.sin(da) * 20.4;
-      box(drapes, 2.2, 5.2, 0.05, dx, 6.4, dz, 0.02, -da, 0.05);
+      // 贴内壁垂到天花（原半径 20.4 悬在厅中 2.2m）
+      var dx = Math.cos(da) * 22.0, dz = Math.sin(da) * 22.0;
+      box(drapes, 2.2, 5.2, 0.05, dx, 6.55, dz, 0.02, -da, 0.05);
     }
     add(drapes, drapeMat, 'drapes');
 
@@ -626,6 +634,8 @@
       if (!o.isMesh) return;
       meshes++;
       tris += o.geometry.attributes.position.count / 3;
+      // 实体面接收主光投影（Basic/加法面片自身不响应阴影，设了也无害）
+      o.receiveShadow = true;
     });
     tuneLights(scene);
     return { kind: k, meshes: meshes, tris: Math.round(tris) };
@@ -645,15 +655,15 @@
       if (o.isHemisphereLight) {
         o.color.setHex(isD ? 0x5b8aa6 : 0xd8e8f6);
         o.groundColor.setHex(isD ? 0x0c1418 : 0x6b6153);
-        o.intensity = isD ? 0.66 : 0.85;
+        o.intensity = isD ? 0.62 : 0.70;
       }
       if (o.isDirectionalLight) {
         if (dirs === 0) {
           o.color.setHex(isD ? 0xa9cede : 0xfff2dc);
-          o.intensity = isD ? 0.78 : 1.0;
+          o.intensity = isD ? 0.72 : 0.78;
         } else {
           o.color.setHex(isD ? 0x2a6cff : 0xcfd9e0);
-          o.intensity = isD ? 0.35 : 0.45;
+          o.intensity = isD ? 0.30 : 0.32;
         }
         dirs++;
       }

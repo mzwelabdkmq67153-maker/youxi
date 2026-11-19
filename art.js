@@ -738,6 +738,8 @@ function buildHeroV2(type) {
     if (!sets[i][0].length) continue;
     const mesh = new THREE.Mesh(mergeParts(sets[i][0]), sets[i][1]);
     mesh.userData.part = ['cloth', 'armor', 'accent', 'skin'][i];
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     grp.add(mesh);
   }
 
@@ -774,6 +776,38 @@ function ball(list, r, x, y, z, sy) {
     rot: [0, 0, 0],
     scale: [1, sy || 1, 1]
   });
+}
+
+/* 接触阴影：脚下一片径向渐变的暗斑，让角色踩在地上而不是浮着
+   比实时阴影便宜得多，十人同屏也只多十张透明面片 */
+var _blobTex = null;
+function blobShadow(radius) {
+  if (!_blobTex) {
+    var c = document.createElement('canvas');
+    c.width = c.height = 128;
+    var g = c.getContext('2d');
+    var grad = g.createRadialGradient(64, 64, 3, 64, 64, 62);
+    grad.addColorStop(0, 'rgba(0,0,0,0.66)');
+    grad.addColorStop(0.48, 'rgba(0,0,0,0.30)');
+    grad.addColorStop(0.78, 'rgba(0,0,0,0.10)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 128, 128);
+    _blobTex = new THREE.CanvasTexture(c);
+    _blobTex.needsUpdate = true;
+  }
+  var mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(radius * 2, radius * 2),
+    new THREE.MeshBasicMaterial({
+      map: _blobTex, transparent: true, depthWrite: false, opacity: 0.85,
+      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2
+    })
+  );
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.y = 0.018;
+  mesh.renderOrder = 2;
+  mesh.userData.part = 'shadow';
+  return mesh;
 }
 
 function buildHeroV3(type) {
@@ -840,12 +874,13 @@ function buildHeroV3(type) {
     hb(cloth, 0.168, 0.070, 0.180, 0, 1.756, 0.008);
     hb(cloth, 0.060, 0.058, 0.055, 0, 1.798, 0.062);
     hb(cloth, 0.062, 0.560, 0.052, 0, 1.690, 0.300, 1.74);
-    // 长刀：右手向前下方
-    var KX = 0.206, KY = 0.400, KZ = -0.430, KR = -2.28;
+    // 长刀：右手持，刀尖离地 0.26（原 -2.28 倾角会让刀尖插进地面）
+    var KX = 0.206, KY = 0.500, KZ = -0.430, KR = -2.05;
     hb(armor, 0.040, 1.040, 0.022, KX, KY, KZ, KR, 0, 0.05);
     hb(accent, 0.010, 1.000, 0.009, KX + 0.018, KY, KZ - 0.006, KR, 0, 0.05);
-    hb(armor, 0.136, 0.020, 0.052, 0.206, 0.796, -0.028, KR, 0, 0);
-    cyl(cloth, 0.018, 0.018, 0.140, 0.206, 0.878, -0.028, 6, KR);
+    // 护手与握柄贴着右掌（掌位 0.206 / 0.800 / -0.028）
+    hb(armor, 0.136, 0.020, 0.052, 0.206, 0.752, 0.010, KR, 0, 0);
+    cyl(cloth, 0.018, 0.018, 0.130, 0.206, 0.796, -0.028, 6, KR);
   } else if (broad) {
     [-1, 1].forEach(function (s) {
       hb(armor, 0.178, 0.072, 0.242, 0.198 * s, 1.428, 0, 0, 0, -0.22 * s);
@@ -870,17 +905,32 @@ function buildHeroV3(type) {
     hb(cloth, 0.172, 0.065, 0.182, 0, 1.762, 0.004);
     hb(cloth, 0.062, 0.078, 0.050, -0.052, 1.806, 0.028, 0.22, 0, 0.28);
     hb(cloth, 0.056, 0.070, 0.046, 0.046, 1.812, 0.040, -0.18, 0, -0.32);
-    // 长枪：沿 x 横跨，正面读长度
-    hb(armor, 0.500, 0.110, 0.076, 0.070, 1.028, -0.268, 0, 0, -0.10);
-    armor.push({ geo: new THREE.CylinderGeometry(0.026, 0.026, 0.420, 8), pos: [0.520, 1.000, -0.284], rot: [0, 0, Math.PI / 2 + 0.10] });
-    hb(cloth, 0.180, 0.112, 0.060, -0.268, 1.026, -0.248, 0, 0, -0.10);
-    accent.push({ geo: new THREE.SphereGeometry(0.036, 8, 6), pos: [0.730, 0.978, -0.292], rot: [0, 0, 0] });
-    hb(armor, 0.110, 0.026, 0.026, 0.208, 1.060, -0.310, 0, 0, -0.10);
+    // 长枪：右手端枪。枪身沿“右前 - 后托”方向斜 0.42 弧度，
+    // 既保证正面能看出枪的长度，又不会横穿腰腹、枪托也不穿左臂
+    var GY = 0.42, GX = 0.32;
+    hb(armor, 0.086, 0.104, 0.500, GX, 0.870, -0.320, 0, GY, 0);
+    armor.push({ geo: new THREE.CylinderGeometry(0.024, 0.024, 0.400, 8), pos: [GX + 0.078, 0.900, -0.664], rot: [Math.PI / 2 + 0.18, GY, 0] });
+    hb(cloth, 0.076, 0.122, 0.180, GX - 0.070, 0.842, 0.032, 0, GY, 0);
+    accent.push({ geo: new THREE.SphereGeometry(0.032, 8, 6), pos: [GX + 0.124, 0.928, -0.858], rot: [0, 0, 0] });
+    // 弹带贴胸，向体表外侧抬 2cm 避免埋进躯干
+    hb(accent, 0.034, 0.300, 0.012, 0.026, 1.300, -0.124, 0, 0, 0.42);
   } else {
-    // 兜帽：贴头的软帽，圆顶覆盖后脑，前沿自然垂到眉骨，不做帽檐横板
-    cyl(cloth, 0.104, 0.146, 0.230, 0, 1.696, 0.010, 8);
-    cloth.push({ geo: new THREE.SphereGeometry(0.115, 8, 6), pos: [0, 1.780, 0.010], rot: [0, 0, 0], scale: [1, 0.72, 1] });
-    hb(cloth, 0.212, 0.090, 0.088, 0, 1.742, -0.078, 0.55);
+    // 兜帽：后脑半开的软帽壳 + 前脸留缝。整圈圆柱会把整张脸封死（原版只留一条缝）
+    cloth.push({
+      geo: new THREE.CylinderGeometry(0.118, 0.154, 0.276, 10, 1, true, Math.PI / 2, Math.PI),
+      pos: [0, 1.704, 0.014], rot: [0, 0, 0]
+    });
+    cloth.push({ geo: new THREE.SphereGeometry(0.122, 8, 6), pos: [0, 1.796, 0.020], rot: [0, 0, 0], scale: [1, 0.62, 0.92] });
+    // 露出的脸 + 兜帽里的一双亮点（必须整块落在头球面之外，否则被帽壳吃掉）
+    hb(skin, 0.132, 0.156, 0.024, 0, 1.648, -0.116);
+    hb(accent, 0.048, 0.016, 0.010, -0.042, 1.676, -0.132);
+    hb(accent, 0.048, 0.016, 0.010, 0.042, 1.676, -0.132);
+    // 帽檐向脸两侧收的翻边，把脚线收在眉骨之上
+    [-1, 1].forEach(function (s) {
+      hb(cloth, 0.052, 0.104, 0.092, 0.086 * s, 1.744, -0.062, 0.22, 0, -0.26 * s);
+    });
+    // 后垂的帽尖：软边剪影，和长袍一条气
+    cloth.push({ geo: new THREE.CylinderGeometry(0.030, 0.006, 0.34, 6), pos: [0, 1.795, 0.196], rot: [1.12, 0, 0] });
     hb(cloth, 0.208, 0.074, 0.184, 0, 1.534, 0.016);
     // 银灰肩甲 + 颈甲
     [-1, 1].forEach(function (s) {
@@ -913,6 +963,8 @@ function buildHeroV3(type) {
     if (!sets[i][0].length) continue;
     const mesh = new THREE.Mesh(mergeParts(sets[i][0]), sets[i][1]);
     mesh.userData.part = ['cloth', 'armor', 'accent', 'skin'][i];
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     grp.add(mesh);
   }
 
@@ -925,6 +977,8 @@ function buildHeroV3(type) {
   grp.userData.kit = type;
   grp.userData.tris = tris;
   grp.userData.meshes = meshes;
+  // 脚底接触阴影（不参与合批统计）
+  grp.add(blobShadow(robe ? 0.46 : 0.40));
   return grp;
 }
 
@@ -1004,23 +1058,25 @@ function buildFighterHero(type) {
 
   /* 武器 */
   if (K.weapon === 'sword') {
-    hb(armor, 0.040, 1.000, 0.022, 0.208, 0.400, -0.420, -2.28, 0, 0.05);
-    hb(accent, 0.010, 0.960, 0.009, 0.226, 0.400, -0.426, -2.28, 0, 0.05);
-    hb(armor, 0.132, 0.020, 0.050, 0.208, 0.796, -0.026, -2.28, 0, 0);
+    // 剑尖离地 0.28（原倾角 -2.28 时剑尖只剩 6cm，抬刀动作会戳地）
+    hb(armor, 0.040, 1.000, 0.022, 0.208, 0.520, -0.420, -2.05, 0, 0.05);
+    hb(accent, 0.010, 0.960, 0.009, 0.226, 0.520, -0.426, -2.05, 0, 0.05);
+    hb(armor, 0.132, 0.020, 0.050, 0.208, 0.790, 0.010, -2.05, 0, 0);
   } else if (K.weapon === 'greatsword') {
     const len = big ? 1.34 : 1.10;
-    hb(armor, 0.070, len, 0.032, 0.232, 0.390, -0.520, -2.34, 0, 0.05);
-    hb(accent, 0.016, len * 0.94, 0.012, 0.262, 0.390, -0.530, -2.34, 0, 0.05);
-    hb(armor, 0.180, 0.026, 0.060, 0.208, 0.796, -0.026, -2.34, 0, 0);
+    // 抬到 y=0.56 并把倾角收到 -2.05：首领巨剑原值剑尖埋地 7.6cm
+    hb(armor, 0.070, len, 0.032, 0.232, 0.560, -0.500, -2.05, 0, 0.05);
+    hb(accent, 0.016, len * 0.94, 0.012, 0.262, 0.560, -0.510, -2.05, 0, 0.05);
+    hb(armor, 0.180, 0.026, 0.060, 0.208, 0.796, -0.026, -2.05, 0, 0);
   } else {
-    // 步枪：横压肩宽，枪口只留一点发光
-    hb(armor, 0.470, 0.104, 0.072, 0.070, 1.026, -0.262, 0, 0, -0.10);
-    armor.push({ geo: new THREE.CylinderGeometry(0.024, 0.024, 0.400, 8), pos: [0.500, 0.998, -0.278], rot: [0, 0, Math.PI / 2 + 0.10] });
-    hb(cloth, 0.170, 0.106, 0.058, -0.260, 1.024, -0.242, 0, 0, -0.10);
-    accent.push({ geo: new THREE.SphereGeometry(0.032, 8, 6), pos: [0.700, 0.976, -0.286], rot: [0, 0, 0] });
-    hb(accent, 0.030, 0.030, 0.012, 0.070, 1.026, -0.300);
-    // 弹带
-    hb(accent, 0.034, 0.300, 0.012, 0.026, 1.300, -0.100, 0, 0, 0.42);
+    // 步枪：右手端枪，枪身沿前后走，避免 0.47 的长度横穿腰腹
+    hb(armor, 0.082, 0.100, 0.480, 0.236, 0.878, -0.320, 0.18, 0, 0);
+    armor.push({ geo: new THREE.CylinderGeometry(0.022, 0.022, 0.380, 8), pos: [0.236, 0.910, -0.640], rot: [Math.PI / 2 + 0.18, 0, 0] });
+    hb(cloth, 0.072, 0.118, 0.170, 0.236, 0.850, 0.004, 0.18, 0, 0);
+    accent.push({ geo: new THREE.SphereGeometry(0.030, 8, 6), pos: [0.236, 0.948, -0.828], rot: [0, 0, 0] });
+    hb(accent, 0.028, 0.028, 0.012, 0.236, 0.930, -0.470);
+    // 弹带：贴胸外沿，避免埋进躯干
+    hb(accent, 0.034, 0.300, 0.012, 0.026, 1.300, -0.124, 0, 0, 0.42);
   }
 
   const grp = new THREE.Group();
@@ -1029,6 +1085,8 @@ function buildFighterHero(type) {
     if (!sets[i][0].length) continue;
     const mesh = new THREE.Mesh(mergeParts(sets[i][0]), sets[i][1]);
     mesh.userData.part = ['cloth', 'armor', 'accent'][i];
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     grp.add(mesh);
   }
 
@@ -1041,6 +1099,8 @@ function buildFighterHero(type) {
   grp.userData.kit = type;
   grp.userData.tris = tris;
   grp.userData.meshes = meshes;
+  // 脚底接触阴影：首领体型更大，暗斑跟着放大
+  grp.add(blobShadow(big ? 0.78 : broad ? 0.44 : 0.38));
   return grp;
 }
 
