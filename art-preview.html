@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>第七竞技场 · 角色资产预览（白露）</title>
+<style>
+  html, body { margin: 0; background: #05080e; color: #cfe6f5; font-family: system-ui, sans-serif; }
+  canvas { display: block; margin: 0 auto; }
+  .cap { text-align: center; font-size: 13px; letter-spacing: 2px; padding: 10px 0 18px; color: #7fa8c4; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<p class="cap">轻甲剑客 · 枪炮师 · 重装精英 · 首领 · 职业选手</p>
+<script src="vendor/three.min.js"></script>
+<script src="art.js"></script>
+<script>
+(function () {
+  const W = Math.min(1200, window.innerWidth || 1080);
+  const H = Math.round(W * 0.5);
+  const canvas = document.getElementById('c');
+  const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+  renderer.setPixelRatio(1);
+  renderer.setSize(W, H, false);
+  canvas.width = W; canvas.height = H;
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x070c14);
+  scene.fog = new THREE.Fog(0x070c14, 12, 26);
+
+  scene.add(new THREE.HemisphereLight(0xdceeff, 0x1a2430, 1.5));
+  const key = new THREE.DirectionalLight(0xffffff, 1.15);
+  key.position.set(5, 9, 7);
+  scene.add(key);
+  const rim = new THREE.DirectionalLight(0x7799ff, 0.75);
+  rim.position.set(-7, 5, -6);
+  scene.add(rim);
+
+  // 地面与参考网格
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(30, 30),
+    new THREE.MeshStandardMaterial({ color: 0x0c1724, roughness: 0.9, metalness: 0.1 })
+  );
+  floor.rotation.x = -Math.PI / 2;
+  scene.add(floor);
+  const grid = new THREE.GridHelper(30, 30, 0x1d3550, 0x122335);
+  grid.position.y = 0.01;
+  scene.add(grid);
+
+  const types = ['grunt', 'shooter', 'elite', 'boss', 'duelist'];
+  const spacing = 2.35;
+  const startX = -((types.length - 1) * spacing) / 2;
+
+  types.forEach((t, i) => {
+    const grp = ArenaArt.buildFighter(t);
+    const s = ArenaArt.scaleOf(t);
+    grp.scale.setScalar(s);
+    grp.position.set(startX + i * spacing, 0, 0);
+    grp.rotation.y = -0.5;
+    scene.add(grp);
+  });
+
+  const cam = new THREE.PerspectiveCamera(32, W / H, 0.1, 100);
+  cam.position.set(0.6, 2.5, 12.4);
+  cam.lookAt(0.3, 1.3, 0);
+
+  renderer.render(scene, cam);
+
+  // 后台标签页 rAF 会停，这里补一次定时重绘，保证预览始终是最新资产
+  let tick = 0;
+  setInterval(function () {
+    tick += 0.25;
+    scene.children.forEach(function (o) {
+      if (o.userData && o.userData.kit) {
+        if (o.userData.baseRing) o.userData.baseRing.rotation.z = tick;
+      }
+    });
+    renderer.render(scene, cam);
+  }, 250);
+})();
+</script>
+</body>
+</html>

@@ -109,7 +109,7 @@ let canvas, renderer, scene, camera, clock;
 let yawObj, pitchObj, weaponObj, weaponBase;
 let hudEl, overlayEl, menuPanel, pausePanel, resultPanel;
 let resultTitleEl, resultSubEl, resultStatsEl;
-let hpFill, hpText, enFill, enText, skillsEl, objectiveEl, timerEl, modeLabelEl;
+let hpFill, hpText, enFill, enText, stFill, stText, skillsEl, objectiveEl, timerEl, modeLabelEl;
 let toastEl, flashEl, hitmarkerEl, dmgLayerEl;
 
 const state = {
@@ -117,7 +117,8 @@ const state = {
   time: 0, elapsed: 0,
   wave: 1, kills: 0, scoreP: 0, scoreE: 0,
   spawnQueue: [], spawnTimer: 0, waveRest: null,
-  enemyResp: 0, clsName: '剑客'
+  enemyResp: 0, clsName: '剑客',
+  sandbox: /sandbox/i.test(location.search)
 };
 
 const player = {};
@@ -149,6 +150,8 @@ function init() {
   hpText = document.getElementById('hpText');
   enFill = document.getElementById('enFill');
   enText = document.getElementById('enText');
+  stFill = document.getElementById('stFill');
+  stText = document.getElementById('stText');
   skillsEl = document.getElementById('skills');
   objectiveEl = document.getElementById('objective');
   timerEl = document.getElementById('timer');
@@ -379,9 +382,20 @@ function resetPlayer() {
   player.respawn = 0;
   player.hurtT = 0;
 
+  // 竖直方向与疾跑状态
+  player.y = PLAYER_H;
+  player.vy = 0;
+  player.grounded = true;
+  player.jumpCd = 0;
+  player.stamina = 100;
+  player.maxStamina = 100;
+  player.runT = 0;
+  player.trailT = 0;
+
   yawObj.position.set(0, PLAYER_H, 14);
   yawObj.rotation.y = 0;
   pitchObj.rotation.x = 0;
+  camera.position.set(0, 0, 0);
 }
 
 function updatePlayer(dt) {
@@ -405,7 +419,19 @@ function updatePlayer(dt) {
 
   player.sprintT = Math.max(0, player.sprintT - dt);
   player.sprintCd = Math.max(0, player.sprintCd - dt);
-  const speed = player.speed * (player.sprintT > 0 ? 1.7 : 1);
+  player.jumpCd = Math.max(0, player.jumpCd - dt);
+
+  // 疾跑：Shift 按住，持续消耗耐力
+  const wantsRun = !!input.keys['shift'] && mag > 0 && player.stamina > 0;
+  if (wantsRun) {
+    player.stamina = Math.max(0, player.stamina - 24 * dt);
+    player.runT += dt;
+  } else {
+    player.stamina = Math.min(player.maxStamina, player.stamina + 14 * dt);
+    player.runT = 0;
+  }
+  const runMul = wantsRun ? 1.45 : 1;
+  const speed = player.speed * (player.sprintT > 0 ? 1.7 : 1) * runMul;
 
   const yaw = yawObj.rotation.y;
   const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
@@ -413,8 +439,31 @@ function updatePlayer(dt) {
 
   yawObj.position.x += (fx * fwd + rx * rgt) * speed * dt;
   yawObj.position.z += (fz * fwd + rz * rgt) * speed * dt;
-  yawObj.position.y = PLAYER_H;
   clampPos(yawObj.position, 0.55);
+
+  // 跳跃：竖直速度 + 重力，落地重置视角高度
+  if (!player.grounded) {
+    player.vy -= 16 * dt;
+    player.y += player.vy * dt;
+    if (player.y <= PLAYER_H) {
+      player.y = PLAYER_H;
+      player.vy = 0;
+      player.grounded = true;
+      landEffect();
+    }
+  }
+  yawObj.position.y = player.y;
+
+  // 疾跑残影
+  if (wantsRun) {
+    player.trailT += dt;
+    if (player.trailT > 0.1) {
+      player.trailT = 0;
+      spawnTrailGhost();
+    }
+  } else {
+    player.trailT = 0;
+  }
 
   player.attackCd = Math.max(0, player.attackCd - dt);
   player.attackAnim = Math.max(0, player.attackAnim - dt);
@@ -467,6 +516,34 @@ function doSprint() {
   spawnRing(yawObj.position.x, 0.35, yawObj.position.z, 0x6fe3ff, 1.6);
 }
 
+function doJump() {
+  if (state.phase !== 'playing' || !player.alive) return;
+  if (!player.grounded || player.jumpCd > 0) return;
+  player.vy = 6.4;
+  player.grounded = false;
+  player.jumpCd = 0.22;
+  spawnRing(yawObj.position.x, 0.14, yawObj.position.z, 0x9fe8ff, 1.1);
+  for (let i = 0; i < 4; i++) {
+    spawnParticle(yawObj.position.x + rand(-0.3, 0.3), 0.25, yawObj.position.z + rand(-0.3, 0.3));
+  }
+  sfx('dash');
+}
+
+function landEffect() {
+  const x = yawObj.position.x;
+  const z = yawObj.position.z;
+  spawnRing(x, 0.1, z, 0x8ff0ff, 1.9);
+  for (let i = 0; i < 6; i++) {
+    spawnParticle(x + rand(-0.5, 0.5), 0.2, z + rand(-0.5, 0.5));
+  }
+  sfx('hit');
+}
+
+/* 疾跑残影：脚下一圈快速淡出的青色痕迹 */
+function spawnTrailGhost() {
+  spawnRing(yawObj.position.x, 0.06, yawObj.position.z, 0x2ee6c0, 0.9);
+}
+
 /* ---------------- 攻击 ---------------- */
 function tryAttack() {
   const A = CLASSES[state.cls].attack;
@@ -503,6 +580,7 @@ function meleeAttack(dmg) {
     hits++;
   }
 
+  spawnSlashArc(0x9fe8ff);
   spawnRing(ox + fx * 1.6, 1.1, oz + fz * 1.6, 0x9fe8ff, 1.3);
   if (hits > 0) {
     flashHit();
@@ -545,6 +623,7 @@ function hitscanAttack(dmg, A) {
   }
 
   const len = best ? bestT : 70;
+  spawnMuzzleFlash();
   spawnTracer(origin, dir, len);
 
   if (best) {
@@ -633,6 +712,7 @@ function runSkill(id) {
       yawObj.position.z = clamp(pz + fz * 5.6, -HALF + 1, HALF - 1);
       clampPos(yawObj.position, 0.55);
       player.invul = Math.max(player.invul, 0.3);
+      spawnSlashArc(0x6fe3ff);
       spawnRing(yawObj.position.x, 0.9, yawObj.position.z, 0x6fe3ff, 2.2);
       shake = 0.3;
       sfx(hit ? 'hit' : 'skill');
@@ -645,6 +725,8 @@ function runSkill(id) {
         const d = hyp(e.pos.x - px, e.pos.z - pz);
         if (d < 4.4) damageEnemy(e, 42);
       }
+      spawnSlashArc(0x8ff0ff);
+      spawnCastCircle(px, pz, 0x8ff0ff);
       spawnRing(px, 0.9, pz, 0x8ff0ff, 4.4);
       svfxRing(px, pz);
       shake = 0.22;
@@ -655,6 +737,7 @@ function runSkill(id) {
       player.domain = 6;
       player.domainTick = 0;
       toast('剑域展开', 900);
+      spawnCastCircle(px, pz, 0x8ff0ff);
       spawnRing(px, 0.5, pz, 0x8ff0ff, 5);
       sfx('skill');
       break;
@@ -680,6 +763,7 @@ function runSkill(id) {
       const gx = clamp(origin.x + dir.x * 16, -HALF + 1.5, HALF - 1.5);
       const gz = clamp(origin.z + dir.z * 16, -HALF + 1.5, HALF - 1.5);
       spawnDelayedBlast(gx, gz, 0.9, 4.2, 62, 0xff9a6b);
+      spawnCastCircle(gx, gz, 0xff9a6b);
       sfx('cast');
       break;
     }
@@ -697,6 +781,7 @@ function runSkill(id) {
         const d = hyp(e.pos.x - px, e.pos.z - pz);
         if (d < 6.5) { damageEnemy(e, 14); e.slow = 3.2; }
       }
+      spawnCastCircle(px, pz, 0x8fc9ff);
       spawnRing(px, 0.4, pz, 0x8fc9ff, 6.5);
       sfx('skill');
       break;
@@ -704,11 +789,13 @@ function runSkill(id) {
     case 'blink': {
       const nx = clamp(px + fx * 8, -HALF + 1.2, HALF - 1.2);
       const nz = clamp(pz + fz * 8, -HALF + 1.2, HALF - 1.2);
+      spawnCastCircle(px, pz, 0xb98cff);
       spawnRing(px, 0.5, pz, 0xb98cff, 1.6);
       yawObj.position.x = nx;
       yawObj.position.z = nz;
       clampPos(yawObj.position, 0.55);
       player.invul = 0.45;
+      spawnCastCircle(nx, nz, 0xb98cff);
       spawnRing(nx, 0.5, nz, 0xb98cff, 1.6);
       sfx('dash');
       break;
@@ -717,6 +804,7 @@ function runSkill(id) {
       const mx = clamp(px + fx * 13, -HALF + 2, HALF - 2);
       const mz = clamp(pz + fz * 13, -HALF + 2, HALF - 2);
       spawnDelayedBlast(mx, mz, 1.1, 6.2, 100, 0xb98cff);
+      spawnCastCircle(mx, mz, 0xb98cff);
       sfx('cast');
       break;
     }
@@ -729,6 +817,10 @@ function svfxRing(x, z) {
 
 /* ---------------- 敌人 ---------------- */
 function buildEnemyMesh(type) {
+  // 形象由 art.js（白露的资产模块）接管；下面保留旧几何体实现作为低配回退
+  if (window.ArenaArt && ArenaArt.buildFighter) {
+    return ArenaArt.buildFighter(type);
+  }
   const g = new THREE.Group();
   const color = TYPES[type].color;
 
@@ -842,10 +934,12 @@ function spawnEnemy(type, pos) {
     strafe: Math.random() < 0.5 ? 1 : -1,
     strafeT: rand(1, 2.6),
     summonT: 9,
+    wind: 0,
+    baseScale: window.ArenaArt ? ArenaArt.scaleOf(type) : 1,
     mesh: buildEnemyMesh(type)
   };
   e.mesh.position.copy(e.pos);
-  e.mesh.scale.set(0.01, 0.01, 0.01);
+  e.mesh.scale.setScalar(e.baseScale * 0.08);
   scene.add(e.mesh);
   enemies.push(e);
   return e;
@@ -859,7 +953,7 @@ function updateEnemies(dt) {
     if (e.spawn > 0) {
       e.spawn -= dt;
       const k = clamp(1 - e.spawn / 0.55, 0, 1);
-      e.mesh.scale.setScalar(0.08 + 0.92 * k);
+      e.mesh.scale.setScalar(e.baseScale * (0.08 + 0.92 * k));
     }
     if (e.flash > 0) e.flash -= dt;
     if (e.slow > 0) e.slow -= dt;
@@ -875,17 +969,24 @@ function updateEnemies(dt) {
     const spd = e.speed * (e.slow > 0 ? 0.5 : 1);
 
     if (e.type === 'grunt' || e.type === 'elite') {
-      const reach = e.radius + 1.6; // 停在 2 米左右出手，避免贴身糊满镜头
+      const reach = e.radius + 2.2; // 停在两米半左右出手，避免糊满镜头
       if (d > reach) {
         e.pos.x += nx * spd * dt;
         e.pos.z += nz * spd * dt;
-      } else if (e.attackCd <= 0) {
-        e.attackCd = e.type === 'elite' ? 1.3 : 1.05;
-        // 近战也要有视线，柱体后面打不到玩家
-        if (!losBlocked(e.pos.x, e.pos.z, yawObj.position.x, yawObj.position.z)) {
-          damagePlayer(e.dmg);
-          spawnRing(e.pos.x, 0.9, e.pos.z, 0xff5c72, 1.2);
+      } else if (e.wind > 0) {
+        // 出手前摇：脚下亮一圈红环，给玩家闪避或起跳的窗口
+        e.wind -= dt;
+        if (e.wind <= 0) {
+          const onGround = (player.y - PLAYER_H) < 0.85;
+          if (onGround && !losBlocked(e.pos.x, e.pos.z, yawObj.position.x, yawObj.position.z)) {
+            damagePlayer(e.dmg);
+            spawnRing(e.pos.x, 0.9, e.pos.z, 0xff5c72, 1.2);
+          }
         }
+      } else if (e.attackCd <= 0) {
+        e.wind = e.type === 'elite' ? 0.52 : 0.42;
+        e.attackCd = (e.type === 'elite' ? 1.3 : 1.05) + e.wind;
+        spawnRing(e.pos.x, 0.07, e.pos.z, 0xff5c72, e.radius + 2.4);
       }
     } else if (e.type === 'shooter') {
       if (d > 15) {
@@ -941,6 +1042,7 @@ function updateEnemies(dt) {
 
     // 边界与柱体
     clampPos(e.pos, e.radius + 0.4);
+
     // 敌人之间推离
     for (let j = 0; j < enemies.length; j++) {
       if (j === i) continue;
@@ -952,6 +1054,19 @@ function updateEnemies(dt) {
       if (dd < minD && dd > 0.0001) {
         e.pos.x = other.pos.x + (ddx / dd) * minD;
         e.pos.z = other.pos.z + (ddz / dd) * minD;
+      }
+    }
+
+    // 与玩家保持最小间距，避免贴脸挡住视线（放在推离之后，防止被同伴挤到脸上）
+    if (player.alive) {
+      const pdx = e.pos.x - yawObj.position.x;
+      const pdz = e.pos.z - yawObj.position.z;
+      const pd = hyp(pdx, pdz);
+      const minPD = e.radius + 2.0;
+      if (pd < minPD && pd > 0.0001) {
+        e.pos.x = yawObj.position.x + (pdx / pd) * minPD;
+        e.pos.z = yawObj.position.z + (pdz / pd) * minPD;
+        clampPos(e.pos, e.radius + 0.4);
       }
     }
 
@@ -1054,7 +1169,9 @@ function updateProjectiles(dt) {
     if (pr.owner === 'enemy') {
       const dx = pr.pos.x - yawObj.position.x;
       const dz = pr.pos.z - yawObj.position.z;
-      if (dx * dx + dz * dz < 0.36 && pr.pos.y > 0.3 && pr.pos.y < 2.1) {
+      // 以玩家当前高度为基准，跳起来能躲低飞弹丸
+      const bodyY = player.y - 0.45;
+      if (dx * dx + dz * dz < 0.36 && pr.pos.y > bodyY - 0.85 && pr.pos.y < bodyY + 0.9) {
         damagePlayer(pr.dmg);
         removeProjectile(i);
       }
@@ -1146,6 +1263,68 @@ function spawnDelayedBlast(x, z, delay, radius, dmg, color) {
   });
 }
 
+/* 斩击弧：贴在地面的一道扇形刀光，跟着玩家朝向走 */
+function spawnSlashArc(color) {
+  const geo = new THREE.RingGeometry(0.85, 3.05, 24, 1, -0.95, 1.9);
+  const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+    color: color || 0x9fe8ff, transparent: true, opacity: 0.7,
+    side: THREE.DoubleSide, depthWrite: false
+  }));
+  mesh.position.set(yawObj.position.x, yawObj.position.y - 1.35, yawObj.position.z);
+  mesh.rotation.set(-Math.PI / 2, yawObj.rotation.y + Math.PI / 2, 0);
+  scene.add(mesh);
+  effects.push({ mesh: mesh, kind: 'arc', life: 0.16, maxLife: 0.16 });
+}
+
+/* 枪口火光：枪管前方一个短促的亮点 */
+function spawnMuzzleFlash() {
+  const origin = camera.getWorldPosition(new THREE.Vector3());
+  const dir = camera.getWorldDirection(new THREE.Vector3());
+  const mesh = new THREE.Mesh(sparkGeo, new THREE.MeshBasicMaterial({
+    color: 0xffe9a8, transparent: true, opacity: 0.95
+  }));
+  mesh.scale.setScalar(2.3);
+  mesh.position.copy(origin).addScaledVector(dir, 0.85);
+  scene.add(mesh);
+  effects.push({ mesh: mesh, kind: 'flash', life: 0.07, maxLife: 0.07 });
+}
+
+/* 施法法阵：内外两层反向旋转的圆环 */
+function spawnCastCircle(x, z, color) {
+  const inner = new THREE.Mesh(
+    new THREE.RingGeometry(0.62, 0.74, 24),
+    new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false })
+  );
+  inner.rotation.x = -Math.PI / 2;
+  inner.position.set(x, 0.05, z);
+  scene.add(inner);
+
+  const outer = new THREE.Mesh(
+    new THREE.RingGeometry(1.42, 1.58, 30, 1, 0, Math.PI * 1.4),
+    new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false })
+  );
+  outer.rotation.x = -Math.PI / 2;
+  outer.position.set(x, 0.05, z);
+  scene.add(outer);
+
+  effects.push({ mesh: inner, kind: 'castIn', life: 0.55, maxLife: 0.55, spin: 2.2 });
+  effects.push({ mesh: outer, kind: 'castOut', life: 0.55, maxLife: 0.55, spin: -1.1 });
+}
+
+/* 击杀碎片：向四周迸开的八面体 */
+function spawnShards(pos, count, color) {
+  for (let i = 0; i < count; i++) {
+    const geo = new THREE.OctahedronGeometry(rand(0.06, 0.11), 0);
+    const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: color, transparent: true }));
+    mesh.position.set(pos.x + rand(-0.35, 0.35), rand(0.7, 1.5), pos.z + rand(-0.35, 0.35));
+    scene.add(mesh);
+    effects.push({
+      mesh: mesh, kind: 'shard', life: 0.55, maxLife: 0.55,
+      vel: new THREE.Vector3(rand(-3.4, 3.4), rand(2, 5.4), rand(-3.4, 3.4))
+    });
+  }
+}
+
 function updateEffects(dt) {
   for (let i = effects.length - 1; i >= 0; i--) {
     const f = effects[i];
@@ -1176,6 +1355,21 @@ function updateEffects(dt) {
     } else if (f.kind === 'particle') {
       f.vel.y -= 9 * dt;
       f.mesh.position.addScaledVector(f.vel, dt);
+      f.mesh.material.opacity = 1 - k;
+    } else if (f.kind === 'arc') {
+      f.mesh.material.opacity = (1 - k) * 0.7;
+      f.mesh.rotation.y = yawObj.rotation.y + Math.PI / 2;
+    } else if (f.kind === 'flash') {
+      f.mesh.material.opacity = (1 - k) * 0.95;
+      f.mesh.scale.setScalar(2.3 * (1 + k * 0.7));
+    } else if (f.kind === 'castIn' || f.kind === 'castOut') {
+      f.mesh.rotation.z += f.spin * dt;
+      f.mesh.material.opacity = (1 - k) * (f.kind === 'castIn' ? 0.85 : 0.5);
+    } else if (f.kind === 'shard') {
+      f.vel.y -= 11 * dt;
+      f.mesh.position.addScaledVector(f.vel, dt);
+      f.mesh.rotation.x += dt * 5;
+      f.mesh.rotation.y += dt * 3.4;
       f.mesh.material.opacity = 1 - k;
     } else if (f.kind === 'tracer') {
       f.mesh.material.opacity = (1 - k) * 0.9;
@@ -1209,9 +1403,11 @@ function killEnemy(e) {
 
   if (e.type === 'boss') {
     spawnExplosion(e.pos.x, 1.6, e.pos.z, 2.6);
+    spawnShards(e.pos, 16, 0xff3860);
     toast('BOSS 击破', 1300);
   } else {
     spawnExplosion(e.pos.x, 1.1, e.pos.z, 1.1);
+    spawnShards(e.pos, 7, TYPES[e.type].color);
   }
   sfx('kill');
 
@@ -1230,6 +1426,8 @@ function killEnemy(e) {
 
 function damagePlayer(dmg) {
   if (player.invul > 0 || state.phase !== 'playing' || !player.alive) return;
+  // 调试沙盒：地址带 ?sandbox 时不掉血，用于检查动作与特效
+  if (state.sandbox) return;
   player.hp -= dmg;
   player.invul = 0.55;
   player.hurtT = 0.2;
@@ -1280,7 +1478,8 @@ function spawnDamageText(pos, amount, crit) {
 
 /* ---------------- 波次与对局 ---------------- */
 function startWave() {
-  const count = 3 + state.wave * 2;
+  // 首波只放 3 只，留出熟悉跳跃与疾跑的时间；之后按波次递增
+  const count = state.wave === 1 ? 3 : 3 + state.wave * 2;
   const q = [];
   for (let i = 0; i < count; i++) {
     let t = 'grunt';
@@ -1520,6 +1719,12 @@ function updateHUD() {
   enFill.style.width = (enPct * 100) + '%';
   enText.textContent = Math.ceil(player.en);
 
+  if (stFill) {
+    const stPct = clamp(player.stamina / player.maxStamina, 0, 1);
+    stFill.style.width = (stPct * 100) + '%';
+    stText.textContent = Math.ceil(player.stamina);
+  }
+
   const C = CLASSES[state.cls];
   const nodes = skillsEl.children;
   for (let i = 0; i < 3; i++) {
@@ -1591,7 +1796,8 @@ function bindInput() {
     initAudio();
     input.keys[k] = true;
     if (state.phase !== 'playing') return;
-    if (k === ' ') doSprint();
+    if (k === ' ') doJump();
+    if (k === 'shift') doSprint();
     if (k === 'q') castSkill(0);
     if (k === 'e') castSkill(1);
     if (k === 'r') castSkill(2);
@@ -1685,6 +1891,16 @@ function animate() {
 
   renderer.render(scene, camera);
 }
+
+/* 自测钩子：QA 用，不参与游戏逻辑 */
+window.__arenaDebug = {
+  state: state,
+  player: player,
+  enemies: enemies,
+  spawn: spawnEnemy,
+  jump: doJump,
+  art: window.ArenaArt || null
+};
 
 /* ---------------- 启动 ---------------- */
 init();

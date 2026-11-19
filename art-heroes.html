@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>第七竞技场 · 玩家职业三视图</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #cfd4d9; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="sheet"></canvas>
+<script src="vendor/three.min.js"></script>
+<script src="art.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  const W = 960;
+  const HEAD = 96;
+  const ROW_H = 440;
+  const CW = 320;
+  const RW = 300;
+  const RH = 360;
+  const PAD = 36;
+  const H = HEAD + ROW_H * 3;
+
+  const heroes = [
+    ['swordsman', '剑客', 'SWORDSMAN'],
+    ['gunner', '枪手', 'GUNNER'],
+    ['warlock', '术士', 'WARLOCK']
+  ];
+  const views = [
+    ['正面', 0, -4.2],
+    ['侧面', 4.2, 0],
+    ['背面', 0, 4.2]
+  ];
+
+  const sheet = document.getElementById('sheet');
+  sheet.width = W;
+  sheet.height = H;
+  const ctx = sheet.getContext('2d');
+  ctx.fillStyle = '#cfd4d9';
+  ctx.fillRect(0, 0, W, H);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: false });
+  renderer.setPixelRatio(2);
+  renderer.setSize(RW, RH);
+  renderer.setClearColor(0xcfd4d9, 1);
+
+  const scene = new THREE.Scene();
+  scene.add(new THREE.AmbientLight(0xffffff, 0.62));
+
+  const key = new THREE.DirectionalLight(0xffffff, 0.95);
+  key.position.set(2.4, 4.2, -3.2);
+  scene.add(key);
+
+  const fill = new THREE.DirectionalLight(0xa9c4de, 0.38);
+  fill.position.set(-3.2, 2.2, 2.6);
+  scene.add(fill);
+
+  const rim = new THREE.DirectionalLight(0x8fa6bd, 0.34);
+  rim.position.set(0, 2.6, 4.2);
+  scene.add(rim);
+
+  const cam = new THREE.OrthographicCamera(-0.95, 0.95, 1.14, -1.14, 0.1, 40);
+
+  function countTris(obj) {
+    let n = 0;
+    obj.traverse(function (o) {
+      if (!o.isMesh || !o.geometry) return;
+      const geo = o.geometry;
+      if (geo.index) n += geo.index.count / 3;
+      else n += geo.attributes.position.count / 3;
+    });
+    return Math.round(n);
+  }
+
+  /* 表头 */
+  ctx.fillStyle = '#1f2a33';
+  ctx.font = 'bold 34px "Microsoft YaHei", sans-serif';
+  ctx.fillText('第七竞技场 · 玩家职业三视图', 40, 54);
+  ctx.font = '17px "Microsoft YaHei", sans-serif';
+  ctx.fillStyle = '#465765';
+  ctx.fillText('原型档 · 共享几何 · 三视图同一比例 1:1 · 右侧为持械手', 40, 82);
+
+  const report = [];
+
+  heroes.forEach(function (h, row) {
+    const obj = window.ArenaArt.buildHero(h[0]);
+    obj.updateMatrixWorld(true);
+    scene.add(obj);
+    const tris = countTris(obj);
+    const y0 = HEAD + row * ROW_H;
+
+    /* 行标识 */
+    ctx.fillStyle = '#1f2a33';
+    ctx.font = 'bold 21px "Microsoft YaHei", sans-serif';
+    ctx.fillText(h[1] + '  ' + h[2] + '  ·  ' + tris + ' 三角面', 8, y0 + 24);
+
+    views.forEach(function (v, col) {
+      cam.position.set(v[1], 1.05, v[2]);
+      cam.lookAt(0, 1.05, 0);
+      cam.updateProjectionMatrix();
+      renderer.render(scene, cam);
+      ctx.drawImage(renderer.domElement, col * CW + 10, y0 + PAD, RW, RH);
+
+      ctx.fillStyle = '#1f2a33';
+      ctx.font = 'bold 19px "Microsoft YaHei", sans-serif';
+      ctx.fillText(v[0], col * CW + 14, y0 + PAD + RH + 24);
+    });
+
+    report.push(h[1] + '=' + tris);
+    scene.remove(obj);
+  });
+
+  ctx.strokeStyle = 'rgba(31,42,51,0.18)';
+  ctx.lineWidth = 1;
+  for (let i = 1; i < 3; i++) {
+    ctx.beginPath();
+    ctx.moveTo(0, HEAD + i * ROW_H);
+    ctx.lineTo(W, HEAD + i * ROW_H);
+    ctx.stroke();
+  }
+
+  window.__TRI = report.join(' | ');
+  document.title = '三视图 ' + window.__TRI;
+})();
+</script>
+</body>
+</html>

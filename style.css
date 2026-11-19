@@ -93,6 +93,9 @@ html, body {
 .bar .fill { position: absolute; inset: 0; width: 100%; transform-origin: left center; }
 .bar .fill.hp { background: linear-gradient(90deg, #ff4d6d, #ff9a6b); }
 .bar .fill.en { background: linear-gradient(90deg, #3f8dff, #6fe3ff); }
+.bar .fill.st { background: linear-gradient(90deg, #7ce7b0, #d6ff8f); }
+.bar.slim { height: 9px; }
+.bar.slim span { font-size: 9px; padding-left: 8px; color: #9fc7b4; }
 .bar span {
   position: absolute; inset: 0;
   display: flex; align-items: center;

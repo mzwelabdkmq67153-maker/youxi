@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>hero ref</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #cfd4d9; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="ref"></canvas>
+<script src="vendor/three.min.js"></script>
+<script src="art.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  const W = 820;
+  const H = 1080;
+
+  const params = new URLSearchParams(location.search);
+  const type = params.get('h') || 'swordsman';
+
+  const cv = document.getElementById('ref');
+  cv.width = W;
+  cv.height = H;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#cfd4d9';
+  ctx.fillRect(0, 0, W, H);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: false });
+  renderer.setPixelRatio(2);
+  renderer.setSize(W, H);
+  renderer.setClearColor(0xcfd4d9, 1);
+
+  const scene = new THREE.Scene();
+  scene.add(new THREE.AmbientLight(0xffffff, 0.62));
+
+  const key = new THREE.DirectionalLight(0xffffff, 0.95);
+  key.position.set(2.4, 4.2, -3.2);
+  scene.add(key);
+
+  const fill = new THREE.DirectionalLight(0xa9c4de, 0.38);
+  fill.position.set(-3.2, 2.2, 2.6);
+  scene.add(fill);
+
+  const rim = new THREE.DirectionalLight(0x8fa6bd, 0.34);
+  rim.position.set(0, 2.6, 4.2);
+  scene.add(rim);
+
+  const obj = window.ArenaArt.buildHero(type);
+  obj.position.y = 0;
+  scene.add(obj);
+
+  const cam = new THREE.PerspectiveCamera(38, W / H, 0.1, 100);
+  cam.position.set(1.95, 1.5, -3.5);
+  cam.lookAt(0, 1.02, 0);
+
+  renderer.render(scene, cam);
+  ctx.drawImage(renderer.domElement, 0, 0, W, H);
+
+  document.title = 'ref ' + type;
+})();
+</script>
+</body>
+</html>
