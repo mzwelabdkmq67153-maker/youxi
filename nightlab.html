@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>夜景重做 · 竞技场 / 地宫</title>
+<style>html,body{margin:0;background:#070c10}canvas#shot{display:block}</style>
+</head>
+<body>
+<canvas id="shot" width="2000" height="1240"></canvas>
+<script src="vendor/three.min.js"></script>
+<script src="art.js"></script>
+<script src="paint.js"></script>
+<script src="fx.js"></script>
+<script src="ink.js"></script>
+<script src="scene.js"></script>
+<script src="night.js"></script>
+<script>
+(function () {
+  var W = 2000, H = 1240;
+  var cv = document.getElementById('shot');
+  var ctx = cv.getContext('2d');
+  ctx.fillStyle = '#070c10';
+  ctx.fillRect(0, 0, W, H);
+
+  var CW = 940, CH = 700;
+
+  function label(t, x, y, size, color, bold) {
+    ctx.fillStyle = color || '#dbe6ef';
+    ctx.font = (bold ? '600 ' : '400 ') + size + 'px "PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(t, x, y);
+  }
+
+  function render(side, kind, shots, camSpec, title) {
+    var renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    renderer.setPixelRatio(1);
+    renderer.setSize(CW, CH);
+    renderer.setClearColor(0x05090c, 1);
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.80;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    var scene = new THREE.Scene();
+    // 与游戏同一套灯：半球 + 主光（带阴影）+ 补光，tune 会把它们压成夜色
+    scene.add(new THREE.HemisphereLight(0xd8e8f6, 0x6b6153, 0.85));
+    var d1 = new THREE.DirectionalLight(0xfff2dc, 0.95);
+    d1.position.set(6, 10, 5);
+    d1.castShadow = true;
+    d1.shadow.mapSize.set(1024, 1024);
+    d1.shadow.camera.near = 1; d1.shadow.camera.far = 110;
+    d1.shadow.camera.left = -30; d1.shadow.camera.right = 30;
+    d1.shadow.camera.top = 30; d1.shadow.camera.bottom = -30;
+    d1.shadow.bias = -0.0009;
+    d1.shadow.normalBias = 0.02;
+    scene.add(d1);
+    var d2 = new THREE.DirectionalLight(0xcfd9e0, 0.40);
+    d2.position.set(-8, 6, -6);
+    scene.add(d2);
+
+    window.ArenaScene.build(kind, scene, []);
+
+    var foes = kind === 'dungeon'
+      ? [['grunt', -3.0, 0, 5.4, 0.28], ['shooter', 1.0, 0, 3.2, -0.18], ['boss', 4.2, 0, 6.4, 0.5]]
+      : [['grunt', -2.4, 0, -3.2, 0.35], ['shooter', 0.6, 0, -4.6, -0.2], ['elite', 2.9, 0, -2.6, 0.55]];
+    foes.forEach(function (f) {
+      var g = window.ArenaArt.buildFighter(f[0]);
+      g.position.set(f[1], f[2], f[3]);
+      g.rotation.y = f[4];
+      scene.add(g);
+    });
+
+    window.ArenaFX.init(scene);
+    var v3 = new THREE.Vector3();
+    shots.forEach(function (s) {
+      v3.set(s.x, s.y, s.z);
+      if (s.kind === 'slash') window.ArenaFX.slash(v3, s.yaw);
+      if (s.kind === 'muzzle') window.ArenaFX.muzzle(v3, s.yaw);
+      if (s.kind === 'orb') window.ArenaFX.orbBurst(v3, s.yaw);
+      if (s.kind === 'hit') window.ArenaFX.hit(v3, s.yaw);
+    });
+
+    // 推到粒子正亮的那一帧，同时让火盆/火星动起来
+    for (var i = 0; i < 5; i++) {
+      window.ArenaFX.update(0.03);
+      window.ArenaScene.update(0.03);
+    }
+
+    var cam = new THREE.PerspectiveCamera(58, CW / CH, 0.1, 200);
+    cam.position.set(camSpec.p[0], camSpec.p[1], camSpec.p[2]);
+    cam.lookAt(camSpec.l[0], camSpec.l[1], camSpec.l[2]);
+
+    renderer.render(scene, cam);
+    ctx.drawImage(renderer.domElement, side.x, side.y, CW, CH);
+    ctx.strokeStyle = 'rgba(150,190,220,0.22)';
+    ctx.strokeRect(side.x + 0.5, side.y + 0.5, CW - 1, CH - 1);
+    label(title, side.x, side.y - 14, 22, '#e8f2fa', true);
+    renderer.dispose();
+  }
+
+  label('夜景重做 · 第一人称竞技场 / 地宫', 60, 70, 40, '#f2f7fb', true);
+  label('明度结构照参考实机：整幅压在 8%–15%，只留冷青（面罩/符阵）与暖橙（火盆/余烬）两处高亮', 60, 106, 17, '#93a8b8');
+
+  render({ x: 50, y: 150 }, 'arena', [
+    { kind: 'slash', x: -2.4, y: 1.25, z: -2.4, yaw: 0.5 },
+    { kind: 'hit', x: 0.6, y: 1.15, z: -4.2, yaw: 0 },
+    { kind: 'muzzle', x: 0.6, y: 1.35, z: -5.6, yaw: 0 }
+  ], { p: [3.2, 1.72, 9.2], l: [0, 1.15, -1.6] }, '竞技场 · 夜场圆台');
+
+  render({ x: 1010, y: 150 }, 'dungeon', [
+    { kind: 'orb', x: 4.2, y: 1.3, z: 6.0, yaw: 0 },
+    { kind: 'hit', x: -3.0, y: 1.1, z: 5.0, yaw: 0 },
+    { kind: 'slash', x: 1.0, y: 1.2, z: 3.6, yaw: -0.4 }
+  ], { p: [0.2, 1.75, 11.6], l: [0, 1.10, 1.0] }, '地宫 · 冷青首领厅');
+
+  var st = window.ArenaScene.stats();
+  label('场景：' + st.meshes + ' mesh / ' + st.tris + ' 三角面（合批后）· 夜景层再叠 4 火盆 4 点光 / 余烬 220–260 粒（1 drawcall）/ 雾面 13 张 / 光柱 12 片', 60, 900, 17, '#93a8b8');
+  label('人物：立绘贴图之上一律剪影化，头部一盏冷青面罩光——剪影先读成人形，再看得出不是人。', 60, 934, 17, '#93a8b8');
+  label('画面：渲染到离屏后过一次分级——暗部染青、高光微暖、降饱和、压中间调、暗角 + 颗粒。', 60, 968, 17, '#93a8b8');
+  label('保留第一人称：视角、准心、HUD、手中武器一律未动，只换光与雾与材质响应。', 60, 1002, 17, '#93a8b8');
+  window.__ready = true;
+})();
+</script>
+</body>
+</html>
