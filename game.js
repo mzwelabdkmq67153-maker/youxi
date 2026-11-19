@@ -301,6 +301,7 @@ function buildLights() {
 function buildWeapon() {
   if (weaponObj) {
     camera.remove(weaponObj);
+    disposeGroup(weaponObj);
     weaponObj = null;
   }
   const cls = state.cls;
@@ -441,6 +442,23 @@ function clampPos(p, pad) {
   }
 }
 
+/* 两点之间的水平视线是否被柱子挡住 */
+function losBlocked(ax, az, bx, bz) {
+  const dx = bx - ax;
+  const dz = bz - az;
+  const len2 = dx * dx + dz * dz;
+  if (len2 < 1e-6) return false;
+  for (let i = 0; i < obstacles.length; i++) {
+    const o = obstacles[i];
+    let t = ((o.x - ax) * dx + (o.z - az) * dz) / len2;
+    t = clamp(t, 0, 1);
+    const px = ax + dx * t;
+    const pz = az + dz * t;
+    if (hyp(px - o.x, pz - o.z) < o.r * 0.95) return true;
+  }
+  return false;
+}
+
 function doSprint() {
   if (player.sprintCd > 0 || !player.alive) return;
   player.sprintT = 0.32;
@@ -479,6 +497,7 @@ function meleeAttack(dmg) {
     if (d > A.range + e.radius) continue;
     const dot = d > 0.0001 ? (dx / d) * fx + (dz / d) * fz : 1;
     const ang = Math.acos(clamp(dot, -1, 1));
+    // arcDeg 按"半角"解释：66 表示左右各 66°，总张角 132°
     if (ang > A.arcDeg * Math.PI / 180) continue;
     damageEnemy(e, dmg);
     hits++;
@@ -515,12 +534,14 @@ function hitscanAttack(dmg, A) {
   }
 
   if (best) {
+    // 柱体按整根圆柱判定，避免用包围球导致"柱后目标"被打中
+    let blockedT = Infinity;
     for (let i = 0; i < obstacles.length; i++) {
       const o = obstacles[i];
-      const c = new THREE.Vector3(o.x, 3, o.z);
-      const t = raySphere(origin, dir, c, o.r * 1.15);
-      if (t !== null && t < bestT) { best = null; break; }
+      const t = rayCylinder(origin, dir, o.x, o.z, o.r * 1.05, 0, WALL_H);
+      if (t !== null && t < blockedT) blockedT = t;
     }
+    if (blockedT < bestT) best = null;
   }
 
   const len = best ? bestT : 70;
@@ -551,6 +572,26 @@ function raySphere(origin, dir, center, radius) {
   if (d2 > radius * radius) return null;
   const thc = Math.sqrt(radius * radius - d2);
   return Math.max(0, t - thc);
+}
+
+/* 射线与竖直圆柱求交（柱子遮挡判定）
+   返回最近命中距离，未命中返回 null */
+function rayCylinder(origin, dir, cx, cz, radius, yMin, yMax) {
+  const ox = origin.x - cx;
+  const oz = origin.z - cz;
+  const a = dir.x * dir.x + dir.z * dir.z;
+  if (a < 1e-8) return null;
+  const b = 2 * (ox * dir.x + oz * dir.z);
+  const c = ox * ox + oz * oz - radius * radius;
+  const disc = b * b - 4 * a * c;
+  if (disc < 0) return null;
+  const sq = Math.sqrt(disc);
+  let t = (-b - sq) / (2 * a);
+  if (t < 0) t = (-b + sq) / (2 * a);
+  if (t < 0) return null;
+  const y = origin.y + dir.y * t;
+  if (y < yMin || y > yMax) return null;
+  return t;
 }
 
 /* ---------------- 技能 ---------------- */
@@ -840,8 +881,11 @@ function updateEnemies(dt) {
         e.pos.z += nz * spd * dt;
       } else if (e.attackCd <= 0) {
         e.attackCd = e.type === 'elite' ? 1.3 : 1.05;
-        damagePlayer(e.dmg);
-        spawnRing(e.pos.x, 0.9, e.pos.z, 0xff5c72, 1.2);
+        // 近战也要有视线，柱体后面打不到玩家
+        if (!losBlocked(e.pos.x, e.pos.z, yawObj.position.x, yawObj.position.z)) {
+          damagePlayer(e.dmg);
+          spawnRing(e.pos.x, 0.9, e.pos.z, 0xff5c72, 1.2);
+        }
       }
     } else if (e.type === 'shooter') {
       if (d > 15) {
@@ -1023,7 +1067,8 @@ function updateProjectiles(dt) {
       const dx = pr.pos.x - e.pos.x;
       const dz = pr.pos.z - e.pos.z;
       const r = e.radius + 0.22;
-      if (dx * dx + dz * dz < r * r) {
+      // 判定加高度带，避免朝天上打的弹丸命中地面上的敌人
+      if (dx * dx + dz * dz < r * r && pr.pos.y > 0.1 && pr.pos.y < 2.4) {
         if (pr.splash > 0) splashDamage(pr.pos, pr.splash, pr.dmg);
         else damageEnemy(e, pr.dmg);
         removeProjectile(i);
@@ -1329,6 +1374,9 @@ function startGame() {
   state.enemyResp = 0;
   state.clsName = CLASSES[state.cls].name;
 
+  input.keys = {};
+  input.attacking = false;
+
   resetPlayer();
   buildWeapon();
   updateSkillUI();
@@ -1486,7 +1534,8 @@ function updateHUD() {
   }
 
   if (state.mode === 'pve') {
-    const alive = enemies.filter(e => !e.dead).length;
+    let alive = 0;
+    for (let i = 0; i < enemies.length; i++) if (!enemies[i].dead) alive++;
     objectiveEl.textContent = 'WAVE ' + state.wave + ' · 剩余 ' + (alive + state.spawnQueue.length);
   } else {
     objectiveEl.textContent = state.scoreP + ' : ' + state.scoreE + ' · 先到 3 杀';
@@ -1580,6 +1629,11 @@ function bindInput() {
   window.addEventListener('blur', () => {
     input.attacking = false;
     input.keys = {};
+  });
+
+  // 切到后台时自动暂停，避免"人不在还被怪打"
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && state.phase === 'playing') pauseGame();
   });
 }
 
