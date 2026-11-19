@@ -758,6 +758,22 @@ function castSkill(idx) {
   runSkill(S.id);
 }
 
+/* 范围/锥形技能对远端对手的判定：联机下技能不能只打 PVE 敌人 */
+function aoeHitRemote(px, pz, radius, dmg, crit, fx, fz) {
+  const rm = netRemoteAlive();
+  if (!rm) return false;
+  const dx = (rm.x || 0) - px;
+  const dz = (rm.z || 0) - pz;
+  const d = hyp(dx, dz);
+  if (d > radius) return false;
+  if (fx !== undefined) {
+    const dot = d > 0.0001 ? (dx / d) * fx + (dz / d) * fz : 1;
+    if (dot <= 0.55) return false;
+  }
+  netApplyLocalHit(rm, dmg, !!crit);
+  return true;
+}
+
 function runSkill(id) {
   const yaw = yawObj.rotation.y;
   const fx = -Math.sin(yaw);
@@ -777,6 +793,7 @@ function runSkill(id) {
         const dot = d > 0.0001 ? (dx / d) * fx + (dz / d) * fz : 1;
         if (d < 6.5 && dot > 0.55) { damageEnemy(e, 55, true); hit++; }
       }
+      if (aoeHitRemote(px, pz, 6.5, 55, true, fx, fz)) hit++;
       yawObj.position.x = clamp(px + fx * 5.6, -HALF + 1, HALF - 1);
       yawObj.position.z = clamp(pz + fz * 5.6, -HALF + 1, HALF - 1);
       clampPos(yawObj.position, 0.55);
@@ -794,6 +811,7 @@ function runSkill(id) {
         const d = hyp(e.pos.x - px, e.pos.z - pz);
         if (d < 4.4) damageEnemy(e, 42);
       }
+      aoeHitRemote(px, pz, 4.4, 42, false);
       spawnSlashArc(0x8ff0ff);
       spawnCastCircle(px, pz, 0x8ff0ff);
       spawnRing(px, 0.9, pz, 0x8ff0ff, 4.4);
@@ -850,6 +868,7 @@ function runSkill(id) {
         const d = hyp(e.pos.x - px, e.pos.z - pz);
         if (d < 6.5) { damageEnemy(e, 14); e.slow = 3.2; }
       }
+      aoeHitRemote(px, pz, 6.5, 14, false);
       spawnCastCircle(px, pz, 0x8fc9ff);
       spawnRing(px, 0.4, pz, 0x8fc9ff, 6.5);
       sfx('skill');
@@ -1247,6 +1266,7 @@ function updateProjectiles(dt) {
       continue;
     }
 
+    let hitAny = false;
     for (let j = 0; j < enemies.length; j++) {
       const e = enemies[j];
       if (e.dead) continue;
@@ -1258,7 +1278,22 @@ function updateProjectiles(dt) {
         if (pr.splash > 0) splashDamage(pr.pos, pr.splash, pr.dmg);
         else damageEnemy(e, pr.dmg);
         removeProjectile(i);
+        hitAny = true;
         break;
+      }
+    }
+    if (hitAny) continue;
+
+    // 联机：法球也要能砸到对面的真人
+    const rm = netRemoteAlive();
+    if (rm) {
+      const dx = pr.pos.x - (rm.x || 0);
+      const dz = pr.pos.z - (rm.z || 0);
+      const r = 0.62 + 0.22;
+      if (dx * dx + dz * dz < r * r && pr.pos.y > 0.1 && pr.pos.y < 2.4) {
+        if (pr.splash > 0) splashDamage(pr.pos, pr.splash, pr.dmg);
+        else netApplyLocalHit(rm, pr.dmg, false);
+        removeProjectile(i);
       }
     }
   }
@@ -1704,6 +1739,7 @@ function updateSkills(dt) {
         const d = hyp(e.pos.x - yawObj.position.x, e.pos.z - yawObj.position.z);
         if (d < 5.2) damageEnemy(e, 16);
       }
+      aoeHitRemote(yawObj.position.x, yawObj.position.z, 5.2, 16, false);
     }
     if (player.domain <= 0) toast('剑域结束', 700);
   }
