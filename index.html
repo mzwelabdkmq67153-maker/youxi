@@ -55,6 +55,15 @@
       <div class="toggle" id="modeToggle">
         <button data-mode="pve" class="on">PVE 副本</button>
         <button data-mode="pvp">PVP 对决</button>
+        <button data-mode="online">局域网对战</button>
+      </div>
+    </div>
+
+    <div class="row hidden" id="onlineRow">
+      <label>房间</label>
+      <div class="fields">
+        <input id="roomInput" maxlength="6" placeholder="房间号，如 A1B2" autocomplete="off" spellcheck="false" />
+        <input id="nameInput" maxlength="10" placeholder="你的昵称" autocomplete="off" spellcheck="false" />
       </div>
     </div>
 
@@ -70,6 +79,14 @@
     <p class="hint">WASD 移动 · Shift 疾跑 · 空格跳跃 · 鼠标转向 · 左键攻击 · Q / E / R 技能 · Esc 暂停</p>
     <button id="startBtn" class="primary">进入竞技场</button>
     <p class="tiny">建议使用 Chrome / Edge，进入后鼠标会被锁定，按 Esc 退出</p>
+  </div>
+
+  <div class="panel hidden" id="onlinePanel">
+    <h2>房间 <span id="roomCode" class="code">—</span></h2>
+    <p class="sub" id="onlineStatus">正在连接服务器…</p>
+    <div id="onlinePlayers" class="players"></div>
+    <p class="tiny" id="onlineTip">把房间号发给对手，让他在同一 WiFi 下输入同一个号码</p>
+    <button id="onlineQuit" class="ghost">退出房间</button>
   </div>
 
   <div class="panel hidden" id="pausePanel">
@@ -90,6 +107,9 @@
 
 <script src="vendor/three.min.js"></script>
 <script src="art.js"></script>
+<script src="fx.js"></script>
+<script src="scene.js"></script>
+<script src="net.js"></script>
 <script src="game.js"></script>
 </body>
 </html>

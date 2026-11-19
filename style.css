@@ -261,6 +261,47 @@ html, body {
 }
 .tiny { margin-top: 10px; font-size: 11px; color: #4d627a; }
 
+/* 联机房间输入与玩家列表 */
+.fields { display: flex; gap: 8px; flex: 1; }
+.fields input {
+  flex: 1; min-width: 0;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  letter-spacing: 1px;
+  color: #eafaff;
+  background: rgba(10, 18, 30, 0.9);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+.fields input::placeholder { color: #4f6680; letter-spacing: 0.5px; }
+.fields input:focus {
+  border-color: rgba(110, 227, 255, 0.6);
+  box-shadow: 0 0 16px rgba(110, 227, 255, 0.14);
+}
+#roomInput { text-transform: uppercase; }
+
+.code {
+  font-size: 22px;
+  letter-spacing: 5px;
+  color: #6ee3ff;
+  text-shadow: 0 0 20px rgba(110, 227, 255, 0.45);
+}
+.players { margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
+.players .p {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  color: #cfe8f7;
+  background: rgba(12, 22, 34, 0.82);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.players .p .tag { font-size: 11px; letter-spacing: 1px; color: #6ee3ff; }
+.players .p.waiting { color: #586e86; border-style: dashed; }
+
 button.primary, button.ghost {
   display: block;
   width: 100%;

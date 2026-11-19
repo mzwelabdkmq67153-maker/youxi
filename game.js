@@ -23,7 +23,7 @@ const CLASSES = {
     ]
   },
   gunner: {
-    name: '枪手', hp: 110, en: 100, speed: 6.6, color: 0xffcf6b,
+    name: '枪手', hp: 110, en: 100, speed: 6.6, color: 0x8fd4ff,
     attackType: 'hitscan',
     attack: { dmg: 15, interval: 0.12, spread: 0.006, headMul: 1.8 },
     skills: [
@@ -46,10 +46,10 @@ const CLASSES = {
 
 const TYPES = {
   grunt:   { hp: 58,  speed: 3.1, dmg: 8,  radius: 0.52, color: 0xff5c72, score: 1 },
-  shooter: { hp: 44,  speed: 2.7, dmg: 9,  radius: 0.50, color: 0xb98cff, score: 1 },
+  shooter: { hp: 44,  speed: 2.7, dmg: 9,  radius: 0.50, color: 0xffa23c, score: 1 },
   elite:   { hp: 150, speed: 2.9, dmg: 17, radius: 0.78, color: 0xff9a6b, score: 2 },
   boss:    { hp: 900, speed: 2.3, dmg: 22, radius: 1.50, color: 0xff3860, score: 5 },
-  duelist: { hp: 150, speed: 5.2, dmg: 13, radius: 0.50, color: 0x2ee6c0, score: 1 }
+  duelist: { hp: 150, speed: 5.2, dmg: 13, radius: 0.50, color: 0xff7a45, score: 1 }
 };
 
 /* ---------------- 工具 ---------------- */
@@ -118,7 +118,8 @@ const state = {
   wave: 1, kills: 0, scoreP: 0, scoreE: 0,
   spawnQueue: [], spawnTimer: 0, waveRest: null,
   enemyResp: 0, clsName: '剑客',
-  sandbox: /sandbox/i.test(location.search)
+  sandbox: /sandbox/i.test(location.search),
+  tapTest: /tap/i.test(location.search)
 };
 
 const player = {};
@@ -130,6 +131,7 @@ const obstacles = [];
 
 let lockActive = false;
 let shake = 0;
+let hitStop = 0;
 let hitTimer = null;
 
 const sparkGeo = new THREE.SphereGeometry(0.07, 6, 6);
@@ -166,6 +168,7 @@ function init() {
   renderer.setSize(window.innerWidth, window.innerHeight);
 
   scene = new THREE.Scene();
+  if (window.ArenaFX) ArenaFX.init(scene);
   scene.background = new THREE.Color(0x060a12);
   scene.fog = new THREE.Fog(0x060a12, 30, 78);
 
@@ -219,7 +222,22 @@ function makeGridTexture() {
   return tex;
 }
 
+function wantScene() {
+  return state.mode === 'pve' ? 'dungeon' : 'arena';
+}
+
+/* 换场：先清障碍再重建，障碍由场景模块重新登记 */
+function syncScene() {
+  if (!window.ArenaScene) return;
+  if (ArenaScene.kind === wantScene()) return;
+  obstacles.length = 0;
+  ArenaScene.build(wantScene(), scene, obstacles);
+  ArenaScene.tuneLights(scene);
+}
+
 function buildArena() {
+  if (window.ArenaScene) ArenaScene.build(wantScene(), scene, obstacles);
+  if (window.ArenaScene) return;
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(HALF * 2, HALF * 2),
     new THREE.MeshStandardMaterial({ map: makeGridTexture(), color: 0x2a3d55, roughness: 0.82, metalness: 0.22 })
@@ -298,6 +316,8 @@ function buildLights() {
     pl.position.set(x, 6, z);
     scene.add(pl);
   });
+
+  if (window.ArenaScene) ArenaScene.tuneLights(scene);
 }
 
 /* ---------------- 武器 ---------------- */
@@ -400,6 +420,8 @@ function resetPlayer() {
 
 function updatePlayer(dt) {
   if (!player.alive) {
+    // 联机对战：复活时机由服务器决定，客户端不做本地复活
+    if (state.mode === 'online') return;
     player.respawn -= dt;
     if (player.respawn <= 0) {
       player.alive = true;
@@ -433,6 +455,11 @@ function updatePlayer(dt) {
   const runMul = wantsRun ? 1.45 : 1;
   const speed = player.speed * (player.sprintT > 0 ? 1.7 : 1) * runMul;
 
+  // 疾跑拉 FOV：+6°，冲刺再叠 +4°；插值过渡，不跳变
+  const targetFov = 72 + (wantsRun ? 6 : 0) + (player.sprintT > 0 ? 4 : 0);
+  camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 8);
+  camera.updateProjectionMatrix();
+
   const yaw = yawObj.rotation.y;
   const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
   const rx = Math.cos(yaw), rz = -Math.sin(yaw);
@@ -443,7 +470,7 @@ function updatePlayer(dt) {
 
   // 跳跃：竖直速度 + 重力，落地重置视角高度
   if (!player.grounded) {
-    player.vy -= 16 * dt;
+    player.vy -= 42 * dt;
     player.y += player.vy * dt;
     if (player.y <= PLAYER_H) {
       player.y = PLAYER_H;
@@ -519,12 +546,12 @@ function doSprint() {
 function doJump() {
   if (state.phase !== 'playing' || !player.alive) return;
   if (!player.grounded || player.jumpCd > 0) return;
-  player.vy = 6.4;
+  player.vy = 11.6;
   player.grounded = false;
   player.jumpCd = 0.22;
   spawnRing(yawObj.position.x, 0.14, yawObj.position.z, 0x9fe8ff, 1.1);
-  for (let i = 0; i < 4; i++) {
-    spawnParticle(yawObj.position.x + rand(-0.3, 0.3), 0.25, yawObj.position.z + rand(-0.3, 0.3));
+  for (let i = 0; i < 3; i++) {
+    spawnParticle(yawObj.position.x + rand(-0.3, 0.3), 0.25, yawObj.position.z + rand(-0.3, 0.3), 0xbfd4e2);
   }
   sfx('dash');
 }
@@ -532,16 +559,25 @@ function doJump() {
 function landEffect() {
   const x = yawObj.position.x;
   const z = yawObj.position.z;
-  spawnRing(x, 0.1, z, 0x8ff0ff, 1.9);
-  for (let i = 0; i < 6; i++) {
-    spawnParticle(x + rand(-0.5, 0.5), 0.2, z + rand(-0.5, 0.5));
+  if (window.ArenaFX) {
+    ArenaFX.land(new THREE.Vector3(x, 0.02, z));
+    sfx('hit');
+    return;
+  }
+  spawnRing(x, 0.1, z, 0x9fb8c8, 1.9);
+  // 落地扬尘：一笔横铺的墨迹 + 两笔短的
+  spawnBrush(x, 0.18, z, 0xb6c6d2, 0, 1.6, true);
+  spawnBrush(x + 0.5, 0.16, z + 0.3, 0x9fb0bd, 0.9, 1.0, true);
+  spawnBrush(x - 0.45, 0.16, z - 0.2, 0x9fb0bd, -1.2, 1.0, true);
+  for (let i = 0; i < 3; i++) {
+    spawnParticle(x + rand(-0.5, 0.5), 0.2, z + rand(-0.5, 0.5), 0xb6c6d2);
   }
   sfx('hit');
 }
 
 /* 疾跑残影：脚下一圈快速淡出的青色痕迹 */
 function spawnTrailGhost() {
-  spawnRing(yawObj.position.x, 0.06, yawObj.position.z, 0x2ee6c0, 0.9);
+  spawnRing(yawObj.position.x, 0.06, yawObj.position.z, CLASSES[state.cls].color, 0.9);
 }
 
 /* ---------------- 攻击 ---------------- */
@@ -580,6 +616,21 @@ function meleeAttack(dmg) {
     hits++;
   }
 
+  // 联机对手也吃这一刀
+  if (state.mode === 'online') {
+    const rm = netRemoteAlive();
+    if (rm) {
+      const dx = rm.x - ox;
+      const dz = rm.z - oz;
+      const d = hyp(dx, dz);
+      const dot = d > 0.0001 ? (dx / d) * fx + (dz / d) * fz : 1;
+      const ang = Math.acos(clamp(dot, -1, 1));
+      if (d <= A.range + 0.55 && ang <= A.arcDeg * Math.PI / 180) {
+        if (netApplyLocalHit(rm, dmg, false)) hits++;
+      }
+    }
+  }
+
   spawnSlashArc(0x9fe8ff);
   spawnRing(ox + fx * 1.6, 1.1, oz + fz * 1.6, 0x9fe8ff, 1.3);
   if (hits > 0) {
@@ -602,7 +653,19 @@ function hitscanAttack(dmg, A) {
   dir.normalize();
 
   let best = null;
+  let bestRemote = null;
   let bestT = Infinity;
+
+  // 联机对手先参与射线判定
+  if (state.mode === 'online') {
+    const rm = netRemoteAlive();
+    if (rm) {
+      const c = new THREE.Vector3(rm.x, 1.05, rm.z);
+      const t = raySphere(origin, dir, c, 0.62);
+      if (t !== null && t < bestT) { bestT = t; bestRemote = rm; }
+    }
+  }
+
   for (let i = 0; i < enemies.length; i++) {
     const e = enemies[i];
     if (e.dead) continue;
@@ -611,7 +674,7 @@ function hitscanAttack(dmg, A) {
     if (t !== null && t < bestT) { bestT = t; best = e; }
   }
 
-  if (best) {
+  if (best || bestRemote) {
     // 柱体按整根圆柱判定，避免用包围球导致"柱后目标"被打中
     let blockedT = Infinity;
     for (let i = 0; i < obstacles.length; i++) {
@@ -619,18 +682,24 @@ function hitscanAttack(dmg, A) {
       const t = rayCylinder(origin, dir, o.x, o.z, o.r * 1.05, 0, WALL_H);
       if (t !== null && t < blockedT) blockedT = t;
     }
-    if (blockedT < bestT) best = null;
+    if (blockedT < bestT) { best = null; bestRemote = null; }
   }
 
-  const len = best ? bestT : 70;
+  const len = (best || bestRemote) ? bestT : 70;
   spawnMuzzleFlash();
-  spawnTracer(origin, dir, len);
+  spawnTracer(origin, dir, len, CLASSES[state.cls].color);
 
   if (best) {
     const crit = Math.random() < 0.16;
     damageEnemy(best, dmg * (crit ? A.headMul : 1), crit);
     flashHit();
     sfx('hit');
+  } else if (bestRemote) {
+    const crit = Math.random() < 0.16;
+    if (netApplyLocalHit(bestRemote, dmg * (crit ? A.headMul : 1), crit)) {
+      flashHit();
+      sfx('hit');
+    }
   } else {
     sfx('shot');
   }
@@ -1205,6 +1274,46 @@ function splashDamage(center, radius, dmg) {
       damageEnemy(e, dmg * falloff);
     }
   }
+
+  // 联机：法球与技能的范围伤害同样需要打到对手
+  if (state.mode === 'online') {
+    const rm = netRemoteAlive();
+    if (rm) {
+      const d = hyp(rm.x - center.x, rm.z - center.z);
+      if (d < radius + 0.6) {
+        const falloff = 1 - Math.min(0.45, d / (radius * 2.4));
+        netApplyLocalHit(rm, dmg * falloff, false);
+      }
+    }
+  }
+}
+
+/* 笔触：一片带收锋的墨痕，加法混合；命中、扬尘、冲刺共用一套语言 */
+function spawnBrush(x, y, z, color, angle, scale, flat) {
+  const s = scale || 1;
+  const shape = new THREE.Shape();
+  shape.moveTo(-0.2 * s, 0);
+  shape.quadraticCurveTo(0.0, 0.1 * s, 0.46 * s, 0.01 * s);
+  shape.quadraticCurveTo(0.0, -0.08 * s, -0.2 * s, 0);
+
+  const mesh = new THREE.Mesh(
+    new THREE.ShapeGeometry(shape, 10),
+    new THREE.MeshBasicMaterial({
+      color: color || 0xffffff, transparent: true, opacity: 0.38,
+      side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending
+    })
+  );
+
+  if (flat) {
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.rotation.z = angle || 0;
+  } else {
+    mesh.rotation.y = yawObj.rotation.y + Math.PI + (angle || 0);
+  }
+
+  mesh.position.set(x, y, z);
+  scene.add(mesh);
+  effects.push({ mesh: mesh, kind: 'brush', life: 0.22, maxLife: 0.22 });
 }
 
 function spawnRing(x, y, z, color, radius) {
@@ -1230,8 +1339,8 @@ function spawnExplosion(x, y, z, r) {
   shake = Math.min(0.6, shake + 0.25);
 }
 
-function spawnParticle(x, y, z) {
-  const mesh = new THREE.Mesh(sparkGeo, new THREE.MeshBasicMaterial({ color: 0xffcf6b, transparent: true }));
+function spawnParticle(x, y, z, color) {
+  const mesh = new THREE.Mesh(sparkGeo, new THREE.MeshBasicMaterial({ color: color || 0xffcf6b, transparent: true }));
   mesh.scale.setScalar(rand(0.6, 1.4));
   mesh.position.set(x, y, z);
   scene.add(mesh);
@@ -1241,10 +1350,10 @@ function spawnParticle(x, y, z) {
   });
 }
 
-function spawnTracer(origin, dir, len) {
+function spawnTracer(origin, dir, len, color) {
   const end = origin.clone().addScaledVector(dir, len);
   const geo = new THREE.BufferGeometry().setFromPoints([origin, end]);
-  const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0.9 }));
+  const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: color || 0xffe9a8, transparent: true, opacity: 0.9 }));
   scene.add(line);
   effects.push({ mesh: line, kind: 'tracer', life: 0.09, maxLife: 0.09 });
 }
@@ -1265,6 +1374,18 @@ function spawnDelayedBlast(x, z, delay, radius, dmg, color) {
 
 /* 斩击弧：贴在地面的一道扇形刀光，跟着玩家朝向走 */
 function spawnSlashArc(color) {
+  // fx.js 的墨斩：三段式（前摇 / 刃线 / 飞白），不再铺地面扇形
+  if (window.ArenaFX) {
+    const p = camera.getWorldPosition(new THREE.Vector3());
+    const d = camera.getWorldDirection(new THREE.Vector3());
+    p.addScaledVector(d, 0.95);
+    // 整组推到右下，让准心保持干净
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+    p.addScaledVector(right, 0.26);
+    p.y -= 0.22;
+    ArenaFX.slash(p, camera.rotation.y);
+    return;
+  }
   const geo = new THREE.RingGeometry(0.85, 3.05, 24, 1, -0.95, 1.9);
   const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
     color: color || 0x9fe8ff, transparent: true, opacity: 0.7,
@@ -1276,15 +1397,25 @@ function spawnSlashArc(color) {
   effects.push({ mesh: mesh, kind: 'arc', life: 0.16, maxLife: 0.16 });
 }
 
-/* 枪口火光：枪管前方一个短促的亮点 */
+/* 枪口火光：打在枪管口，不再盖在准心上 */
 function spawnMuzzleFlash() {
-  const origin = camera.getWorldPosition(new THREE.Vector3());
   const dir = camera.getWorldDirection(new THREE.Vector3());
+  const muzzle = new THREE.Vector3(0.31, 1.03, -0.96);
+  if (weaponObj) {
+    weaponObj.localToWorld(muzzle);
+  } else {
+    muzzle.copy(camera.getWorldPosition(new THREE.Vector3())).addScaledVector(dir, 0.9);
+  }
+  // fx.js 的击发：墨花 + 弹道，枪口之外不占准心
+  if (window.ArenaFX) {
+    ArenaFX.muzzle(muzzle, camera.rotation.y);
+    return;
+  }
   const mesh = new THREE.Mesh(sparkGeo, new THREE.MeshBasicMaterial({
-    color: 0xffe9a8, transparent: true, opacity: 0.95
+    color: CLASSES[state.cls].color, transparent: true, opacity: 0.9
   }));
-  mesh.scale.setScalar(2.3);
-  mesh.position.copy(origin).addScaledVector(dir, 0.85);
+  mesh.scale.setScalar(1.15);
+  mesh.position.copy(muzzle);
   scene.add(mesh);
   effects.push({ mesh: mesh, kind: 'flash', life: 0.07, maxLife: 0.07 });
 }
@@ -1326,6 +1457,17 @@ function spawnShards(pos, count, color) {
 }
 
 function updateEffects(dt) {
+  // 同屏特效上限 48：超了先清最老的；陨星的预警圈（delayed）不参与清理
+  if (effects.length > 48) {
+    for (let j = 0; j < effects.length && effects.length > 48; j++) {
+      if (effects[j].kind === 'delayed') continue;
+      const old = effects.splice(j, 1)[0];
+      scene.remove(old.mesh);
+      if (old.mesh.geometry && !old.mesh.geometry.userData.shared) old.mesh.geometry.dispose();
+      if (old.mesh.material) old.mesh.material.dispose();
+      j--;
+    }
+  }
   for (let i = effects.length - 1; i >= 0; i--) {
     const f = effects[i];
     f.life -= dt;
@@ -1359,9 +1501,12 @@ function updateEffects(dt) {
     } else if (f.kind === 'arc') {
       f.mesh.material.opacity = (1 - k) * 0.7;
       f.mesh.rotation.y = yawObj.rotation.y + Math.PI / 2;
+    } else if (f.kind === 'brush') {
+      f.mesh.material.opacity = (1 - k) * 0.38;
+      f.mesh.scale.setScalar(1 + k * 0.85);
     } else if (f.kind === 'flash') {
-      f.mesh.material.opacity = (1 - k) * 0.95;
-      f.mesh.scale.setScalar(2.3 * (1 + k * 0.7));
+      f.mesh.material.opacity = (1 - k) * 0.9;
+      f.mesh.scale.setScalar(1.15 * (1 + k * 0.7));
     } else if (f.kind === 'castIn' || f.kind === 'castOut') {
       f.mesh.rotation.z += f.spin * dt;
       f.mesh.material.opacity = (1 - k) * (f.kind === 'castIn' ? 0.85 : 0.5);
@@ -1389,8 +1534,11 @@ function damageEnemy(e, dmg, crit) {
   if (e.dead) return;
   e.hp -= dmg;
   e.flash = 0.12;
+  hitStop = 0.05;
   spawnDamageText(e.pos, dmg, !!crit);
-  for (let i = 0; i < (crit ? 6 : 3); i++) spawnParticle(e.pos.x, 1.1, e.pos.z);
+  if (window.ArenaFX) ArenaFX.hit(new THREE.Vector3(e.pos.x, 1.15, e.pos.z), yawObj.rotation.y + Math.PI);
+  spawnBrush(e.pos.x, 1.15, e.pos.z, CLASSES[state.cls].color, rand(-0.5, 0.5), crit ? 1.35 : 1.0);
+  for (let i = 0; i < (crit ? 3 : 2); i++) spawnParticle(e.pos.x, 1.1, e.pos.z, CLASSES[state.cls].color);
   if (e.hp <= 0) killEnemy(e);
 }
 
@@ -1426,13 +1574,16 @@ function killEnemy(e) {
 
 function damagePlayer(dmg) {
   if (player.invul > 0 || state.phase !== 'playing' || !player.alive) return;
+  // 联机对战的血量由服务器仲裁，本地挨打只走 onNetHurt
+  if (state.mode === 'online') return;
   // 调试沙盒：地址带 ?sandbox 时不掉血，用于检查动作与特效
   if (state.sandbox) return;
   player.hp -= dmg;
   player.invul = 0.55;
   player.hurtT = 0.2;
-  flashEl.classList.add('show');
-  window.setTimeout(() => flashEl.classList.remove('show'), 200);
+  if (window.ArenaFX) ArenaFX.vignette();
+  else flashEl.classList.add('show');
+  if (!window.ArenaFX) window.setTimeout(() => flashEl.classList.remove('show'), 200);
   shake = Math.min(0.5, shake + 0.2);
   sfx('hurt');
 
@@ -1560,6 +1711,8 @@ function updateSkills(dt) {
 
 /* ---------------- 对局流程 ---------------- */
 function startGame() {
+  // PVE 进首领厅、PVP 留在竞技场：换场只换视觉与障碍，玩法占地仍是 ±HALF
+  syncScene();
   resetWorld();
   state.phase = 'playing';
   state.elapsed = 0;
@@ -1586,11 +1739,22 @@ function startGame() {
   pausePanel.classList.add('hidden');
   resultPanel.classList.add('hidden');
 
-  modeLabelEl.textContent = state.mode === 'pve' ? 'PVE 副本' : 'PVP 对决';
+  modeLabelEl.textContent = state.mode === 'pve' ? 'PVE 副本'
+    : state.mode === 'online' ? '局域网对战' : 'PVP 对决';
 
   if (state.mode === 'pve') {
     startWave();
     toast('WAVE 1', 1200);
+  } else if (state.mode === 'online') {
+    // 出生点由服务端分配，双方各占一侧，避免两人叠在同一格
+    const n = netRef();
+    if (n && n.spawn) {
+      yawObj.position.set(n.spawn.x, player.y, n.spawn.z);
+      yawObj.rotation.y = n.spawn.yaw || 0;
+      pitchObj.rotation.x = 0;
+    }
+    ensureRemoteMesh();
+    toast('对战开始', 1200);
   } else {
     spawnEnemy('duelist', new THREE.Vector3(0, 0, -14));
     toast('对决开始', 1200);
@@ -1613,7 +1777,8 @@ function endGame(win) {
   resultPanel.classList.remove('hidden');
 
   resultTitleEl.textContent = win ? '胜利' : '行动终止';
-  resultSubEl.textContent = (state.mode === 'pve' ? 'PVE 副本' : 'PVP 对决') + ' · ' + state.clsName;
+  resultSubEl.textContent = (state.mode === 'pve' ? 'PVE 副本'
+    : state.mode === 'online' ? '局域网对战' : 'PVP 对决') + ' · ' + state.clsName;
 
   let rows;
   if (state.mode === 'pve') {
@@ -1768,8 +1933,31 @@ function bindUI() {
       modeBtns.forEach(x => x.classList.remove('on'));
       b.classList.add('on');
       state.mode = b.dataset.mode;
+      // 联机模式要先填房间号，房间行展开
+      const row = document.getElementById('onlineRow');
+      if (row) row.classList.toggle('hidden', state.mode !== 'online');
+      if (state.mode === 'online') {
+        const roomEl = document.getElementById('roomInput');
+        if (roomEl && !roomEl.value) roomEl.value = randomRoomCode();
+      }
     });
   });
+
+  const onlineQuit = document.getElementById('onlineQuit');
+  if (onlineQuit) {
+    onlineQuit.addEventListener('click', () => {
+      const n = netRef();
+      if (n) n.close();
+      removeRemoteMesh();
+      document.getElementById('onlinePanel').classList.add('hidden');
+      menuPanel.classList.remove('hidden');
+      state.phase = 'menu';
+      if (state.mode === 'online') state.mode = 'pve';
+      modeBtns.forEach(x => x.classList.toggle('on', x.dataset.mode === 'pve'));
+      const row = document.getElementById('onlineRow');
+      if (row) row.classList.add('hidden');
+    });
+  }
 
   const clsBtns = document.querySelectorAll('#classToggle button');
   clsBtns.forEach((b) => {
@@ -1780,7 +1968,11 @@ function bindUI() {
     });
   });
 
-  document.getElementById('startBtn').addEventListener('click', () => { initAudio(); startGame(); });
+  document.getElementById('startBtn').addEventListener('click', () => {
+    initAudio();
+    if (state.mode === 'online') startOnlineConnect();
+    else startGame();
+  });
   document.getElementById('resumeBtn').addEventListener('click', resumeGame);
   document.getElementById('quitBtn').addEventListener('click', backToMenu);
   document.getElementById('againBtn').addEventListener('click', () => { initAudio(); startGame(); });
@@ -1817,8 +2009,13 @@ function bindInput() {
   canvas.addEventListener('mousedown', (e) => {
     initAudio();
     if (state.phase !== 'playing') return;
-    if (!lockActive) { requestLock(); return; }
-    if (e.button === 0) input.attacking = true;
+    // 正常流程：第一次点击只用于锁定鼠标，不误触攻击
+    if (!lockActive) { requestLock(); if (!state.tapTest) return; }
+    if (e.button === 0) {
+      input.attacking = true;
+      // 调试模式（?tap）：单击即出一次手，方便自动化/无指针锁环境验证命中
+      if (state.tapTest) tryAttack();
+    }
   });
 
   document.addEventListener('mouseup', (e) => {
@@ -1849,15 +2046,18 @@ function updateWeaponVisual(dt) {
   const k = player.attackAnim > 0 ? Math.sin((1 - player.attackAnim / 0.22) * Math.PI) : 0;
   const bobX = Math.sin(state.time * 2.1) * 0.006;
   const bobY = Math.sin(state.time * 4.2) * 0.005;
+  // 疾跑摆动：横向 ±2cm 的节律，配合 FOV 给速度感
+  const runK = Math.min(1, player.runT * 4);
+  const sway = Math.sin(state.time * 9.5) * 0.02 * runK;
   weaponObj.position.set(
-    weaponBase.x + bobX,
-    weaponBase.y + bobY - k * 0.05,
+    weaponBase.x + bobX + sway,
+    weaponBase.y + bobY - k * 0.05 + Math.abs(sway) * 0.35,
     weaponBase.z + k * 0.1
   );
   weaponObj.rotation.set(
     weaponBase.rx - k * 0.85,
     weaponBase.ry + k * 0.2,
-    weaponBase.rz + k * 1.0
+    weaponBase.rz + k * 1.0 + sway * 2.2
   );
 }
 
@@ -1871,8 +2071,11 @@ function applyShake(dt) {
 
 function animate() {
   requestAnimationFrame(animate);
-  const dt = Math.min(clock.getDelta(), 0.05);
-  state.time += dt;
+  const raw = Math.min(clock.getDelta(), 0.05);
+  let dt = raw;
+  // 顿帧：命中后 50ms 内时间压到 12%，其余系统照常
+  if (hitStop > 0) { hitStop -= raw; dt = raw * 0.12; }
+  state.time += raw;
 
   if (state.phase === 'playing') {
     state.elapsed += dt;
@@ -1884,12 +2087,336 @@ function animate() {
     updatePvpRespawn(dt);
     updateWeaponVisual(dt);
     updateHUD();
+    if (state.mode === 'online') {
+      updateOnlineTimers(dt);
+      netPump();
+    }
   }
 
   updateEffects(dt);
+  if (state.mode === 'online') updateRemote(dt);
+  if (window.ArenaFX) ArenaFX.update(dt);
+  if (window.ArenaScene) ArenaScene.update(dt);
   applyShake(dt);
 
   renderer.render(scene, camera);
+}
+
+/* ---------------- 联机（局域网对战） ---------------- */
+
+const HERO_KEY = { blade: 'swordsman', gunner: 'gunner', mage: 'warlock' };
+const CLS_LABEL = { blade: '剑客', gunner: '枪手', mage: '术士' };
+
+let remoteGroup = null;
+const remoteSmooth = { x: 0, y: 0, z: 0, yaw: 0, inited: false };
+let onlineResp = 0;
+
+function netRef() { return window.ArenaNet || null; }
+
+/* 只在对手活着时才是可命中目标 */
+function netRemoteAlive() {
+  const n = netRef();
+  if (!n || !n.remote) return null;
+  if (n.remote.hp !== undefined && n.remote.hp <= 0) return null;
+  return n.remote;
+}
+
+function randomRoomCode() {
+  const A = 'ABCDEFGJKLMNPQRSTUVWXY23456789';
+  let s = '';
+  for (let i = 0; i < 4; i++) s += A[Math.floor(Math.random() * A.length)];
+  return s;
+}
+
+function setRoomStatus(text) {
+  const el = document.getElementById('onlineStatus');
+  if (el) el.textContent = text;
+}
+
+function renderRoomPlayers() {
+  const box = document.getElementById('onlinePlayers');
+  const n = netRef();
+  if (!box) return;
+  const rows = [];
+  const me = n && n.myId ? { name: n.myName, cls: n.myCls, id: n.myId } : { name: '你', cls: state.cls };
+  rows.push('<div class="p"><span>' + me.name + '（你）</span><span class="tag">' + (CLS_LABEL[me.cls] || '剑客') + '</span></div>');
+  if (n && n.remote) {
+    rows.push('<div class="p"><span>' + n.remote.name + '</span><span class="tag">' + (CLS_LABEL[n.remote.cls] || '剑客') + '</span></div>');
+  } else {
+    rows.push('<div class="p waiting"><span>等待对手加入…</span><span class="tag">空位</span></div>');
+  }
+  box.innerHTML = rows.join('');
+}
+
+function startOnlineConnect() {
+  const n = netRef();
+  if (!n) {
+    toast('联机模块未加载，检查 net.js', 1800);
+    return;
+  }
+  const roomEl = document.getElementById('roomInput');
+  const code = ((roomEl && roomEl.value.trim()) || '').toUpperCase() || randomRoomCode();
+  if (roomEl) roomEl.value = code;
+
+  menuPanel.classList.add('hidden');
+  resultPanel.classList.add('hidden');
+  pausePanel.classList.add('hidden');
+  overlayEl.classList.remove('hidden');
+  const panel = document.getElementById('onlinePanel');
+  if (panel) panel.classList.remove('hidden');
+  document.getElementById('roomCode').textContent = code;
+  setRoomStatus('正在连接服务器…');
+  renderRoomPlayers();
+
+  n.connect({
+    room: code,
+    name: onlineName(),
+    cls: state.cls,
+    welcome: onNetWelcome,
+    opponent: onNetOpponent,
+    hurt: onNetHurt,
+    hitOk: onNetHitOk,
+    kill: onNetKill,
+    respawn: onNetRespawn,
+    end: onNetEnd,
+    leave: onNetLeave,
+    close: onNetClose,
+    error: onNetError
+  });
+}
+
+function onlineName() {
+  const el = document.getElementById('nameInput');
+  return (el && el.value.trim()) || '玩家';
+}
+
+function onNetWelcome(m) {
+  setRoomStatus(m.opponent ? '对手已在房间，准备开始' : '房间已创建，等待对手…');
+  document.getElementById('roomCode').textContent = m.room || '';
+  renderRoomPlayers();
+  if (m.opponent) beginOnlineMatch();
+}
+
+function onNetOpponent(m) {
+  setRoomStatus(m.name + ' 加入了房间');
+  renderRoomPlayers();
+  toast(m.name + ' 进入战场', 1400);
+  beginOnlineMatch();
+}
+
+function beginOnlineMatch() {
+  if (state.mode !== 'online') return;
+  if (state.phase === 'playing') return;
+  const panel = document.getElementById('onlinePanel');
+  if (panel) panel.classList.add('hidden');
+  startGame();
+}
+
+function onNetHitOk(m) {
+  flashHit();
+  sfx('hit');
+}
+
+function onNetHurt(m) {
+  if (state.phase !== 'playing') return;
+  player.hp = m.hp;
+  player.invul = 0.45;
+  player.hurtT = 0.2;
+  flashEl.classList.add('show');
+  window.setTimeout(() => flashEl.classList.remove('show'), 200);
+  shake = Math.min(0.5, shake + 0.2);
+  sfx('hurt');
+  spawnDamageText(new THREE.Vector3(yawObj.position.x, 1.5, yawObj.position.z), m.dmg, false);
+  if (player.hp <= 0) onlineKnockdown();
+}
+
+function onlineKnockdown() {
+  if (!player.alive) return;
+  player.alive = false;
+  input.attacking = false;
+  onlineResp = 3.2;
+  toast('你被击倒，3 秒后回到战场', 1600);
+}
+
+function onNetRespawn(m) {
+  player.alive = true;
+  player.hp = m.hp;
+  player.dead = false;
+  yawObj.position.set(m.x, player.y, m.z);
+  yawObj.rotation.y = m.yaw || 0;
+  spawnRing(m.x, 0.5, m.z, 0x6ee3ff, 1.6);
+  toast('已回到战场', 900);
+}
+
+function onNetKill(m) {
+  const n = netRef();
+  const mine = n && m.by === n.myId;
+  state.scoreP = m.score ? (m.score[n.myId] || 0) : state.scoreP;
+  state.scoreE = m.score ? (m.score[n.myId === 1 ? 2 : 1] || 0) : state.scoreE;
+  toast(mine ? '击倒对手' : '你被击倒', 1200);
+}
+
+function onNetEnd(m) {
+  const n = netRef();
+  const win = n && m.winner === n.myId;
+  state.scoreP = m.score ? (m.score[n.myId] || 0) : state.scoreP;
+  state.scoreE = m.score ? (m.score[n.myId === 1 ? 2 : 1] || 0) : state.scoreE;
+  endGame(win);
+}
+
+function onNetLeave(m) {
+  toast('对手离开了房间', 1600);
+  setRoomStatus('对手已离开，等待新的挑战者…');
+  renderRoomPlayers();
+  removeRemoteMesh();
+  if (state.phase === 'playing') {
+    state.phase = 'over';
+    endGame(false);
+  }
+}
+
+function onNetClose(info) {
+  // 从未连上就断开（房间满/号错/服务没开）：只更新面板文案，不打成"掉线"
+  if (info && info.wasConnected === false) {
+    setRoomStatus('没能进入房间：检查房间号，或确认 server.js 是否在运行');
+    return;
+  }
+  toast('与服务器断开', 1600);
+  setRoomStatus('连接已断开，检查 server.js 是否在运行');
+  const panel = document.getElementById('onlinePanel');
+  if (panel) panel.classList.remove('hidden');
+}
+
+function onNetError(msg) {
+  setRoomStatus(typeof msg === 'string' ? msg : '连接出错');
+}
+
+/* 远端玩家形象：用白露的玩家职业资产，按对手职业取 */
+function removeRemoteMesh() {
+  if (remoteGroup) {
+    scene.remove(remoteGroup);
+    disposeGroup(remoteGroup);
+    remoteGroup = null;
+  }
+  remoteSmooth.inited = false;
+}
+
+function ensureRemoteMesh() {
+  const n = netRef();
+  if (!n || !n.remote) {
+    removeRemoteMesh();
+    return null;
+  }
+  const cls = n.remote.cls || 'blade';
+  if (remoteGroup && remoteGroup.userData.cls === cls) return remoteGroup;
+  removeRemoteMesh();
+
+  const key = HERO_KEY[cls] || 'swordsman';
+  const grp = window.ArenaArt && ArenaArt.buildHero
+    ? ArenaArt.buildHero(key)
+    : new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 1.7, 8), new THREE.MeshStandardMaterial({ color: 0x6fe3ff }));
+  grp.userData.cls = cls;
+  // 头顶挂一个职业色标识环，远处也能认出对手
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(0.26, 0.022, 6, 20),
+    new THREE.MeshBasicMaterial({ color: CLASSES[cls] ? CLASSES[cls].color : 0x6fe3ff })
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 2.02;
+  grp.add(ring);
+  grp.userData.ring = ring;
+
+  scene.add(grp);
+  remoteGroup = grp;
+  remoteSmooth.inited = false;
+  return grp;
+}
+
+/* 插值跟随：20Hz 上行 + 平滑，避免对手抖成幻灯片 */
+function updateRemote(dt) {
+  const n = netRef();
+  if (!n || !n.remote) {
+    if (remoteGroup) removeRemoteMesh();
+    return;
+  }
+  const grp = ensureRemoteMesh();
+  if (!grp) return;
+  const r = n.remote;
+
+  if (!remoteSmooth.inited) {
+    remoteSmooth.x = r.x || 0;
+    remoteSmooth.z = r.z || 0;
+    remoteSmooth.y = r.y || 0;
+    remoteSmooth.yaw = r.yaw || 0;
+    remoteSmooth.inited = true;
+  }
+  const k = 1 - Math.pow(0.0018, dt);
+  remoteSmooth.x += ((r.x || 0) - remoteSmooth.x) * k;
+  remoteSmooth.z += ((r.z || 0) - remoteSmooth.z) * k;
+  remoteSmooth.y += ((r.y || 0) - remoteSmooth.y) * k;
+
+  // 角度走最短弧，避免过 ±π 时转一圈
+  let dy = (r.yaw || 0) - remoteSmooth.yaw;
+  while (dy > Math.PI) dy -= Math.PI * 2;
+  while (dy < -Math.PI) dy += Math.PI * 2;
+  remoteSmooth.yaw += dy * k;
+
+  grp.position.set(remoteSmooth.x, remoteSmooth.y, remoteSmooth.z);
+  grp.rotation.y = remoteSmooth.yaw;
+
+  // 动作表现：跑动上下摆、攻击前倾、跳跃抬升
+  const anim = r.anim || 'idle';
+  const t = state.time;
+  let bob = 0;
+  let lean = 0;
+  if (anim === 'run') bob = Math.sin(t * 11) * 0.045;
+  else if (anim === 'attack') lean = 0.22;
+  else if (anim === 'jump') bob = 0.06;
+  grp.position.y += bob;
+  grp.rotation.x = lean * 0.5;
+
+  if (grp.userData.ring) grp.userData.ring.rotation.z += dt * 1.4;
+}
+
+function localAnimState() {
+  if (!player.alive) return 'idle';
+  if (!player.grounded) return 'jump';
+  if (player.attackAnim > 0) return 'attack';
+  if (player.runT > 0.25) return 'run';
+  return 'idle';
+}
+
+function netPump() {
+  const n = netRef();
+  if (!n || state.mode !== 'online' || state.phase !== 'playing' || !n.connected) return;
+  n.sendState({
+    x: yawObj.position.x,
+    y: player.y,
+    z: yawObj.position.z,
+    yaw: yawObj.rotation.y,
+    anim: localAnimState()
+  });
+}
+
+/* 被击倒后的复活倒计时：到点向服务器申请重生 */
+function updateOnlineTimers(dt) {
+  if (onlineResp <= 0) return;
+  onlineResp -= dt;
+  if (onlineResp <= 0) {
+    onlineResp = 0;
+    const n = netRef();
+    if (n && n.connected) n.sendRespawn();
+  }
+}
+
+/* 联机受伤只认服务器，本地挨打走这条 */
+function netApplyLocalHit(target, dmg, crit) {
+  const n = netRef();
+  if (!n || !target) return false;
+  n.sendHit(target.id, dmg);
+  spawnDamageText(new THREE.Vector3(target.x, 1.45, target.z), Math.round(dmg), !!crit);
+  hitStop = Math.max(hitStop, 0.045);
+  return true;
 }
 
 /* 自测钩子：QA 用，不参与游戏逻辑 */
@@ -1899,7 +2426,28 @@ window.__arenaDebug = {
   enemies: enemies,
   spawn: spawnEnemy,
   jump: doJump,
-  art: window.ArenaArt || null
+  art: window.ArenaArt || null,
+  camera: function () { return camera; },
+  effects: function () { return effects; },
+  input: function () { return input; },
+  hitStop: function () { return hitStop; },
+  attack: function () { tryAttack(); },
+  net: function () { return window.ArenaNet || null; },
+  remoteMesh: function () { return remoteGroup; },
+  damage: damageEnemy,
+  brush: spawnBrush,
+  muzzle: spawnMuzzleFlash,
+  render: function () { renderer.render(scene, camera); },
+  fx: function () { return window.ArenaFX ? ArenaFX.stats() : null; },
+  slash: function () { spawnSlashArc(CLASSES[state.cls].color); },
+  orb: function (x, y, z) { if (window.ArenaFX) ArenaFX.orbBurst(new THREE.Vector3(x, y, z), 0); },
+  // 手动推进一帧，供无 rAF 的环境（远程/无头）做确定性验证
+  step: function (dt) {
+    updatePlayer(dt);
+    updateEffects(dt);
+    if (window.ArenaFX) ArenaFX.update(dt);
+    if (window.ArenaScene) ArenaScene.update(dt);
+  }
 };
 
 /* ---------------- 启动 ---------------- */
