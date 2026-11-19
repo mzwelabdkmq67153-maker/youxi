@@ -180,6 +180,7 @@ const MAX_HP = 130;
 const CLS_HP = { blade: 130, gunner: 110, mage: 105 };
 const MAX_DMG = 80;        // 单次上报伤害上限，挡住随手改包
 const SCORE_TO_WIN = 3;
+const SPAWN_SHIELD_MS = 1200;  // 出生/复活保护时长
 const SPAWNS = [
   { x: 0, z: -13, yaw: Math.PI },  // 出生在 -z 一侧，面向 +z 的对手
   { x: 0, z: 13, yaw: 0 }          // 出生在 +z 一侧，面向 -z 的对手
@@ -294,6 +295,10 @@ function handleMessage(p, raw) {
     if (!p.alive || room.ended) return;
     const target = room.players.find((x) => x.id === num(m.target) && x.id !== p.id);
     if (!target || !target.alive) return;
+    if (target.invulnUntil && Date.now() < target.invulnUntil) {
+      send(p, { t: 'shielded', target: target.id });
+      return;
+    }
     const dmg = clamp(Math.round(num(m.dmg)), 1, MAX_DMG);
     target.hp = Math.max(0, target.hp - dmg);
     sendRoom(room, { t: 'hit', by: p.id, target: target.id, dmg, hp: target.hp }, 0);
@@ -309,10 +314,38 @@ function handleMessage(p, raw) {
     return;
   }
 
+  if (m.t === 'restart') {
+    // 只有打完的局可以重开，避免对局中途有人刷比分
+    if (!room.ended) return;
+    if (room.players.length < 2) {
+      send(p, { t: 'error', msg: '对手不在房间里，等对手回来再开一局' });
+      return;
+    }
+    room.score = { 1: 0, 2: 0 };
+    room.ended = false;
+    room.players.forEach((x) => {
+      const spawn = SPAWNS[x.id === 1 ? 0 : 1];
+      x.hp = x.maxHp;
+      x.alive = true;
+      x.invulnUntil = Date.now() + SPAWN_SHIELD_MS;
+      x.x = spawn.x;
+      x.z = spawn.z;
+      x.yaw = spawn.yaw;
+    });
+    sendRoom(room, {
+      t: 'restart',
+      score: room.score,
+      players: room.players.map((x) => ({ id: x.id, hp: x.hp, x: x.x, z: x.z, yaw: x.yaw }))
+    }, 0);
+    log('restart 房间 ' + room.code + ' 重新开局');
+    return;
+  }
+
   if (m.t === 'respawn') {
     if (room.ended) return;
     p.hp = p.maxHp;
     p.alive = true;
+    p.invulnUntil = Date.now() + SPAWN_SHIELD_MS;
     const spawn = SPAWNS[p.id === 1 ? 0 : 1];
     p.x = spawn.x;
     p.z = spawn.z;
@@ -376,7 +409,9 @@ server.on('upgrade', (req, socket) => {
     y: 0,
     z: 0,
     yaw: 0,
-    anim: 'idle'
+    anim: 'idle',
+    // 出生保护：刚进房/刚复活的一小段时间不吃伤害，避免一照面就被秒
+    invulnUntil: Date.now() + SPAWN_SHIELD_MS
   };
   room.players.push(p);
   sockets.add(socket);

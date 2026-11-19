@@ -1975,7 +1975,17 @@ function bindUI() {
   });
   document.getElementById('resumeBtn').addEventListener('click', resumeGame);
   document.getElementById('quitBtn').addEventListener('click', backToMenu);
-  document.getElementById('againBtn').addEventListener('click', () => { initAudio(); startGame(); });
+  document.getElementById('againBtn').addEventListener('click', () => {
+    initAudio();
+    // 联机：请服务器把房间重置成新一局，双方一起回到出生点
+    if (state.mode === 'online') {
+      const n = netRef();
+      if (n && n.connected) { n.sendRestart(); toast('等待重开…', 900); return; }
+      toast('连接已断开，请重新进入房间', 1600);
+      return;
+    }
+    startGame();
+  });
   document.getElementById('backBtn').addEventListener('click', backToMenu);
 }
 
@@ -2110,6 +2120,23 @@ const CLS_LABEL = { blade: '剑客', gunner: '枪手', mage: '术士' };
 let remoteGroup = null;
 const remoteSmooth = { x: 0, y: 0, z: 0, yaw: 0, inited: false };
 let onlineResp = 0;
+let onlineStreak = 0;
+
+/* 击杀播报：大字横幅 + 连杀后缀，1.5 秒自动收 */
+const STREAK_LABEL = { 2: '双杀', 3: '三杀', 4: '四杀' };
+function streakLabel(k) {
+  if (k >= 5) return '超 神';
+  return STREAK_LABEL[k] || '';
+}
+
+function showKillBanner(text, sub, mine) {
+  const el = document.getElementById('killBanner');
+  if (!el) return;
+  el.className = mine ? 'mine' : '';
+  el.innerHTML = '<div class="line">' + text + '</div>' + (sub ? '<div class="streak">' + sub + '</div>' : '');
+  void el.offsetWidth; // 强制回流，让动画每次都能重播
+  el.classList.add('show');
+}
 
 function netRef() { return window.ArenaNet || null; }
 
@@ -2178,7 +2205,9 @@ function startOnlineConnect() {
     hitOk: onNetHitOk,
     kill: onNetKill,
     respawn: onNetRespawn,
+    shield: onNetShield,
     end: onNetEnd,
+    restart: onNetRestart,
     leave: onNetLeave,
     close: onNetClose,
     error: onNetError
@@ -2209,12 +2238,21 @@ function beginOnlineMatch() {
   if (state.phase === 'playing') return;
   const panel = document.getElementById('onlinePanel');
   if (panel) panel.classList.add('hidden');
+  onlineStreak = 0;
+  const banner = document.getElementById('killBanner');
+  if (banner) banner.classList.remove('show');
   startGame();
 }
 
 function onNetHitOk(m) {
   flashHit();
   sfx('hit');
+}
+
+/* 对手还在出生保护：这一下不算伤害，给个明确反馈 */
+function onNetShield(m) {
+  toast('对手的出生护盾还在，稍等半秒', 900);
+  if (remoteGroup) remoteGroup.userData.flashT = 0.4;
 }
 
 function onNetHurt(m) {
@@ -2253,7 +2291,13 @@ function onNetKill(m) {
   const mine = n && m.by === n.myId;
   state.scoreP = m.score ? (m.score[n.myId] || 0) : state.scoreP;
   state.scoreE = m.score ? (m.score[n.myId === 1 ? 2 : 1] || 0) : state.scoreE;
-  toast(mine ? '击倒对手' : '你被击倒', 1200);
+
+  const name = n && n.remote ? n.remote.name : '对手';
+  if (mine) onlineStreak = Math.min(9, onlineStreak + 1);
+  else onlineStreak = 0;
+  showKillBanner(mine ? '击 倒  ' + name : '被 ' + name + ' 击倒', streakLabel(onlineStreak), !!mine);
+  // 击杀点上开一圈金色冲击，读作"拿下"
+  if (mine && n && n.remote) spawnRing(n.remote.x, 0.72, n.remote.z, 0xffd27a, 1.9);
 }
 
 function onNetEnd(m) {
@@ -2262,6 +2306,31 @@ function onNetEnd(m) {
   state.scoreP = m.score ? (m.score[n.myId] || 0) : state.scoreP;
   state.scoreE = m.score ? (m.score[n.myId === 1 ? 2 : 1] || 0) : state.scoreE;
   endGame(win);
+}
+
+/* 服务器重置了房间：双方满血、比分清零，直接开新一局 */
+function onNetRestart(m) {
+  const n = netRef();
+  const me = ((m && m.players) || []).find((x) => x.id === (n && n.myId));
+  onlineStreak = 0;
+  onlineResp = 0;
+  const banner = document.getElementById('killBanner');
+  if (banner) banner.classList.remove('show');
+  if (state.phase === 'playing') {
+    if (me) {
+      player.alive = true;
+      player.hp = me.hp;
+      player.dead = false;
+      yawObj.position.set(me.x, 0, me.z);
+      yawObj.rotation.y = me.yaw || 0;
+    }
+    toast('新一局开始', 900);
+    return;
+  }
+  const over = document.getElementById('overlay');
+  if (over) over.classList.add('hidden');
+  startGame();
+  toast('新一局开始', 900);
 }
 
 function onNetLeave(m) {
@@ -2325,11 +2394,91 @@ function ensureRemoteMesh() {
   ring.position.y = 2.02;
   grp.add(ring);
   grp.userData.ring = ring;
+  buildRemoteBar(grp);
 
   scene.add(grp);
   remoteGroup = grp;
   remoteSmooth.inited = false;
   return grp;
+}
+
+/* 对手头顶的名牌 + 血条：远处也能看清谁是谁、还剩多少血 */
+function makeNameSprite(name) {
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 128;
+  const g = c.getContext('2d');
+  const txt = String(name || '对手').slice(0, 10);
+  g.font = '700 40px "Microsoft YaHei", "PingFang SC", system-ui, sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.shadowColor = 'rgba(0, 0, 0, 0.9)';
+  g.shadowBlur = 12;
+  g.fillStyle = '#e6f5ff';
+  g.fillText(txt, 256, 64);
+  const tex = new THREE.CanvasTexture(c);
+  tex.minFilter = THREE.LinearFilter;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  sp.scale.set(1.24, 0.31, 1);
+  return sp;
+}
+
+function buildRemoteBar(grp) {
+  const n = netRef();
+  const holder = new THREE.Group();
+  holder.position.y = 2.3;
+  grp.add(holder);
+
+  // 血条走 Canvas 贴图 + Sprite：永远正对镜头，也不吃深度排序的亏
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 40;
+  const ctx = canvas.getContext('2d');
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.minFilter = THREE.LinearFilter;
+  const barSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  barSprite.scale.set(0.98, 0.153, 1);
+  holder.add(barSprite);
+
+  const name = makeNameSprite(n && n.remote ? n.remote.name : '对手');
+  name.position.y = 0.26;
+  holder.add(name);
+
+  const bar = { sprite: barSprite, canvas: canvas, ctx: ctx, tex: tex, lastRatio: -1 };
+  paintRemoteBar(bar, 1);
+  grp.userData.bar = bar;
+  grp.userData.flashT = 0;
+
+  // 受击闪光罩：只在本端打中对手时亮一下，不改共享材质
+  const flash = new THREE.Mesh(
+    new THREE.SphereGeometry(0.66, 14, 10),
+    new THREE.MeshBasicMaterial({
+      color: 0xff6478, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending
+    })
+  );
+  flash.position.y = 0.95;
+  grp.add(flash);
+  grp.userData.flash = flash;
+}
+
+/* 重绘对手血条：满血青、过半琥珀、残血红 */
+function paintRemoteBar(bar, ratio) {
+  const w = bar.canvas.width;
+  const h = bar.canvas.height;
+  const g = bar.ctx;
+  g.clearRect(0, 0, w, h);
+  g.fillStyle = 'rgba(2, 8, 14, 0.93)';
+  g.fillRect(0, 0, w, h);
+  g.strokeStyle = 'rgba(126, 210, 246, 0.55)';
+  g.lineWidth = 2;
+  g.strokeRect(1, 1, w - 2, h - 2);
+  const col = ratio > 0.6 ? '#8ef0ff' : ratio > 0.32 ? '#ffc65c' : '#ff5060';
+  const fw = Math.max(2, (w - 8) * ratio);
+  g.fillStyle = col;
+  g.fillRect(4, 4, fw, h - 8);
+  g.fillStyle = 'rgba(255, 255, 255, 0.34)';
+  g.fillRect(4, 4, fw, 3);
+  bar.tex.needsUpdate = true;
 }
 
 /* 插值跟随：20Hz 上行 + 平滑，避免对手抖成幻灯片 */
@@ -2376,6 +2525,27 @@ function updateRemote(dt) {
   grp.rotation.x = lean * 0.5;
 
   if (grp.userData.ring) grp.userData.ring.rotation.z += dt * 1.4;
+
+  // 头顶血条：比例变了才重绘，省开销
+  const bar = grp.userData.bar;
+  if (bar) {
+    const maxHp = r.maxHp || (CLASSES[r.cls] ? CLASSES[r.cls].hp : 110);
+    const ratio = Math.max(0, Math.min(1, (typeof r.hp === 'number' ? r.hp : maxHp) / maxHp));
+    if (Math.abs(ratio - bar.lastRatio) > 0.01 || bar.lastRatio < 0) {
+      bar.lastRatio = ratio;
+      paintRemoteBar(bar, ratio);
+    }
+  }
+
+  // 被本端打中时闪一下红光，读作"打实了"
+  if (grp.userData.flash) {
+    grp.userData.flashT = Math.max(0, (grp.userData.flashT || 0) - dt * 3.4);
+    grp.userData.flash.material.opacity = grp.userData.flashT * 0.62;
+  }
+
+  // 被击倒期间先消失，复活消息到了再回来
+  const dead = typeof r.hp === 'number' && r.hp <= 0;
+  if (grp.visible === dead) grp.visible = !dead;
 }
 
 function localAnimState() {
@@ -2416,6 +2586,7 @@ function netApplyLocalHit(target, dmg, crit) {
   n.sendHit(target.id, dmg);
   spawnDamageText(new THREE.Vector3(target.x, 1.45, target.z), Math.round(dmg), !!crit);
   hitStop = Math.max(hitStop, 0.045);
+  if (remoteGroup) remoteGroup.userData.flashT = 1;
   return true;
 }
 

@@ -95,7 +95,7 @@
         if (m.opponent) {
           net.remote = {
             id: m.opponent.id, name: m.opponent.name, cls: m.opponent.cls,
-            hp: m.opponent.hp, x: 0, y: 0, z: 0, yaw: 0, anim: 'idle'
+            hp: m.opponent.hp, maxHp: m.opponent.hp, x: 0, y: 0, z: 0, yaw: 0, anim: 'idle'
           };
         }
         emit('welcome', m);
@@ -103,7 +103,7 @@
 
       case 'opponentJoined':
         net.remote = {
-          id: m.id, name: m.name, cls: m.cls, hp: m.hp,
+          id: m.id, name: m.name, cls: m.cls, hp: m.hp, maxHp: m.hp,
           x: 0, y: 0, z: 0, yaw: 0, anim: 'idle'
         };
         emit('opponent', m);
@@ -157,6 +157,29 @@
         emit('end', m);
         break;
 
+      case 'restart':
+        // 服务器把房间重置成新一局：比分清零、双方满血回到出生点
+        net.score = m.score || { 1: 0, 2: 0 };
+        (m.players || []).forEach(function (pl) {
+          if (pl.id === net.myId) {
+            net.hp = pl.hp;
+            net.spawn = { x: pl.x, z: pl.z, yaw: pl.yaw };
+          } else if (net.remote) {
+            net.remote.hp = pl.hp;
+            net.remote.maxHp = pl.hp;
+            net.remote.x = pl.x;
+            net.remote.z = pl.z;
+            net.remote.yaw = pl.yaw;
+          }
+        });
+        emit('restart', m);
+        break;
+
+      case 'shielded':
+        // 目标还在出生保护里，这一刀不算
+        emit('shield', m);
+        break;
+
       case 'error':
         emit('error', m.msg || '房间异常');
         break;
@@ -186,6 +209,10 @@
 
   net.sendRespawn = function () {
     net.send({ t: 'respawn' });
+  };
+
+  net.sendRestart = function () {
+    net.send({ t: 'restart' });
   };
 
   net.close = function () {

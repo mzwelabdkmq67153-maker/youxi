@@ -180,6 +180,42 @@ html, body {
 }
 #flash.show { opacity: 1; }
 
+/* 击杀播报：扇形展开的大字 + 连杀标记 */
+#killBanner {
+  position: absolute;
+  left: 50%;
+  top: 27%;
+  transform: translate(-50%, -50%) scale(0.94);
+  pointer-events: none;
+  text-align: center;
+  opacity: 0;
+  z-index: 40;
+}
+#killBanner.show { animation: killIn 1.5s cubic-bezier(0.2, 0.9, 0.2, 1) forwards; }
+#killBanner .line {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  color: #f4fbff;
+  text-shadow: 0 0 22px rgba(120, 220, 255, 0.55), 0 3px 10px rgba(0, 0, 0, 0.85);
+}
+#killBanner.mine .line { color: #ffe6a8; text-shadow: 0 0 26px rgba(255, 186, 80, 0.6), 0 3px 10px rgba(0, 0, 0, 0.85); }
+#killBanner .streak {
+  margin-top: 6px;
+  font-size: 13px;
+  letter-spacing: 0.34em;
+  color: #9fe8ff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+#killBanner.mine .streak { color: var(--amber); }
+@keyframes killIn {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.86); }
+  14% { opacity: 1; transform: translate(-50%, -50%) scale(1.04); }
+  26% { transform: translate(-50%, -50%) scale(1); }
+  76% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.02); }
+}
+
 /* ---------------- 覆盖层 ---------------- */
 #overlay {
   position: fixed; inset: 0;
