@@ -875,7 +875,7 @@ function updateEnemies(dt) {
     const spd = e.speed * (e.slow > 0 ? 0.5 : 1);
 
     if (e.type === 'grunt' || e.type === 'elite') {
-      const reach = e.radius + 1.05;
+      const reach = e.radius + 1.6; // 停在 2 米左右出手，避免贴身糊满镜头
       if (d > reach) {
         e.pos.x += nx * spd * dt;
         e.pos.z += nz * spd * dt;
