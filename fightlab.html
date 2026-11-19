@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>入游戏联调 · 场景 / 贴图模型 / 粒子</title>
+<style>html,body{margin:0;background:#0b1016}canvas#shot{display:block}</style>
+</head>
+<body>
+<canvas id="shot" width="2000" height="1150"></canvas>
+<script src="vendor/three.min.js"></script>
+<script src="art.js"></script>
+<script src="paint.js"></script>
+<script src="fx.js"></script>
+<script src="ink.js"></script>
+<script src="scene.js"></script>
+<script>
+(function () {
+  var W = 2000, H = 1150;
+  var cv = document.getElementById('shot');
+  var ctx = cv.getContext('2d');
+  ctx.fillStyle = '#0b1016';
+  ctx.fillRect(0, 0, W, H);
+
+  var CW = 960, CH = 660;
+
+  function label(t, x, y, size, color, bold) {
+    ctx.fillStyle = color || '#dbe6ef';
+    ctx.font = (bold ? '600 ' : '400 ') + size + 'px "PingFang SC","Microsoft YaHei",sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(t, x, y);
+  }
+
+  function render(side, kind, shots) {
+    var renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    renderer.setPixelRatio(1);
+    renderer.setSize(CW, CH);
+    renderer.setClearColor(0x0b1016, 1);
+    var scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x0d1319, 0.010);
+
+    scene.add(new THREE.HemisphereLight(0xd8e8f6, 0x6b6153, 0.85));
+    var d1 = new THREE.DirectionalLight(0xfff2dc, 1.0); d1.position.set(6, 10, 5); scene.add(d1);
+    var d2 = new THREE.DirectionalLight(0xcfd9e0, 0.45); d2.position.set(-8, 6, -6); scene.add(d2);
+
+    window.ArenaScene.build(kind, scene, []);
+
+    // 三具带立绘贴图的敌人，站在台面前侧
+    var foes = [
+      ['grunt', -2.4, -3.2, 0.35],
+      ['shooter', 0.6, -4.6, -0.2],
+      ['elite', 2.9, -2.6, 0.55]
+    ];
+    foes.forEach(function (f) {
+      var g = window.ArenaArt.buildFighter(f[0]);
+      g.position.set(f[1], 0, f[2]);
+      g.rotation.y = f[3];
+      scene.add(g);
+    });
+
+    window.ArenaFX.init(scene);
+    var v3 = new THREE.Vector3();
+    shots.forEach(function (s) {
+      v3.set(s.x, s.y, s.z);
+      if (s.kind === 'slash') window.ArenaFX.slash(v3, s.yaw);
+      if (s.kind === 'muzzle') window.ArenaFX.muzzle(v3, s.yaw);
+      if (s.kind === 'orb') window.ArenaFX.orbBurst(v3, s.yaw);
+      if (s.kind === 'hit') window.ArenaFX.hit(v3, s.yaw);
+    });
+
+    // 推进到粒子飞在半空的那一帧
+    for (var i = 0; i < 5; i++) {
+      window.ArenaFX.update(0.03);
+      window.ArenaScene.update(0.03);
+    }
+
+    var cam = new THREE.PerspectiveCamera(56, CW / CH, 0.1, 200);
+    if (kind === "dungeon") { cam.position.set(0.2, 1.75, 10.2); cam.lookAt(0, 1.10, -3.0); }
+    else { cam.position.set(0.6, 1.62, 6.4); cam.lookAt(0, 1.05, -2.2); }
+    renderer.render(scene, cam);
+    ctx.drawImage(renderer.domElement, side.x, side.y, CW, CH);
+    ctx.strokeStyle = 'rgba(150,190,220,0.25)';
+    ctx.strokeRect(side.x + 0.5, side.y + 0.5, CW - 1, CH - 1);
+    label(window.ArenaScene.stats().kind === 'dungeon' ? '地宫 · 冷青' : '竞技场 · 暖白日场', side.x, side.y - 16, 22, '#e8f2fa', true);
+    renderer.dispose();
+  }
+
+  label('入游戏联调 · 竞技场 / 地宫', 60, 78, 40, '#f2f7fb', true);
+  label('同一套运行时：scene.js 场景 + art.js 人物网格（paint.js 贴立绘）+ fx.js 面片 + ink.js 墨粒粒子', 60, 116, 17, '#9fb3c2');
+
+  render({ x: 40, y: 170 }, 'arena', [
+    { kind: 'slash', x: -2.4, y: 1.25, z: -2.4, yaw: 0.5 },
+    { kind: 'hit', x: 0.6, y: 1.15, z: -4.2, yaw: 0 },
+    { kind: 'muzzle', x: 0.6, y: 1.35, z: -5.6, yaw: 0 }
+  ]);
+
+  render({ x: 1000, y: 170 }, 'dungeon', [
+    { kind: 'orb', x: 2.9, y: 1.2, z: -2.2, yaw: 0 },
+    { kind: 'hit', x: -2.4, y: 1.1, z: -2.8, yaw: 0 },
+    { kind: 'slash', x: 0.6, y: 1.2, z: -4.2, yaw: -0.4 }
+  ]);
+
+  var st = window.ArenaScene.stats();
+  label('场景预算：' + st.meshes + ' 个 mesh / ' + st.tris + ' 三角面（按场景合并后）· 粒子最多 6 批同屏，每批 1 次 drawcall',
+    60, 900, 17, '#9fb3c2');
+  label('人物：甲/衣/肤三槽吃立绘贴图，点缀槽仍走自发光；敌方四类只换主色，不换画法源。',
+    60, 934, 17, '#9fb3c2');
+  label('特效：刀光/枪口/法爆/受击/落地都在原有面片之上叠一层 Points 粒子，命中时面片给形、粒子给量和速度感。',
+    60, 968, 17, '#9fb3c2');
+  window.__ready = true;
+})();
+</script>
+</body>
+</html>
