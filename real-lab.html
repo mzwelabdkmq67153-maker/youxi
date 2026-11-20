@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>写实档人形 · 定型验证（许澄）</title>
+<style>
+  html, body { margin: 0; background: #0a0b0d; color: #d8dee4; font-family: "Microsoft YaHei", system-ui, sans-serif; overflow: hidden; }
+  #c { display: block; margin: 0 auto; }
+  #hud { position: fixed; left: 22px; top: 18px; font-size: 13px; line-height: 1.7; color: #8fa3b5; letter-spacing: 0.5px; }
+  #hud b { color: #e6edf4; font-weight: 600; }
+  #title { position: fixed; right: 24px; top: 18px; text-align: right; font-size: 13px; color: #6f8399; line-height: 1.8; }
+  #title b { display: block; font-size: 15px; color: #cfd9e4; }
+  #labels { position: fixed; left: 0; right: 0; bottom: 16px; display: flex; justify-content: center; gap: 0; font-size: 12px; color: #7d90a4; }
+  #labels span { text-align: center; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud"></div>
+<div id="title"><b>写实档人形 · 定型稿 v1</b>许澄 / 角色形象与定型</div>
+<div id="labels"></div>
+<script src="vendor/three.min.js"></script>
+<script src="real3d.js"></script>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var mode = q.get('mode') || 'views';
+  var wire = q.get('wire') === '1';
+  var showWeapon = q.get('wpn') !== '0';
+
+  var W = 1400, H = 900;
+  var canvas = document.getElementById('c');
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+  renderer.setPixelRatio(1);
+  renderer.setSize(W, H, false);
+  canvas.width = W; canvas.height = H;
+  if (THREE.sRGBEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  renderer.shadowMap.enabled = true;
+
+  var scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a0b0d);
+
+  // 三点光：主光在右上，辅光补左侧，轮廓光压背后，写实要的是过渡不是高光
+  var hemi = new THREE.HemisphereLight(0xbccfe4, 0x1a1712, 0.9);
+  scene.add(hemi);
+  var key = new THREE.DirectionalLight(0xfff3e2, 2.2);
+  key.position.set(3.2, 5.0, 4.2);
+  key.castShadow = true;
+  key.shadow.mapSize.set(1024, 1024);
+  key.shadow.camera.near = 0.5;
+  key.shadow.camera.far = 14;
+  key.shadow.camera.left = -2.4; key.shadow.camera.right = 2.4;
+  key.shadow.camera.top = 3.0; key.shadow.camera.bottom = -0.3;
+  scene.add(key);
+  var fill = new THREE.DirectionalLight(0xa9c4e0, 0.75);
+  fill.position.set(-4.0, 2.4, 2.6);
+  scene.add(fill);
+  var rim = new THREE.DirectionalLight(0xdbe6ff, 1.35);
+  rim.position.set(-1.6, 3.0, -5.0);
+  scene.add(rim);
+
+  var floor = new THREE.Mesh(new THREE.PlaneGeometry(30, 30),
+    new THREE.MeshStandardMaterial({ color: 0x14161a, roughness: 0.95, metalness: 0.0 }));
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  var camera = new THREE.PerspectiveCamera(16, W / H, 0.05, 60);
+
+  function place(model, x, yaw) {
+    model.position.x = x;
+    model.rotation.y = yaw || 0;
+    scene.add(model);
+    return model;
+  }
+
+  var root = new THREE.Group();
+  scene.add(root);
+  var models = [];
+  var labelTexts = [];
+
+  if (mode === 'views') {
+    // 正 / 侧 / 背 / 三分之四
+    var views = [
+      { x: -1.17, yaw: 0, t: '正面' },
+      { x: -0.39, yaw: Math.PI * 0.5, t: '侧面' },
+      { x: 0.39, yaw: Math.PI, t: '背面' },
+      { x: 1.17, yaw: -Math.PI * 0.28, t: '三分之四' }
+    ];
+    views.forEach(function (v) {
+      var m = Real3D.build('swordsman', { weapon: showWeapon });
+      m.position.x = v.x;
+      m.rotation.y = v.yaw;
+      root.add(m);
+      models.push(m);
+      labelTexts.push(v.t);
+    });
+    camera.fov = 15;
+    camera.position.set(0, 1.02, 7.6);
+    camera.lookAt(0, 0.92, 0);
+  } else if (mode === 'head') {
+    var hv = [
+      { x: -0.28, yaw: 0, t: '正面' },
+      { x: 0, yaw: -Math.PI * 0.22, t: '三分之四' },
+      { x: 0.28, yaw: Math.PI * 0.5, t: '侧面' }
+    ];
+    hv.forEach(function (v) {
+      var m = Real3D.build('swordsman', { weapon: false });
+      m.position.x = v.x;
+      m.rotation.y = v.yaw;
+      root.add(m);
+      models.push(m);
+      labelTexts.push(v.t);
+    });
+    camera.fov = 16;
+    camera.position.set(0, 1.668, 2.05);
+    camera.lookAt(0, 1.668, 0);
+  } else if (mode === 'pose') {
+    // 绑定测试：A-pose 基准 + 三个极限姿势
+    var poses = [
+      { x: -1.17, p: 'A', t: 'A-pose 基准' },
+      { x: -0.39, p: 'armsUp', t: '举臂（肩部极限）' },
+      { x: 0.39, p: 'squat', t: '深蹲（膝髋极限）' },
+      { x: 1.17, p: 'lunge', t: '弓步（髋部扭转）' }
+    ];
+    poses.forEach(function (v) {
+      var m = Real3D.build('swordsman', { weapon: false });
+      Real3D.pose(m, v.p);
+      m.position.x = v.x;
+      root.add(m);
+      models.push(m);
+      labelTexts.push(v.t);
+    });
+    camera.fov = 15;
+    camera.position.set(0, 1.0, 7.6);
+    camera.lookAt(0, 0.9, 0);
+  } else if (mode === 'solo') {
+    var m = Real3D.build('swordsman', {});
+    m.position.x = 0;
+    m.rotation.y = -Math.PI * 0.32;
+    root.add(m);
+    models.push(m);
+    camera.fov = 22;
+    camera.position.set(0, 1.15, 4.6);
+    camera.lookAt(0, 0.95, 0);
+  }
+
+  // 骨架点：只在 wire 模式下显示，用来核对骨点位置
+  if (wire && models[0]) {
+    var bones = [];
+    models[0].traverse(function (o) {
+      if (o.isObject3D && o.name && o.name !== 'head_surface') {
+        var wp = new THREE.Vector3();
+        o.getWorldPosition(wp);
+        var d = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 6),
+          new THREE.MeshBasicMaterial({ color: 0x63d2ff }));
+        d.position.copy(wp);
+        scene.add(d);
+        bones.push(d);
+      }
+    });
+    models.forEach(function (mo) {
+      mo.traverse(function (o) {
+        if (o.isMesh && o.material) {
+          o.material.wireframe = true;
+        }
+      });
+    });
+  }
+
+  // HUD：面数与比例，直接给苏晓的预算表用的数字
+  var s = Real3D.stats(models[0] || root);
+  document.getElementById('hud').innerHTML =
+    '三角面 <b>' + s.tris.toLocaleString() + '</b>　顶点 <b>' + s.verts.toLocaleString() + '</b><br>' +
+    '网格数 <b>' + s.meshes + '</b>　材质槽 <b>' + s.mats + '</b>　骨 <b>' + s.bones + '</b><br>' +
+    '身高 <b>' + s.height.toFixed(2) + ' m</b>　头身 <b>' + s.heads + '</b>';
+
+  var lab = document.getElementById('labels');
+  if (labelTexts.length) {
+    lab.innerHTML = labelTexts.map(function (t) {
+      return '<span style="flex:1">' + t + '</span>';
+    }).join('');
+  }
+
+  function loop() {
+    requestAnimationFrame(loop);
+    var t = performance.now() / 1000;
+    if (mode !== 'pose') {
+      models.forEach(function (m) {
+        Real3D.update(m, 0.016, { speed: 0, onGround: true });
+      });
+    }
+    renderer.render(scene, camera);
+  }
+  loop();
+})();
+</script>
+</body>
+</html>

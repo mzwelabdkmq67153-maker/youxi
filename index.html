@@ -109,6 +109,17 @@
 <script src="vendor/three.min.js"></script>
 <script src="art.js"></script>
 <script src="hero3d.js"></script>
+<script src="real3d.js"></script>
+<script>
+  /* 写实档人形接进局内：Real3D 与 Hero3D 同签名（build/update/swing/cast），
+     art.js 的 buildHeroHD / buildFighterHD 只认 window.Hero3D，替换这一个引用即可。
+     回退：注释掉下面一行，或把 ?art=ink 打开，就走 Hero3D。 */
+  (function () {
+    var q = new URLSearchParams(location.search);
+    if (q.get('art') === 'ink') return;
+    if (window.Real3D) window.Hero3D = window.Real3D;
+  })();
+</script>
 <script src="paint.js"></script>
 <script src="fx.js"></script>
 <script src="ink.js"></script>

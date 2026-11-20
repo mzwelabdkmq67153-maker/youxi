@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>接缝验证：ArenaArt → Real3D（许澄）</title>
+<style>
+  html, body { margin: 0; background: #0b0d10; overflow: hidden; }
+  #hud { position: fixed; left: 18px; top: 14px; font: 13px/1.7 "Microsoft YaHei", sans-serif; color: #90a6bb; }
+  #hud b { color: #e8eff6; }
+  #tag { position: fixed; right: 20px; top: 14px; text-align: right; font: 13px/1.7 "Microsoft YaHei", sans-serif; color: #7e93a9; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud"></div>
+<div id="tag"><b>接缝验证</b>art.js buildHero/buildFighter → window.Hero3D = Real3D</div>
+<script src="vendor/three.min.js"></script>
+<script src="art.js"></script>
+<script src="hero3d.js"></script>
+<script src="real3d.js"></script>
+<script>
+  window.Hero3D = window.Real3D;   // 与 index.html 内联脚本同一逻辑
+</script>
+<script src="paint.js"></script>
+<script src="fx.js"></script>
+<script>
+(function () {
+  var W = 1400, H = 900;
+  var canvas = document.getElementById('c');
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+  renderer.setPixelRatio(1); renderer.setSize(W, H, false);
+  canvas.width = W; canvas.height = H;
+  if (THREE.sRGBEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.shadowMap.enabled = true;
+
+  var scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0b0d10);
+  scene.add(new THREE.HemisphereLight(0x9fb4c8, 0x1b1712, 0.85));
+  var key = new THREE.DirectionalLight(0xfff0dc, 2.0); key.position.set(3, 5.5, 4);
+  key.castShadow = true; scene.add(key);
+  var rim = new THREE.DirectionalLight(0xcfe0ff, 1.1); rim.position.set(-2, 3, -5); scene.add(rim);
+  var fill = new THREE.DirectionalLight(0x9dbcd8, 0.6); fill.position.set(-4, 2, 3); scene.add(fill);
+
+  var floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 24),
+    new THREE.MeshStandardMaterial({ color: 0x15181c, roughness: 0.95 }));
+  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+
+  var models = [];
+  function add(m, x, yaw) {
+    m.position.x = x; m.rotation.y = yaw || 0;
+    scene.add(m); models.push(m); return m;
+  }
+
+  // 走的是局内真实入口：ArenaArt.buildHero / buildFighter
+  add(ArenaArt.buildHero('swordsman'), -0.95, 0);
+  add(ArenaArt.buildFighter('grunt', 'elite'), 0, -0.35);
+  add(ArenaArt.buildHero('gunner'), 0.95, 0.25);
+
+  var camera = new THREE.PerspectiveCamera(24, W / H, 0.1, 60);
+  camera.position.set(0, 1.35, 5.2);
+  camera.lookAt(0, 0.95, 0);
+
+  var hud = document.getElementById('hud');
+  var kinds = models.map(function (m) { return m.userData.heroKit + (m.userData.real3d ? '(Real3D)' : '(非 Real3D)'); });
+  hud.innerHTML = '入口 <b>ArenaArt.buildHero / buildFighter</b><br>取到 <b>' + kinds.join('、') + '</b><br>' +
+                  'userData.hero3d = <b>' + models.map(function (m) { return m.userData.hero3d ? 'true' : 'false'; }).join(' / ') + '</b>';
+
+  function loop(t) {
+    requestAnimationFrame(loop);
+    models.forEach(function (m) { Real3D.update(m, 0.016, { speed: 0, onGround: true }); });
+    renderer.render(scene, camera);
+  }
+  loop();
+})();
+</script>
+</body>
+</html>
