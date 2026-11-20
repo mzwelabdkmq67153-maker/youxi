@@ -1116,6 +1116,7 @@ function updateEnemies(dt) {
         e.wind = e.type === 'elite' ? 0.52 : 0.42;
         e.attackCd = (e.type === 'elite' ? 1.3 : 1.05) + e.wind;
         spawnRing(e.pos.x, 0.07, e.pos.z, 0xff5c72, e.radius + 2.4);
+        if (window.Hero3D) Hero3D.swing(e.mesh, 'slash', e.wind + 0.18);
       }
     } else if (e.type === 'shooter') {
       if (d > 15) {
@@ -1131,6 +1132,7 @@ function updateEnemies(dt) {
       if (e.attackCd <= 0 && d < 36) {
         e.attackCd = 1.7;
         fireEnemyShot(e, 0.05);
+        if (window.Hero3D) Hero3D.swing(e.mesh, 'shoot', 0.30);
       }
     } else if (e.type === 'boss') {
       if (d > 13) {
@@ -1201,6 +1203,19 @@ function updateEnemies(dt) {
 
     e.mesh.position.copy(e.pos);
     e.mesh.rotation.y = Math.atan2(nx, nz);
+
+    // 关节动画：按实际位移算步速，受击时叠一个后仰
+    if (window.Hero3D && e.mesh.userData && e.mesh.userData.hero3d) {
+      if (!e._lastPos) e._lastPos = { x: e.pos.x, z: e.pos.z };
+      const mv = hyp(e.pos.x - e._lastPos.x, e.pos.z - e._lastPos.z) / Math.max(dt, 0.0001);
+      e._lastPos.x = e.pos.x; e._lastPos.z = e.pos.z;
+      Hero3D.update(e.mesh, dt, {
+        speed: Math.min(9, mv),
+        onGround: true,
+        aim: e.type === 'shooter',
+        hitT: e.flash > 0 ? 1 : 0
+      });
+    }
 
     if (e.mesh.userData.ring) e.mesh.userData.ring.rotation.z += dt * 1.6;
     if (e.mesh.userData.rings) {
@@ -2678,13 +2693,36 @@ function updateRemote(dt) {
   // 动作表现：跑动上下摆、攻击前倾、跳跃抬升
   const anim = r.anim || 'idle';
   const t = state.time;
-  let bob = 0;
-  let lean = 0;
-  if (anim === 'run') bob = Math.sin(t * 11) * 0.045;
-  else if (anim === 'attack') lean = 0.22;
-  else if (anim === 'jump') bob = 0.06;
-  grp.position.y += bob;
-  grp.rotation.x = lean * 0.5;
+  const isHD = !!(grp.userData && grp.userData.hero3d && window.Hero3D);
+  if (isHD) {
+    // 关节动画：远端只报 anim 名，本地把它还原成整套动作
+    const clsName = r.cls || 'blade';
+    Hero3D.update(grp, dt, {
+      speed: anim === 'run' ? 6.4 : (anim === 'walk' ? 3.2 : 0),
+      onGround: anim !== 'jump',
+      aim: clsName === 'gunner',
+      hitT: (grp.userData.flashT || 0) > 0.02 ? Math.min(1, grp.userData.flashT * 1.6) : 0
+    });
+    // 攻击只在进入该状态的第一帧触发一次，避免每帧重播
+    if (anim === 'attack') {
+      if (!grp.userData._swung) {
+        Hero3D.swing(grp, clsName === 'gunner' ? 'shoot' : (clsName === 'mage' ? 'cast' : 'slash'), 0.42);
+        grp.userData._swung = true;
+      }
+    } else {
+      grp.userData._swung = false;
+    }
+    grp.position.y += (anim === 'jump' ? 0.06 : 0);
+    grp.rotation.x = 0;
+  } else {
+    let bob = 0;
+    let lean = 0;
+    if (anim === 'run') bob = Math.sin(t * 11) * 0.045;
+    else if (anim === 'attack') lean = 0.22;
+    else if (anim === 'jump') bob = 0.06;
+    grp.position.y += bob;
+    grp.rotation.x = lean * 0.5;
+  }
 
   if (grp.userData.ring) grp.userData.ring.rotation.z += dt * 1.4;
 

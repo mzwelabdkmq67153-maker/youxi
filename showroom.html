@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>第七竞技场 · 本地展厅</title>
+<style>
+  html,body{margin:0;height:100%;background:#070b0f;color:#e6f2f8;font-family:"Microsoft YaHei",system-ui,sans-serif;overflow:hidden}
+  #gl{position:fixed;inset:0;display:block}
+  #hud{position:fixed;inset:0;pointer-events:none}
+  #scrim{position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(to bottom,rgba(5,9,13,.82) 0,rgba(5,9,13,.28) 12%,rgba(5,9,13,0) 26%),
+               linear-gradient(to top,rgba(5,9,13,.9) 0,rgba(5,9,13,.35) 18%,rgba(5,9,13,0) 34%)}
+  #title{position:absolute;left:26px;top:18px;font-size:19px;letter-spacing:.14em;color:#bfe9ff;line-height:1.35}
+  #title small{display:block;font-size:11px;letter-spacing:.28em;color:#5f8ea3;margin-top:6px}
+  #tabs{position:absolute;left:26px;bottom:26px;display:flex;gap:8px;pointer-events:auto}
+  #tabs button,#fxbar button{
+    pointer-events:auto;background:rgba(14,24,32,.86);border:1px solid rgba(120,200,235,.28);
+    color:#b8dced;padding:8px 14px;font-size:13px;border-radius:6px;cursor:pointer;letter-spacing:.04em}
+  #tabs button.on{border-color:#6fd3ff;color:#e8fbff;background:rgba(26,54,70,.95);box-shadow:0 0 12px rgba(80,200,255,.25)}
+  #fxbar{position:absolute;left:26px;bottom:76px;display:flex;gap:8px;flex-wrap:wrap;pointer-events:auto;max-width:70vw}
+  #fxbar button:hover{border-color:#8fe0ff}
+  #stat{position:absolute;right:26px;top:18px;text-align:right;font:12px/1.8 Consolas,monospace;color:#8fb8ca;white-space:pre}
+  #cap{position:absolute;right:22px;bottom:22px;text-align:right;font-size:12px;line-height:1.85;color:#9fbcc9;
+    max-width:36vw;background:rgba(6,11,16,.72);border:1px solid rgba(110,180,210,.18);
+    border-radius:6px;padding:9px 13px}
+  #flash{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .18s;
+    box-shadow:inset 0 0 120px 40px rgba(255,60,60,.55)}
+  #flash.show{opacity:.95}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="flash"></div>
+<div id="hud">
+  <div id="scrim"></div>
+  <div id="title">第七竞技场 · 本地展厅<small>SEVENTH ARENA / SHOWROOM</small></div>
+  <div id="stat">…</div>
+  <div id="fxbar"></div>
+  <div id="tabs"></div>
+  <div id="cap"></div>
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="art.js"></script>
+<script src="hero3d.js"></script>
+<script src="fx.js"></script>
+<script src="scene.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var W = window.innerWidth, H = window.innerHeight;
+  var renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gl'), antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(W, H);
+
+  var scene = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera(55, W / H, 0.1, 300);
+
+  /* 常规灯：展厅用中性光，场景内由 ArenaScene.tuneLights 改成日光/地宫 */
+  var hemi = new THREE.HemisphereLight(0xbcd8ea, 0x3a4046, 1.05);
+  var key = new THREE.DirectionalLight(0xfff4e6, 1.45);
+  key.position.set(4, 7, 5);
+  var rim = new THREE.DirectionalLight(0x7fe0ff, 1.05);
+  rim.position.set(-5, 3.5, -6);
+  var front = new THREE.DirectionalLight(0xffffff, 0.55);
+  front.position.set(0, 2.4, 7);
+  scene.add(hemi, key, rim, front);
+
+  var studioGround = null;
+  var current = [];       // 当前视图里的模型/场景
+  var obstacles = [];
+  var view = 'heroes';
+  var t0 = 0;
+
+  var CLASS_NAMES = { swordsman: '剑客', gunner: '枪手', warlock: '术士' };
+  var TYPE_NAMES = { grunt: '杂兵 · 剑', shooter: '射手 · 枪', elite: '精英 · 巨剑', duelist: '决斗者 · 枪', boss: '首领 · 巨剑' };
+
+  function clearView() {
+    if (window.ArenaScene) ArenaScene.clear();
+    for (var i = 0; i < current.length; i++) {
+      var o = current[i];
+      if (o.parent) o.parent.remove(o);
+      o.traverse(function (m) {
+        if (m.isMesh && m.geometry) m.geometry.dispose();
+      });
+    }
+    current = [];
+    if (studioGround && studioGround.parent) {
+      studioGround.parent.remove(studioGround);
+      studioGround.geometry.dispose();
+      studioGround = null;
+    }
+  }
+
+  function makeStudioGround() {
+    var g = new THREE.Mesh(
+      new THREE.CircleGeometry(9, 48),
+      new THREE.MeshStandardMaterial({ color: 0x222b31, roughness: 0.94, metalness: 0.05 })
+    );
+    g.rotation.x = -Math.PI / 2;
+    scene.add(g);
+    studioGround = g;
+    scene.background = new THREE.Color(0x0b1116);
+    scene.fog = new THREE.Fog(0x0b1116, 10, 30);
+    hemi.intensity = 0.78; hemi.color.setHex(0xa9c8dc); hemi.groundColor.setHex(0x2c3238);
+    key.intensity = 1.05; key.color.setHex(0xfff4e6);
+  }
+
+  function addPart(obj) {
+    scene.add(obj);
+    current.push(obj);
+    return obj;
+  }
+
+  function buildHeroes() {
+    makeStudioGround();
+    camera.position.set(0, 1.22, 4.3);
+    camera.lookAt(0, 0.98, 0);
+    var classes = ['swordsman', 'gunner', 'warlock'];
+    var xs = [-0.95, 0, 0.95];
+    classes.forEach(function (c, i) {
+      var m = ArenaArt.buildHero(c);
+      m.position.set(xs[i], 0, 0);
+      m.rotation.y = Math.PI - 0.2;
+      addPart(m);
+      m.userData.spin = true;
+    });
+  }
+
+  function buildEnemies() {
+    makeStudioGround();
+    camera.position.set(0, 1.35, 5.9);
+    camera.lookAt(0, 1.02, 0);
+    var types = ['grunt', 'shooter', 'elite', 'duelist', 'boss'];
+    var xs = [-2.3, -1.15, 0, 1.15, 2.3];
+    types.forEach(function (t, i) {
+      var m = ArenaArt.buildFighter(t);
+      m.position.set(xs[i], 0, 0);
+      m.rotation.y = Math.PI - 0.18;
+      m.scale.setScalar(ArenaArt.scaleOf(t) > 1.6 ? 1.3 : ArenaArt.scaleOf(t));
+      addPart(m);
+      m.userData.spin = true;
+    });
+  }
+
+  function buildScene(kind) {
+    hemi.intensity = 0.62;
+    camera.fov = 58;
+    camera.updateProjectionMatrix();
+    if (kind === 'dungeon') {
+      camera.position.set(0, 2.1, 9.4);
+      camera.lookAt(0, 2.2, 0);
+    } else {
+      camera.position.set(0, 5.4, 23.5);
+      camera.lookAt(0, 2.2, 0);
+    }
+    obstacles = [];
+    var st = ArenaScene.build(kind, scene, obstacles);
+    ArenaScene.tuneLights(scene);
+    return st;
+  }
+
+  /* ---------- 特效 ---------- */
+  ArenaFX.init(scene);
+
+  function fwd(dist) {
+    var d = camera.getWorldDirection(new THREE.Vector3());
+    var p = camera.getWorldPosition(new THREE.Vector3());
+    return p.add(d.multiplyScalar(dist));
+  }
+  function rightOf(p, k) {
+    var r = new THREE.Vector3().crossVectors(camera.getWorldDirection(new THREE.Vector3()), new THREE.Vector3(0, 1, 0)).normalize();
+    return p.add(r.multiplyScalar(k));
+  }
+  function ground(p) { return new THREE.Vector3(p.x, 0.03, p.z); }
+
+  var FX = [
+    ['墨斩 · 剑客', function () { var p = rightOf(fwd(1.15), 0.34); p.y -= 0.18; ArenaFX.slash(p, 0); }],
+    ['击发 · 枪手', function () { var p = rightOf(fwd(0.95), 0.30); p.y -= 0.28; ArenaFX.muzzle(p, 0); }],
+    ['法爆 · 术士', function () { ArenaFX.orbBurst(ground(fwd(2.4)), 0); }],
+    ['敌受击 · 朱红', function () { ArenaFX.hit(new THREE.Vector3(0, 1.05, -0.3), 0); }],
+    ['落地 · 墨圈', function () { ArenaFX.land(ground(fwd(1.7))); }],
+    ['玩家受击 · 边缘', function () { ArenaFX.vignette(); }]
+  ];
+
+  var fxbar = document.getElementById('fxbar');
+  FX.forEach(function (f) {
+    var b = document.createElement('button');
+    b.textContent = f[0];
+    b.addEventListener('click', function () { f[1](); });
+    fxbar.appendChild(b);
+  });
+
+  /* ---------- 视图切换 ---------- */
+  var TABS = [
+    ['heroes', '玩家三职业'],
+    ['enemies', '敌人五型'],
+    ['arena', '场景 · 竞技场'],
+    ['dungeon', '场景 · 首领厅']
+  ];
+  var tabsEl = document.getElementById('tabs');
+  var statEl = document.getElementById('stat');
+  var capEl = document.getElementById('cap');
+
+  var CAPTION = {
+    heroes: '按三张人形立绘重做的低模：7.5 头身、总高 1.80。剑客 1324 面 / 枪手 1472 / 术士 1316，各 4 个材质槽。',
+    enemies: '敌人换成同一套人形骨架，每只合批到 3 个 mesh：1151–1296 面。颜色按类型分开，轮廓上分剑、枪、巨剑与披风。',
+    arena: '竞技场：圆台 + 三圈看台（每圈抬 1.2m）+ 四根 9m 断柱（45°、半径 10.2m）+ 六处掩体；穹顶符阵走两张加法面片，不进几何。',
+    dungeon: '首领厅：圆厅 + 中央祭石台（断成四块、缝隙发青蓝光）+ 五根断柱 + 八处 1.1m 矮掩体 + 兽面浮雕 + 朱红帐幔 + 熔岩缝。'
+  };
+
+  function statText() {
+    var line = [];
+    if (view === 'heroes' || view === 'enemies') {
+      var tris = 0, meshes = 0;
+      current.forEach(function (m) {
+        m.traverse(function (o) {
+          if (!o.isMesh) return;
+          meshes++;
+          tris += o.geometry.attributes.position.count / 3;
+        });
+      });
+      line.push('模型 ' + current.length + ' 个 · mesh ' + meshes + ' · 三角面 ' + Math.round(tris));
+    } else {
+      var s = ArenaScene.stats();
+      line.push(s.kind === 'dungeon' ? '首领厅' : '竞技场');
+      line.push('mesh ' + s.meshes + ' · 三角面 ' + s.tris + ' · 障碍 ' + obstacles.length);
+    }
+    var fx = ArenaFX.stats();
+    line.push('特效活跃组 ' + fx.active + ' / 上限 4 · 层片 ' + fx.layers);
+    return line.join('\n');
+  }
+
+  function setView(v) {
+    view = v;
+    clearView();
+    if (v === 'heroes') buildHeroes();
+    else if (v === 'enemies') buildEnemies();
+    else buildScene(v === 'dungeon' ? 'dungeon' : 'arena');
+
+    Array.prototype.forEach.call(tabsEl.children, function (b) {
+      b.classList.toggle('on', b.dataset.v === v);
+    });
+    capEl.textContent = CAPTION[v];
+    statEl.textContent = statText();
+  }
+
+  TABS.forEach(function (t) {
+    var b = document.createElement('button');
+    b.textContent = t[1];
+    b.dataset.v = t[0];
+    b.addEventListener('click', function () { setView(t[0]); });
+    tabsEl.appendChild(b);
+  });
+
+  setView('heroes');
+
+  // 允许用 #view=enemies 之类直接开局，方便截图与演示
+  var h = (location.hash || '') + (location.search || '');
+  ['heroes', 'enemies', 'arena', 'dungeon'].forEach(function (k) {
+    if (h.indexOf(k) >= 0) setView(k);
+  });
+
+  /* ---------- 渲染循环 ---------- */
+  var last = performance.now();
+  function loop(now) {
+    var dt = Math.min((now - last) / 1000, 0.05);
+    last = now;
+    t0 += dt;
+    if (view === 'heroes' || view === 'enemies') {
+      current.forEach(function (m, i) {
+        m.rotation.y = Math.PI - 0.18 + Math.sin(t0 * 0.5 + i * 1.1) * 0.5;
+      });
+    } else if (window.ArenaScene) {
+      ArenaScene.update(dt);
+    }
+    ArenaFX.update(dt);
+    renderer.render(scene, camera);
+    if (Math.floor(t0 * 4) % 2 === 0) statEl.textContent = statText();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  window.addEventListener('resize', function () {
+    W = window.innerWidth; H = window.innerHeight;
+    camera.aspect = W / H;
+    camera.updateProjectionMatrix();
+    renderer.setSize(W, H);
+  });
+})();
+</script>
+</body>
+</html>

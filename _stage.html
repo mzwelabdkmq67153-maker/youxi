@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>hero3d · 动画台</title>
+<style>
+  html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden;font:12px/1.6 system-ui,"Microsoft YaHei"}
+  #bar{position:fixed;left:10px;bottom:10px;display:flex;gap:6px;flex-wrap:wrap;z-index:9}
+  button{background:#1a2028;color:#cfe3f2;border:1px solid #33404e;border-radius:8px;padding:6px 10px;cursor:pointer}
+  button.on{background:#2a3f52;border-color:#6fe4ff;color:#eaf7ff}
+  #hint{position:fixed;right:12px;top:10px;color:#7f8f9e;text-align:right}
+</style>
+</head>
+<body>
+<div id="hint">hero3d · 三职业 + 敌人同台<br><span id="stat"></span><br><span id="mode"></span></div>
+<div id="bar"></div>
+<script src="vendor/three.min.js"></script>
+<script src="hero3d.js"></script>
+<script>
+(function () {
+  var scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0b0e12);
+  scene.fog = new THREE.Fog(0x0b0e12, 8, 26);
+  var camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 60);
+  camera.position.set(0.9, 1.62, -6.4);
+  camera.lookAt(0, 1.00, 0.4);
+  var renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.80;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  document.body.appendChild(renderer.domElement);
+
+  scene.add(new THREE.HemisphereLight(0xd8e8f6, 0x6b6153, 0.70));
+  var key = new THREE.DirectionalLight(0xfff2dc, 0.80);
+  key.position.set(1.4, 3.0, -2.2);
+  key.castShadow = true;
+  key.shadow.mapSize.set(1024, 1024);
+  key.shadow.camera.near = 1; key.shadow.camera.far = 20;
+  key.shadow.camera.left = -6; key.shadow.camera.right = 6;
+  key.shadow.camera.top = 6; key.shadow.camera.bottom = -6;
+  scene.add(key);
+  var rim = new THREE.DirectionalLight(0xcfd9e0, 0.32);
+  rim.position.set(-1.4, 1.6, 1.6);
+  scene.add(rim);
+
+  var ground = new THREE.Mesh(new THREE.CircleGeometry(9, 56),
+    new THREE.MeshStandardMaterial({ color: 0x3a4148, roughness: 0.92 }));
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+  var grid = new THREE.GridHelper(12, 12, 0x2a3138, 0x222a30);
+  grid.position.y = 0.005;
+  scene.add(grid);
+
+  var lineup = [
+    { kind: 'swordsman', x: -1.35, z: 0.0, face: 0.0 },
+    { kind: 'gunner', x: 0.0, z: 0.0, face: 0.0 },
+    { kind: 'warlock', x: 1.35, z: 0.0, face: 0.0 },
+    { kind: 'grunt', x: -2.0, z: -2.2, face: 0.55 },
+    { kind: 'shooter', x: -0.65, z: -2.2, face: 0.35 },
+    { kind: 'elite', x: 0.7, z: -2.2, face: -0.35 },
+    { kind: 'boss', x: 2.1, z: -2.4, face: -0.55 }
+  ];
+  var models = [];
+  lineup.forEach(function (c) {
+    var m = Hero3D.build(c.kind, {});
+    m.position.set(c.x, 0, c.z);
+    m.rotation.y = c.face;
+    scene.add(m);
+    models.push({ m: m, kind: c.kind, cfg: c });
+  });
+
+  // 动作序列：idle → walk → run → attack → cast → hit
+  var cu = { mode: 'run', t: 0, swing: 0 };
+  function applyMode(dt) {
+    cu.t += dt;
+    if (cu.swing > 0) cu.swing = Math.max(0, cu.swing - dt);
+    models.forEach(function (o, i) {
+      var st = { speed: 0, onGround: true, aim: o.kind === 'gunner' };
+      if (cu.mode === 'run') st.speed = 4.2;
+      else if (cu.mode === 'walk') st.speed = 2.0;
+      else if (cu.mode === 'attack') {
+        st.speed = 0.2;
+        // 每个模型错开 0.4s 出手，画面里能同时看到不同帧
+        var ph = (cu.t * 1.4 - i * 0.30) % 1.6;
+        if (ph > 0 && ph < 0.5) {
+          if (!o._did) { Hero3D.swing(o.m, o.kind === 'gunner' || o.kind === 'shooter' ? 'shoot' : 'slash', 0.55); o._did = true; }
+        } else if (ph >= 1.5) o._did = false;
+      } else if (cu.mode === 'cast') {
+        var ph2 = (cu.t * 1.1 - i * 0.25) % 1.8;
+        if (ph2 > 0 && ph2 < 0.6) { if (!o._did) { Hero3D.cast(o.m, 0.7); o._did = true; } }
+        else if (ph2 >= 1.7) o._did = false;
+      } else if (cu.mode === 'hit') {
+        st.hitT = (Math.sin(cu.t * 6) > 0.2) ? 1 : 0;
+      }
+      Hero3D.update(o.m, dt, st);
+    });
+  }
+
+  var modes = {
+    idle: '静止', walk: '走', run: '跑', attack: '攻击', cast: '施法', hit: '受击'
+  };
+  var curMode = cu.mode;
+  var bar = document.getElementById('bar');
+  function rebuildBar() {
+    bar.innerHTML = '';
+    Object.keys(modes).forEach(function (k) {
+      var b = document.createElement('button');
+      b.textContent = modes[k];
+      if (k === curMode) b.className = 'on';
+      b.onclick = function () { curMode = k; cu.mode = k; cu.t = 0; models.forEach(function (o) { o._did = false; }); rebuildBar(); };
+      bar.appendChild(b);
+    });
+  }
+  rebuildBar();
+
+  var last = performance.now();
+  function loop(now) {
+    requestAnimationFrame(loop);
+    var dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    applyMode(dt);
+    renderer.render(scene, camera);
+    document.getElementById('stat').textContent = 'Triangles ' + renderer.info.render.triangles;
+    document.getElementById('mode').textContent = modes[curMode] + ' · t=' + cu.t.toFixed(2) + 's';
+  }
+  requestAnimationFrame(loop);
+
+  addEventListener('resize', function () {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  });
+})();
+</script>
+</body>
+</html>

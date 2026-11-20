@@ -127,6 +127,8 @@
   /* ---------- 3. 把贴图挂到部位网格上 ---------- */
   function applyGroup(grp, kit) {
     if (!grp || !grp.traverse) return;
+    // hero3d 的高模自带甲纹/布纹/发丝/面部贴图，不能再被立绘样本覆盖
+    if (grp.userData && (grp.userData.hero3d || grp.userData.part === 'hero3d')) return;
     grp.traverse(function (o) {
       if (!o.isMesh || !o.material) return;
       var part = o.userData && o.userData.part;

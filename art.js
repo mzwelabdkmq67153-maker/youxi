@@ -1104,12 +1104,31 @@ function buildFighterHero(type) {
   return grp;
 }
 
+/* hero3d.js 在场时，玩家与敌人改用"关节骨架 + 细节贴图"的高模；
+   保留 V3 / FighterHero 作为低配回退（hero3d.js 缺失时仍可跑） */
+function buildHeroHD(type) {
+  if (!window.Hero3D) return buildHeroV3(type);
+  var m = window.Hero3D.build(type);
+  m.userData.hero3d = true;
+  m.userData.heroKit = type;
+  return m;
+}
+function buildFighterHD(type) {
+  if (!window.Hero3D) return buildFighterHero(type);
+  var m = window.Hero3D.build(type);
+  m.userData.hero3d = true;
+  m.userData.heroKit = type;
+  return m;
+}
+
 window.ArenaArt = {
-  buildFighter: buildFighterHero,
+  buildFighter: buildFighterHD,
   buildFighterLegacy: buildFighter,
-  buildHero: buildHeroV3,
+  buildHero: buildHeroHD,
   buildHeroLegacy: buildHero,
   buildHeroV2: buildHeroV2,
+  buildHeroV3: buildHeroV3,
+  buildFighterHero: buildFighterHero,
   scaleOf: scaleOf,
   KITS: KITS,
   HEROES: HEROES_V2,
