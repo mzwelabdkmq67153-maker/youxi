@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>原画对照建模 · 检查稿（许澄）</title>
+<style>
+  html, body { margin: 0; background: #0c0e11; color: #d8dee4; font-family: "Microsoft YaHei", system-ui, sans-serif; overflow: hidden; }
+  #c { display: block; margin: 0 auto; }
+  #hud { position: fixed; left: 20px; top: 16px; font-size: 13px; line-height: 1.65; color: #8fa3b5; }
+  #hud b { color: #e6edf4; }
+  #title { position: fixed; right: 22px; top: 16px; text-align: right; font-size: 13px; color: #74889d; line-height: 1.7; }
+  #title b { display: block; font-size: 16px; color: #d6e0ea; margin-bottom: 2px; }
+  #labels { position: fixed; left: 0; right: 0; bottom: 14px; display: flex; font-size: 12px; color: #7d90a4; }
+  #labels span { flex: 1; text-align: center; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud"></div>
+<div id="title"><b id="tname">——</b>原画对照 · 建模检查稿 v0</div>
+<div id="labels"></div>
+<script src="vendor/three.min.js"></script>
+<script src="real3d.js"></script>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var kind = q.get('kind') || 'swordsman';
+  var mode = q.get('mode') || 'views';
+  var showWeapon = q.get('wpn') !== '0';
+  var NAMES = { swordsman: '剑客', gunner: '枪手', warlock: '术士' };
+  document.getElementById('tname').textContent = NAMES[kind] || kind;
+
+  var W = 1400, H = 900;
+  var canvas = document.getElementById('c');
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+  renderer.setPixelRatio(1);
+  renderer.setSize(W, H, false);
+  canvas.width = W; canvas.height = H;
+  if (THREE.sRGBEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.02;
+  renderer.shadowMap.enabled = true;
+
+  var scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0c0e11);
+  scene.add(new THREE.HemisphereLight(0xb8cade, 0x1a1712, 0.85));
+  var key = new THREE.DirectionalLight(0xfff4e6, 2.1);
+  key.position.set(3.4, 5.2, 4.4); key.castShadow = true;
+  key.shadow.mapSize.set(1024, 1024);
+  key.shadow.camera.near = 0.5; key.shadow.camera.far = 14;
+  key.shadow.camera.left = -2.6; key.shadow.camera.right = 2.6;
+  key.shadow.camera.top = 3.2; key.shadow.camera.bottom = -0.3;
+  scene.add(key);
+  var fill = new THREE.DirectionalLight(0xa6c2de, 0.70); fill.position.set(-4.2, 2.2, 2.4); scene.add(fill);
+  var rim = new THREE.DirectionalLight(0xdae6ff, 1.30); rim.position.set(-1.8, 3.2, -5.2); scene.add(rim);
+
+  var floor = new THREE.Mesh(new THREE.PlaneGeometry(30, 30),
+    new THREE.MeshStandardMaterial({ color: 0x15181c, roughness: 0.95 }));
+  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+
+  var root = new THREE.Group(); scene.add(root);
+  var models = [], labels = [];
+  var camera = new THREE.PerspectiveCamera(16, W / H, 0.05, 60);
+
+  if (mode === 'views') {
+    [
+      { x: -1.17, yaw: 0, t: '正面' },
+      { x: -0.39, yaw: Math.PI * 0.5, t: '侧面' },
+      { x: 0.39, yaw: Math.PI, t: '背面' },
+      { x: 1.17, yaw: -Math.PI * 0.28, t: '三分之四' }
+    ].forEach(function (v) {
+      var m = Real3D.build(kind, { weapon: showWeapon });
+      m.position.x = v.x; m.rotation.y = v.yaw;
+      root.add(m); models.push(m); labels.push(v.t);
+    });
+    camera.fov = 15; camera.position.set(0, 1.02, 7.6); camera.lookAt(0, 0.92, 0);
+  } else if (mode === 'head') {
+    [
+      { x: -0.28, yaw: 0, t: '正面' },
+      { x: 0.00, yaw: -Math.PI * 0.22, t: '三分之四' },
+      { x: 0.28, yaw: Math.PI * 0.5, t: '侧面' }
+    ].forEach(function (v) {
+      var m = Real3D.build(kind, { weapon: false });
+      m.position.x = v.x; m.rotation.y = v.yaw;
+      root.add(m); models.push(m); labels.push(v.t);
+    });
+    camera.fov = 16; camera.position.set(0, 1.668, 2.05); camera.lookAt(0, 1.668, 0);
+  } else if (mode === 'pose') {
+    [
+      { p: 'A', x: -1.17, t: 'A-pose' },
+      { p: 'armsUp', x: -0.39, t: '举臂' },
+      { p: 'squat', x: 0.39, t: '深蹲' },
+      { p: 'lunge', x: 1.17, t: '弓步' }
+    ].forEach(function (v) {
+      var m = Real3D.build(kind, { weapon: false });
+      Real3D.pose(m, v.p);
+      m.position.x = v.x;
+      root.add(m); models.push(m); labels.push(v.t);
+    });
+    camera.fov = 15; camera.position.set(0, 1.0, 7.6); camera.lookAt(0, 0.9, 0);
+  }
+
+  var s = Real3D.stats(models[0] || root);
+  document.getElementById('hud').innerHTML =
+    '三角面 <b>' + s.tris.toLocaleString() + '</b>　顶点 <b>' + s.verts.toLocaleString() + '</b><br>' +
+    '网格 <b>' + s.meshes + '</b>　材质槽 <b>' + s.mats + '</b>　骨 <b>' + s.bones + '</b><br>' +
+    '身高 <b>' + s.height.toFixed(2) + ' m</b>　头身 <b>' + s.heads + '</b>';
+
+  var lab = document.getElementById('labels');
+  if (labels.length) lab.innerHTML = labels.map(function (t) { return '<span>' + t + '</span>'; }).join('');
+
+  function loop() {
+    requestAnimationFrame(loop);
+    if (mode !== 'pose') {
+      models.forEach(function (m) { Real3D.update(m, 0.016, { speed: 0, onGround: true }); });
+    }
+    renderer.render(scene, camera);
+  }
+  loop();
+})();
+</script>
+</body>
+</html>

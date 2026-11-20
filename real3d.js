@@ -238,9 +238,9 @@
      二、材质槽位
      ============================================================ */
   var PAL = {
-    swordsman: { skin: 0xc08f74, hair: 0x18161a, cloth: 0x3a4148, leather: 0x4b3527, metal: 0xa8b0b6, accent: 0x7fbfd0 },
-    gunner:    { skin: 0xb4835f, hair: 0x221a16, cloth: 0x333f39, leather: 0x4c3a2a, metal: 0x93999e, accent: 0xd99a4e },
-    warlock:   { skin: 0xc9a086, hair: 0x2a2431, cloth: 0x2e2b44, leather: 0x3d3346, metal: 0x9d98ad, accent: 0x9a78e6 },
+    swordsman: { skin: 0xc08f74, hair: 0x18161a, cloth: 0x2c323b, leather: 0x3b2f27, metal: 0xb9c0c6, accent: 0x74e6f2 },
+    gunner:    { skin: 0xb4835f, hair: 0x1b1d24, cloth: 0x2a3442, leather: 0x2a2c33, metal: 0x8793a0, accent: 0x35d8f2 },
+    warlock:   { skin: 0xb99e8e, hair: 0x241f2c, cloth: 0x342f47, leather: 0x35304a, metal: 0x8f8a9c, accent: 0xa87ef0 },
     grunt:     { skin: 0xa07d64, hair: 0x241a17, cloth: 0x40402f, leather: 0x4a3c2c, metal: 0x8a8f8c, accent: 0x94c56f },
     shooter:   { skin: 0x9d7a62, hair: 0x1d1815, cloth: 0x353a36, leather: 0x453528, metal: 0x8b9095, accent: 0xd0ad55 },
     elite:     { skin: 0x91725b, hair: 0x211a16, cloth: 0x2f333a, leather: 0x3f3226, metal: 0x9ba1a6, accent: 0xcf5a68 },
@@ -280,8 +280,10 @@
       roughness: 0.30, metalness: 0.85
     });
     M.accent = new T.MeshStandardMaterial({
-      color: p.accent, emissive: new T.Color(p.accent), emissiveIntensity: 0.2, roughness: 0.45, metalness: 0.25
+      color: p.accent, emissive: new T.Color(p.accent), emissiveIntensity: 0.2, roughness: 0.45, metalness: 0.25, side: T.DoubleSide
     });
+    // 自发光条：剑客的刃光、枪手的护目镜与枪口、术士的袍纹都用它
+    M.glow = new T.MeshBasicMaterial({ color: p.accent, toneMapped: false });
     M.face = new T.MeshStandardMaterial({
       map: tex('face' + p.skin, function () { return faceTex(p.skin); }, true, [1, 1]),
       roughness: 0.58, metalness: 0.0
@@ -313,7 +315,7 @@
     for (var i2 = 0; i2 < rings - 1; i2++) {
       for (var s2 = 0; s2 < seg; s2++) {
         var a1i = i2 * (seg + 1) + s2, b1 = a1i + 1, c1 = a1i + seg + 1, d1 = c1 + 1;
-        idx.push(a1i, c1, b1, b1, c1, d1);
+        idx.push(a1i, b1, c1, b1, d1, c1);
       }
     }
     var g = new T.BufferGeometry();
@@ -327,6 +329,39 @@
   function ellipsoid(rx, ry, rz, w, h) {
     var g = new T.SphereGeometry(1, w || 16, h || 12);
     g.scale(rx, ry, rz);
+    return g;
+  }
+
+  /* 斜挎带 / 束带用：沿身体椭圆表面扫出一条连续窄带（不是一串小方块） */
+  function ribbon(mat, stations, rx, rz, halfW, lift, thick) {
+    var N = stations.length, pos = [], idx = [], P = [];
+    for (var i = 0; i < N; i++) {
+      var st = stations[i];
+      var zz = rz * Math.sqrt(Math.max(0.02, 1 - (st.x / rx) * (st.x / rx))) + lift;
+      P.push(new T.Vector3(st.x, st.y, zz));
+    }
+    for (var i2 = 0; i2 < N; i2++) {
+      var prev = P[Math.max(0, i2 - 1)], next = P[Math.min(N - 1, i2 + 1)];
+      var dir = next.clone().sub(prev).normalize();
+      var nrm = new T.Vector3(P[i2].x / (rx * rx), 0, P[i2].z / (rz * rz)).normalize();
+      var lat = new T.Vector3().crossVectors(dir, nrm).normalize();
+      lat.multiplyScalar(halfW);
+      var a = P[i2].clone().add(lat), b = P[i2].clone().sub(lat);
+      var an = a.clone().addScaledVector(nrm, thick), bn = b.clone().addScaledVector(nrm, thick);
+      pos.push(a.x, a.y, a.z, b.x, b.y, b.z, an.x, an.y, an.z, bn.x, bn.y, bn.z);
+    }
+    for (var i3 = 0; i3 < N - 1; i3++) {
+      var o = i3 * 4, p = (i3 + 1) * 4;
+      idx.push(o + 2, o + 3, p + 2, o + 3, p + 3, p + 2);
+      idx.push(o, p, o + 1, o + 1, p, p + 1);
+      idx.push(o, o + 2, p, o + 2, p + 2, p);
+      idx.push(o + 1, p + 1, o + 3, o + 3, p + 1, p + 3);
+    }
+    var g = new T.BufferGeometry();
+    g.setAttribute('position', new T.BufferAttribute(new Float32Array(pos), 3));
+    g.setAttribute('uv', new T.BufferAttribute(new Float32Array(pos.length / 3 * 2), 2));
+    g.setIndex(idx);
+    g.computeVertexNormals();
     return g;
   }
 
@@ -450,7 +485,7 @@
     return g;
   }
 
-  function buildHead(J, M) {
+  function buildHead(J, M, kind) {
     var headG = put(J.head, headGeo(), M.face, 0, HEAD.cy, 0);
     headG.name = 'head_surface';
 
@@ -471,10 +506,8 @@
       var cx = cpa.getX(ci), cy = cpa.getY(ci), cz = cpa.getZ(ci);
       if (cz < -0.02) continue;
       var w8 = Math.min(1, Math.abs(cx) / 0.062);
-      var hl = 0.054 - 0.034 * Math.pow(w8, 1.5) - 0.05 * Math.max(0, -cz) * 0;
-      if (cz > 0.004 && cy < hl) {
-        cpa.setY(ci, hl);
-      }
+      var hl = 0.042 - 0.030 * Math.pow(w8, 1.3);
+      if (cy < hl) cpa.setY(ci, hl);
     }
     cpa.needsUpdate = true;
     crownGeo.computeVertexNormals();
@@ -490,6 +523,66 @@
       m.rotation.set(c.rx, c.ry, 0);
       m.castShadow = false;
     });
+
+    /* ---- 职业发饰（按原画） ---- */
+    if (kind === 'swordsman') {
+      // 高马尾：后脑上方扎一枚发髻，四片长束向后下方甩
+      put(J.head, ellipsoid(0.031, 0.028, 0.031, 16, 12), M.hair, 0, 0.112, -0.052);
+      var pt = new T.Group();
+      pt.position.set(0, 0.110, -0.058);
+      J.head.add(pt);
+      J.ponytail = pt;
+      [
+        { x: 0.004, rx: 1.12, rz: 0.12, len: 0.250, w: 0.048 },
+        { x: -0.034, rx: 1.24, rz: -0.14, len: 0.228, w: 0.044 },
+        { x: 0.036, rx: 1.02, rz: 0.28, len: 0.204, w: 0.040 },
+        { x: -0.006, rx: 1.32, rz: 0.02, len: 0.176, w: 0.036 }
+      ].forEach(function (c) {
+        var m = put(pt, loft([
+          { y: 0.010, rx: c.w * 0.46, rz: c.w * 0.32 },
+          { y: -c.len * 0.45, rx: c.w * 0.44, rz: c.w * 0.28 },
+          { y: -c.len, rx: c.w * 0.16, rz: c.w * 0.11 }
+        ], 8), M.hair, c.x, 0, 0);
+        m.rotation.set(c.rx, 0, c.rz);
+      });
+    } else if (kind === 'gunner') {
+      // 碎发：头顶四撮短束
+      [
+        { x: -0.052, y: 0.216, z: 0.040, rx: 0.34, ry: 0.5, len: 0.062, w: 0.038 },
+        { x: 0.000, y: 0.230, z: 0.052, rx: 0.42, ry: 0.0, len: 0.070, w: 0.040 },
+        { x: 0.050, y: 0.218, z: 0.038, rx: 0.34, ry: -0.5, len: 0.060, w: 0.036 },
+        { x: -0.020, y: 0.224, z: -0.010, rx: -0.30, ry: 0.0, len: 0.058, w: 0.034 }
+      ].forEach(function (c) {
+        var m = put(J.head, hairCard(c.w, c.len, 6), M.hair, c.x, c.y, c.z);
+        m.rotation.set(c.rx, c.ry, 0);
+      });
+      // 青色护目镜：镜片压在眼窝前，两侧带绕到耳后
+      put(J.head, new T.BoxGeometry(0.092, 0.020, 0.014), M.glow, 0, 0.140, 0.096);
+      put(J.head, new T.BoxGeometry(0.100, 0.008, 0.020), M.leather, 0, 0.152, 0.092);
+      put(J.head, new T.BoxGeometry(0.100, 0.008, 0.020), M.leather, 0, 0.128, 0.092);
+      [-1, 1].forEach(function (s) {
+        put(J.head, new T.BoxGeometry(0.014, 0.012, 0.080), M.leather, 0.052 * s, 0.140, 0.040);
+      });
+    } else if (kind === 'warlock') {
+      // 尖兜帽：罩壳 + 后倾尖角，正面切出露脸的口
+      var hoodGeo = new T.SphereGeometry(0.129, 34, 24, 0, PI * 2, 0, PI * 0.70);
+      hoodGeo.scale(0.805, 1.075, 1.02);
+      var hpa = hoodGeo.attributes.position;
+      for (var hi = 0; hi < hpa.count; hi++) {
+        var hx = hpa.getX(hi), hy = hpa.getY(hi), hz = hpa.getZ(hi);
+        if (hz < -0.02) continue;
+        var w9 = Math.min(1, Math.abs(hx) / 0.058);
+        var hop = 0.070 - 0.046 * Math.pow(w9, 1.4);
+        if (hz > 0.004 && hy < hop) hpa.setY(hi, hop);
+      }
+      hpa.needsUpdate = true;
+      hoodGeo.computeVertexNormals();
+      put(J.head, hoodGeo, M.cloth, 0, HEAD.cy + 0.006, -0.004);
+      var peak = put(J.head, new T.ConeGeometry(0.080, 0.180, 16), M.cloth, 0, 0.262, -0.052);
+      peak.rotation.x = -0.36;
+      // 帽口边缘压一道深色，脸不至于糊进布里
+      put(J.head, new T.TorusGeometry(0.072, 0.008, 8, 26), M.leather, 0, 0.196, 0.052, -0.34, 0, 0);
+    }
     return headG;
   }
 
@@ -637,7 +730,7 @@
       { y: -0.090, rx: 0.060, rz: 0.056 },
       { y: -0.130, rx: 0.070, rz: 0.064 }
     ], 16), M.skin, 0, 0, 0);
-    buildHead(J, M);
+    buildHead(J, M, kind);
 
     /* --- 手臂：A-pose 建进骨架 --- */
     J.hands = {};
@@ -681,37 +774,37 @@
     });
 
     /* --- 腿：裤 + 靴，膝盖有骨点 --- */
+    var bag = kind === 'swordsman' ? 1.12 : 1.04;
     [-1, 1].forEach(function (s) {
       var side = s < 0 ? 'L' : 'R';
       J['hip' + side] = bone(J.pelvis, 'hip' + side, 0.086 * s, -0.030, 0);
       put(J['hip' + side], loft([
-        { y: 0.030, rx: 0.092, rz: 0.088 },
-        { y: -0.090, rx: 0.088, rz: 0.086 },
-        { y: -0.250, rx: 0.072, rz: 0.072 },
-        { y: -0.420, rx: 0.056, rz: 0.057 }
+        { y: 0.030, rx: 0.092 * bag, rz: 0.088 * bag },
+        { y: -0.090, rx: 0.088 * bag, rz: 0.086 * bag },
+        { y: -0.250, rx: 0.072 * bag, rz: 0.072 * bag },
+        { y: -0.420, rx: 0.056 * bag, rz: 0.057 * bag }
       ], 18), M.cloth, 0, 0, 0);
 
       J['knee' + side] = bone(J['hip' + side], 'knee' + side, 0, -0.420, 0);
       put(J['knee' + side], loft([
-        { y: 0.030, rx: 0.057, rz: 0.058 },
-        { y: -0.075, rx: 0.058, rz: 0.060 },
-        { y: -0.235, rx: 0.041, rz: 0.041 },
-        { y: -0.395, rx: 0.031, rz: 0.032 }
+        { y: 0.030, rx: 0.057 * bag, rz: 0.058 * bag },
+        { y: -0.075, rx: 0.058 * bag, rz: 0.060 * bag },
+        { y: -0.235, rx: 0.041 * bag, rz: 0.041 * bag },
+        { y: -0.395, rx: 0.031 * bag, rz: 0.032 * bag }
       ], 18), M.cloth, 0, 0, 0);
 
       J['ankle' + side] = bone(J['knee' + side], 'ankle' + side, 0, -0.395, 0);
-      // 靴：靴筒 + 脚掌 + 靴底，三层都要落地
+      // 靴：靴筒（布）+ 脚掌 + 靴头 + 两层靴底，整只落地
       put(J['ankle' + side], loft([
-        { y: 0.105, rx: 0.044, rz: 0.046 },
-        { y: 0.020, rx: 0.046, rz: 0.049 },
-        { y: -0.040, rx: 0.048, rz: 0.056 }
-      ], 16), M.leather, 0, 0, 0);
-      put(J['ankle' + side], ellipsoid(0.043, 0.038, 0.104, 18, 12), M.leather, 0, -0.060, 0.046);
-      // 靴头压一块硬皮，脚背不至于圆成一团
-      put(J['ankle' + side], new T.BoxGeometry(0.080, 0.022, 0.058), M.leather, 0, -0.068, 0.112);
-      // 靴底：整块落地，脚才不会像楔子
-      put(J['ankle' + side], new T.BoxGeometry(0.086, 0.014, 0.232), M.leather, 0, -0.079, 0.042);
-      put(J['ankle' + side], new T.BoxGeometry(0.088, 0.008, 0.236), M.metal, 0, -0.0865, 0.042);
+        { y: 0.150, rx: 0.046, rz: 0.048 },
+        { y: 0.060, rx: 0.048, rz: 0.051 },
+        { y: -0.020, rx: 0.050, rz: 0.056 },
+        { y: -0.052, rx: 0.052, rz: 0.062 }
+      ], 18), M.cloth, 0, 0, 0);
+      put(J['ankle' + side], ellipsoid(0.048, 0.038, 0.108, 20, 14), M.cloth, 0, -0.050, 0.042);
+      put(J['ankle' + side], new T.BoxGeometry(0.078, 0.030, 0.056), M.leather, 0, -0.058, 0.118);
+      put(J['ankle' + side], new T.BoxGeometry(0.090, 0.014, 0.236), M.leather, 0, -0.072, 0.036);
+      put(J['ankle' + side], new T.BoxGeometry(0.084, 0.012, 0.228), M.leather, 0, -0.079, 0.036);
     });
 
     gear(J, M, kind);
@@ -738,7 +831,259 @@
   /* ============================================================
      七、装束：贴身层 / 中间层 / 活动件
      ============================================================ */
+  /* ============================================================
+     七、装束：按原画分职业做形制
+     剑客 = 亮银板甲 / 大角肩甲 / 层叠腰甲 / 布腰封
+     枪手 = 暗蓝科技甲 / 青色斜挎带 / 光爆胸章 / 腰包 / 厚底靴
+     术士 = 紫长袍 / 金属披肩 / 布腰带垂布 / 半截护臂
+     ============================================================ */
   function gear(J, M, kind) {
+    if (kind === 'swordsman') return gearSwordsman(J, M);
+    if (kind === 'gunner') return gearGunner(J, M);
+    if (kind === 'warlock') return gearWarlock(J, M);
+    return gearGeneric(J, M, kind);
+  }
+
+  /* 肩甲：两层扁壳 + 外角尖。壳必须压扁，做成球就变成"铁肩膀" */
+  function pauldron(J, met, s, w, h, d, tilt) {
+    var cap = put(J.chest, new T.SphereGeometry(1, 28, 12, 0, PI * 2, 0, PI * 0.38), met, 0.204 * s, 0.148, -0.004);
+    cap.scale.set(w, h, d); cap.rotation.z = -tilt * s;
+    var low = put(J.chest, new T.SphereGeometry(1, 24, 10, 0, PI * 2, 0, PI * 0.32), met, 0.212 * s, 0.112, -0.002);
+    low.scale.set(w * 0.94, h * 0.80, d * 0.96); low.rotation.z = -(tilt + 0.18) * s;
+    return cap;
+  }
+
+  function gearSwordsman(J, M) {
+    var met = M.metal, lea = M.leather, clo = M.cloth, glo = M.glow;
+
+    // 胸甲：贴胸廓的一圈板甲，外缘比身体大 1cm
+    put(J.chest, loft([
+      { y: 0.168, rx: 0.168, rz: 0.114 },
+      { y: 0.115, rx: 0.187, rz: 0.128 },
+      { y: 0.050, rx: 0.184, rz: 0.129 },
+      { y: -0.020, rx: 0.172, rz: 0.124 },
+      { y: -0.095, rx: 0.163, rz: 0.120 }
+    ], 28), met, 0, 0, 0);
+    // 胸口中脊（沿弧面）＋青色刃光横条（同样是弧面，不贴平板）
+    put(J.chest, loft([
+      { y: 0.150, rx: 0.192, rz: 0.133 },
+      { y: 0.020, rx: 0.190, rz: 0.134 },
+      { y: -0.070, rx: 0.169, rz: 0.125 }
+    ], 8, 1.44, 1.70), met, 0, 0, 0);
+    put(J.chest, loft([
+      { y: 0.094, rx: 0.193, rz: 0.136 },
+      { y: 0.076, rx: 0.193, rz: 0.136 }
+    ], 12, 1.22, 1.92), glo, 0, 0, 0);
+
+    // 肩甲
+    [-1, 1].forEach(function (s) {
+      pauldron(J, met, s, 0.094, 0.040, 0.104, 0.34);
+      var tip = put(J.chest, new T.ConeGeometry(0.021, 0.080, 8), met, 0.272 * s, 0.140, -0.004);
+      tip.rotation.z = -0.92 * s;
+    });
+
+    // 护颈：把胸甲到下巴之间那段裸颈盖住（上窄下宽，接着胸甲）
+    put(J.neck, loft([
+      { y: 0.112, rx: 0.054, rz: 0.052 },
+      { y: 0.070, rx: 0.058, rz: 0.056 },
+      { y: 0.030, rx: 0.068, rz: 0.064 }
+    ], 20), met, 0, 0, 0);
+
+    // 腰封：深蓝布带（原画是布腰封，不是皮）
+    put(J.pelvis, loft([
+      { y: 0.058, rx: 0.166, rz: 0.120 },
+      { y: 0.016, rx: 0.170, rz: 0.123 },
+      { y: -0.018, rx: 0.164, rz: 0.118 }
+    ], 24), clo, 0, 0, 0);
+    // 腰甲：前 / 后两片弧甲 + 两侧小块
+    put(J.pelvis, loft([
+      { y: -0.018, rx: 0.176, rz: 0.130 },
+      { y: -0.070, rx: 0.173, rz: 0.128 },
+      { y: -0.118, rx: 0.164, rz: 0.122 }
+    ], 16, 0.80, 2.34), met, 0, 0, 0);
+    put(J.pelvis, loft([
+      { y: -0.018, rx: 0.176, rz: 0.130 },
+      { y: -0.070, rx: 0.173, rz: 0.128 },
+      { y: -0.122, rx: 0.165, rz: 0.123 }
+    ], 16, 3.94, 5.48), met, 0, 0, 0);
+    [-1, 1].forEach(function (s) {
+      var side = put(J.pelvis, ellipsoid(0.020, 0.048, 0.062, 14, 10), met, 0.158 * s, -0.066, 0.004);
+      side.rotation.z = 0.10 * s;
+    });
+    // 腰封布结 + 背后两条飘带
+    put(J.pelvis, new T.BoxGeometry(0.070, 0.048, 0.040), clo, 0, -0.004, -0.130);
+    [-1, 1].forEach(function (s) {
+      var tail = put(J.pelvis, hairCard(0.058, 0.320, 8), clo, 0.026 * s, -0.018, -0.148);
+      tail.rotation.set(0.16, 0, 0.10 * s);
+    });
+
+    // 护臂：前臂半截金属
+    [-1, 1].forEach(function (s) {
+      put(J['elbow' + (s < 0 ? 'L' : 'R')], loft([
+        { y: 0.020, rx: 0.051, rz: 0.049 },
+        { y: -0.070, rx: 0.050, rz: 0.048 },
+        { y: -0.155, rx: 0.042, rz: 0.040 }
+      ], 18), met, 0, 0, 0);
+    });
+
+    // 胫甲：护到踝，按加宽后的裤腿算半径
+    [-1, 1].forEach(function (s) {
+      put(J['knee' + (s < 0 ? 'L' : 'R')], loft([
+        { y: -0.140, rx: 0.069, rz: 0.071 },
+        { y: -0.260, rx: 0.051, rz: 0.052 },
+        { y: -0.378, rx: 0.044, rz: 0.045 }
+      ], 18), met, 0, 0, 0);
+    });
+  }
+
+  function gearGunner(J, M) {
+    var met = M.metal, lea = M.leather, clo = M.cloth, glo = M.glow, acc = M.accent;
+
+    // 科技甲底板：整圈
+    put(J.chest, loft([
+      { y: 0.166, rx: 0.164, rz: 0.112 },
+      { y: 0.110, rx: 0.186, rz: 0.126 },
+      { y: 0.020, rx: 0.182, rz: 0.127 },
+      { y: -0.090, rx: 0.164, rz: 0.118 }
+    ], 26), clo, 0, 0, 0);
+    // 上胸硬板 / 下腹板：两片弧壳
+    put(J.chest, loft([
+      { y: 0.142, rx: 0.188, rz: 0.128 },
+      { y: 0.100, rx: 0.192, rz: 0.132 },
+      { y: 0.020, rx: 0.188, rz: 0.132 }
+    ], 16, 1.02, 2.12), met, 0, 0, 0);
+    put(J.chest, loft([
+      { y: 0.006, rx: 0.186, rz: 0.131 },
+      { y: -0.100, rx: 0.168, rz: 0.123 }
+    ], 12, 1.16, 1.98), met, 0, 0, 0);
+    // 立领：顶到下颌，别把脖子包成一根管子
+    put(J.neck, loft([
+      { y: 0.092, rx: 0.056, rz: 0.054 },
+      { y: 0.050, rx: 0.062, rz: 0.059 },
+      { y: 0.006, rx: 0.072, rz: 0.068 }
+    ], 18), clo, 0, 0, 0);
+
+    // 青色斜挎带：十八片小板沿胸甲弧面拼成一条带（片叠片，看不出接缝）
+    for (var qi = 0; qi <= 18; qi++) {
+      var t = qi / 18;
+      var sy = 0.178 - 0.290 * t;
+      var sx = -0.092 + 0.186 * t;
+      var rxs = sy > 0.110 ? 0.178 : 0.190;
+      var rzs = sy > 0.110 ? 0.124 : 0.134;
+      var zz = rzs * Math.sqrt(Math.max(0.05, 1 - (sx / rxs) * (sx / rxs))) + 0.006;
+      put(J.chest, new T.BoxGeometry(0.052, 0.030, 0.008), glo, sx, sy, zz, 0, -sx * 1.6, -0.57);
+    }
+
+    // 光爆胸章：压在斜挎带之上，金属盘 + 三道星芒
+    put(J.chest, new T.CylinderGeometry(0.032, 0.032, 0.010, 20), met, 0, 0.062, 0.138, PI * 0.5, 0, 0);
+    [0, 1.05, -1.05].forEach(function (a) {
+      put(J.chest, new T.BoxGeometry(0.009, 0.066, 0.006), glo, 0, 0.062, 0.146, 0, 0, a);
+    });
+
+    // 肩甲
+    [-1, 1].forEach(function (s) { pauldron(J, met, s, 0.078, 0.050, 0.090, 0.36); });
+
+    // 腰带 + 腰包（腰包贴腰面转过去，不再是浮在外面的方盒）
+    put(J.pelvis, loft([
+      { y: 0.052, rx: 0.166, rz: 0.120 },
+      { y: 0.010, rx: 0.170, rz: 0.123 },
+      { y: -0.022, rx: 0.164, rz: 0.118 }
+    ], 24), lea, 0, 0, 0);
+    put(J.pelvis, new T.BoxGeometry(0.044, 0.032, 0.012), met, 0, 0.014, 0.126);
+    [-1, 1].forEach(function (s) {
+      var p1 = put(J.pelvis, new T.BoxGeometry(0.052, 0.070, 0.034), lea, 0.134 * s, -0.014, 0.060);
+      p1.rotation.y = -0.62 * s;
+      var p2 = put(J.pelvis, new T.BoxGeometry(0.044, 0.058, 0.030), lea, 0.118 * s, -0.100, 0.084);
+      p2.rotation.y = -0.50 * s;
+    });
+    // 大腿包
+    var thigh = put(J.hipR, new T.BoxGeometry(0.048, 0.062, 0.036), lea, 0.082, -0.150, 0.032);
+    thigh.rotation.y = -0.35;
+
+    // 前臂装甲 + 竖向青光
+    [-1, 1].forEach(function (s) {
+      var sd = s < 0 ? 'L' : 'R';
+      put(J['elbow' + sd], loft([
+        { y: 0.024, rx: 0.049, rz: 0.047 },
+        { y: -0.080, rx: 0.048, rz: 0.046 },
+        { y: -0.215, rx: 0.041, rz: 0.039 }
+      ], 18), met, 0, 0, 0);
+      put(J['elbow' + sd], new T.BoxGeometry(0.009, 0.128, 0.007), glo, 0.006 * s, -0.108, 0.043);
+      put(J['elbow' + sd], new T.BoxGeometry(0.007, 0.100, 0.008), glo, 0.040 * s, -0.090, 0.010);
+    });
+
+    // 护膝：膝前弧甲 + 一道细青光，不做球
+    [-1, 1].forEach(function (s) {
+      var kd = 'knee' + (s < 0 ? 'L' : 'R');
+      put(J[kd], loft([
+        { y: 0.026, rx: 0.070, rz: 0.071 },
+        { y: -0.060, rx: 0.068, rz: 0.069 },
+        { y: -0.145, rx: 0.057, rz: 0.058 }
+      ], 14, 1.10, 2.04), met, 0, 0, 0);
+      put(J[kd], loft([
+        { y: -0.046, rx: 0.072, rz: 0.073 },
+        { y: -0.058, rx: 0.072, rz: 0.073 }
+      ], 10, 1.32, 1.82), glo, 0, 0, 0);
+    });
+  }
+
+  function gearWarlock(J, M) {
+    var clo = M.cloth, met = M.metal, lea = M.leather, glo = M.glow;
+
+    // 长袍：从腰下垂到脚踝，摆只比身体大 6cm，不做成罩子
+    put(J.pelvis, loft([
+      { y: -0.020, rx: 0.172, rz: 0.126 },
+      { y: -0.200, rx: 0.184, rz: 0.138 },
+      { y: -0.420, rx: 0.200, rz: 0.154 },
+      { y: -0.640, rx: 0.216, rz: 0.169 },
+      { y: -0.845, rx: 0.232, rz: 0.182 }
+    ], 32), clo, 0, 0, 0);
+
+    // 金属披肩：罩住双肩，前缘到胸上，不是大斗篷
+    put(J.chest, loft([
+      { y: 0.232, rx: 0.104, rz: 0.094 },
+      { y: 0.196, rx: 0.150, rz: 0.120 },
+      { y: 0.150, rx: 0.181, rz: 0.139 },
+      { y: 0.104, rx: 0.174, rz: 0.133 }
+    ], 28), met, 0, 0, 0);
+    put(J.chest, loft([
+      { y: 0.240, rx: 0.094, rz: 0.086 },
+      { y: 0.216, rx: 0.112, rz: 0.098 }
+    ], 22), met, 0, 0, 0);
+
+    // 腰带 + 布结 + 前垂布
+    put(J.pelvis, loft([
+      { y: 0.064, rx: 0.168, rz: 0.128 },
+      { y: 0.020, rx: 0.172, rz: 0.131 },
+      { y: -0.026, rx: 0.166, rz: 0.126 }
+    ], 24), lea, 0, 0, 0);
+    var knot = put(J.pelvis, new T.BoxGeometry(0.058, 0.044, 0.034), lea, -0.030, 0.018, 0.130);
+    knot.rotation.z = 0.12;
+    [-1, 1].forEach(function (s) {
+      var hang = put(J.pelvis, hairCard(0.066, 0.300, 8), clo, 0.018 * s, 0.004, 0.130);
+      hang.rotation.set(-0.10, 0, 0.06 * s);
+    });
+
+    // 半截护臂
+    [-1, 1].forEach(function (s) {
+      put(J['elbow' + (s < 0 ? 'L' : 'R')], loft([
+        { y: 0.010, rx: 0.048, rz: 0.046 },
+        { y: -0.075, rx: 0.046, rz: 0.044 },
+        { y: -0.150, rx: 0.040, rz: 0.038 }
+      ], 18), met, 0, 0, 0);
+    });
+
+    // 袍摆紫色发光裂纹：贴着袍面走
+    [-1, 1].forEach(function (s) {
+      var c1 = put(J.pelvis, new T.BoxGeometry(0.006, 0.210, 0.006), glo, 0.096 * s, -0.590, 0.164);
+      c1.rotation.set(0.10, 0, 0.34 * s);
+      var c2 = put(J.pelvis, new T.BoxGeometry(0.005, 0.140, 0.005), glo, 0.034 * s, -0.735, 0.176);
+      c2.rotation.set(0.10, 0, -0.24 * s);
+    });
+  }
+
+  /* 杂兵 / 精英 / BOSS / 旧枪手：沿用通用简装 */
+  function gearGeneric(J, M, kind) {
     var cloth = M.cloth, lea = M.leather, met = M.metal;
 
     // 腰带（挂在骨盆上，跑动不跟着腰扭）
@@ -817,34 +1162,53 @@
     G.position.set(0, -0.052, 0.004);
     J.weapon = G;
 
-    if (kind === 'gunner' || kind === 'shooter') {
+    if (kind === 'gunner') {
+      // 枪手：粗管步枪，枪口青光环
       G.rotation.set(PI * 0.46, 0, 0.10);
+      put(G, new T.BoxGeometry(0.048, 0.300, 0.062), M.metal, 0, -0.140, -0.010);
+      put(G, new T.BoxGeometry(0.038, 0.120, 0.052), M.leather, 0, 0.022, -0.036);
+      put(G, new T.BoxGeometry(0.026, 0.070, 0.040), M.leather, 0, -0.020, 0.036);
+      // 枪管与套环
       put(G, loft([
-        { y: 0.020, rx: 0.020, rz: 0.020 },
-        { y: -0.100, rx: 0.017, rz: 0.016 },
-        { y: -0.320, rx: 0.012, rz: 0.011 },
-        { y: -0.560, rx: 0.008, rz: 0.008 }
-      ], 12), M.metal, 0, 0, 0);
-      put(G, new T.BoxGeometry(0.042, 0.120, 0.048), M.leather, 0, -0.130, -0.030);
-      put(G, new T.BoxGeometry(0.036, 0.070, 0.036), M.leather, 0, -0.062, 0.028);
-      put(G, new T.BoxGeometry(0.010, 0.026, 0.010), M.accent, 0, -0.300, 0.020);
+        { y: -0.300, rx: 0.020, rz: 0.020 },
+        { y: -0.560, rx: 0.016, rz: 0.016 }
+      ], 14), M.metal, 0, 0, -0.004);
+      put(G, new T.CylinderGeometry(0.026, 0.026, 0.024, 16), M.metal, 0, -0.404, -0.004);
+      put(G, new T.CylinderGeometry(0.024, 0.024, 0.010, 16), M.glow, 0, -0.572, -0.004);
+      put(G, new T.BoxGeometry(0.010, 0.120, 0.010), M.glow, 0.030, -0.200, -0.004);
     } else if (kind === 'warlock') {
-      G.rotation.set(PI * 0.16, 0, 0.05);
+      // 术士：荆棘杖 + 紫球 + 光环
+      G.rotation.set(PI * 0.05, 0, 0.05);
       put(G, loft([
-        { y: 0.030, rx: 0.010, rz: 0.010 },
-        { y: -0.680, rx: 0.007, rz: 0.007 }
-      ], 10), M.leather, 0, 0, 0);
-      put(G, ellipsoid(0.030, 0.030, 0.030, 14, 10), M.accent, 0, 0.052, 0);
+        { y: 0.180, rx: 0.012, rz: 0.012 },
+        { y: -1.020, rx: 0.009, rz: 0.009 }
+      ], 12), M.leather, 0, 0, 0);
+      // 杖头三根刺
+      [0, 1, 2].forEach(function (i) {
+        var a = i * PI * 2 / 3 + 0.5;
+        var prong = put(G, new T.BoxGeometry(0.020, 0.150, 0.016), M.leather,
+          Math.cos(a) * 0.050, 0.230, Math.sin(a) * 0.050);
+        prong.rotation.set(0.0, -a, 0.42);
+      });
+      // 紫球
+      put(G, ellipsoid(0.044, 0.044, 0.044, 20, 14), M.glow, 0, 0.222, 0);
+      // 光环
+      var ring = put(G, new T.TorusGeometry(0.082, 0.007, 8, 32), M.glow, 0, 0.222, 0);
+      ring.rotation.set(PI * 0.5 + 0.32, 0.22, 0);
     } else {
+      // 剑客：直刃长剑，刃口带青光
       G.rotation.set(PI * 0.26, 0, 0.06);
-      put(G, new T.BoxGeometry(0.028, 0.100, 0.026), M.leather, 0, -0.020, 0);
-      put(G, new T.BoxGeometry(0.120, 0.014, 0.026), M.metal, 0, -0.072, 0);
       put(G, loft([
-        { y: -0.078, rx: 0.021, rz: 0.005 },
-        { y: -0.400, rx: 0.019, rz: 0.0045 },
-        { y: -0.660, rx: 0.014, rz: 0.0035 },
-        { y: -0.720, rx: 0.002, rz: 0.0012 }
-      ], 10), M.metal, 0, 0, 0);
+        { y: 0.200, rx: 0.016, rz: 0.014 },
+        { y: 0.160, rx: 0.019, rz: 0.016 },
+        { y: -0.040, rx: 0.021, rz: 0.017 }
+      ], 12), M.leather, 0, 0, 0);
+      put(G, new T.BoxGeometry(0.026, 0.016, 0.026), M.metal, 0, 0.202, 0);
+      put(G, new T.BoxGeometry(0.132, 0.018, 0.034), M.metal, 0, -0.052, 0);
+      put(G, new T.BoxGeometry(0.034, 0.930, 0.011), M.metal, 0, -0.532, 0);
+      // 刃口一条青线（贴着刃缘，不再是并排的第二把刀）
+      put(G, new T.BoxGeometry(0.004, 0.910, 0.004), M.glow, 0.016, -0.532, 0.005);
+      put(G, new T.BoxGeometry(0.026, 0.080, 0.010), M.metal, 0, -1.020, 0);
     }
   }
 

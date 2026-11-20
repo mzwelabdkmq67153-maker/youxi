@@ -113,10 +113,10 @@
 <script>
   /* 写实档人形接进局内：Real3D 与 Hero3D 同签名（build/update/swing/cast），
      art.js 的 buildHeroHD / buildFighterHD 只认 window.Hero3D，替换这一个引用即可。
-     回退：注释掉下面一行，或把 ?art=ink 打开，就走 Hero3D。 */
+     检查稿阶段：默认走水墨档，写实档用 ?art=real 显式打开；验收通过后再改成默认。 */
   (function () {
     var q = new URLSearchParams(location.search);
-    if (q.get('art') === 'ink') return;
+    if (q.get('art') !== 'real') return;
     if (window.Real3D) window.Hero3D = window.Real3D;
   })();
 </script>
