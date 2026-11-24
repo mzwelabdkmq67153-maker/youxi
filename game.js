@@ -132,6 +132,8 @@ let toastEl, flashEl, hitmarkerEl, dmgLayerEl;
 let lvText, xpFill, xpText, lvLineEl;
 // 菜单面板上的等级读数
 let menuLvEl, menuXpEl;
+// 菜单里的世界选择
+let worldToggleEl, worldDescEl, worldRowEl;
 
 const state = {
   mode: 'pve', cls: 'blade', phase: 'menu',
@@ -144,7 +146,14 @@ const state = {
   // 调试：?nolock 不请求指针锁、也不因失锁暂停，便于自动化截图与走位测试
   noLock: /nolock/i.test(location.search),
   // 玩家等级（跨局累积，只有 PVE 副本给经验；PVP/联机不吃等级加成）
-  lv: 1, xp: 0
+  lv: 1, xp: 0,
+  // 当前世界：village / city / peak（PVE 的舞台，PVP 与联机固定竞技场）
+  world: 'village',
+  // 调试：?scene=dungeon|arena|village|city|peak 直接指定场景，绕过世界，便于三档美术对照
+  dbgScene: (function () {
+    const m = /[?&]scene=([a-z]+)/i.exec(location.search);
+    return m ? m[1].toLowerCase() : null;
+  })()
 };
 
 const player = {};
@@ -195,6 +204,9 @@ function init() {
   lvLineEl = document.querySelector('.lvline');
   menuLvEl = document.getElementById('menuLv');
   menuXpEl = document.getElementById('menuXp');
+  worldToggleEl = document.getElementById('worldToggle');
+  worldDescEl = document.getElementById('worldDesc');
+  worldRowEl = document.getElementById('worldRow');
   skillsEl = document.getElementById('skills');
   objectiveEl = document.getElementById('objective');
   timerEl = document.getElementById('timer');
@@ -241,6 +253,10 @@ function init() {
 
   window.addEventListener('resize', onResize);
   animate();
+  // 调试：?autostart 跳过菜单直接开局（无头截图与回归脚本用，音频仍等首个手势）
+  if (/autostart/i.test(location.search) && state.mode !== 'online') {
+    setTimeout(function () { if (state.phase === 'menu') startGame(); }, 300);
+  }
 }
 
 function onResize() {
@@ -274,7 +290,11 @@ function makeGridTexture() {
 }
 
 function wantScene() {
-  return state.mode === 'pve' ? 'dungeon' : 'arena';
+  // 调试：?scene= 直接指定场景，用于三个世界的同机位对照
+  if (state.dbgScene) return state.dbgScene;
+  // PVE 的舞台由世界决定（新手村 / 主城 / 神之巅），PVP 与联机固定竞技场
+  if (state.mode === 'pve') return worldFor(state.world).scene;
+  return 'arena';
 }
 
 /* 场景实现选择：默认走 Tripo 场景模型档（scene_glb.js），
@@ -462,9 +482,8 @@ function buildWeapon() {
    - 进度写进 localStorage，刷新页面与换局都保留（?resetlv=1 可清档）。
    ============================================================================ */
 
-const LEVEL_XP_BASE = 100;      // 1 级升 2 级所需经验
-const LEVEL_XP_MULT = 2;        // 每升一级，需求翻倍
-const LEVEL_CAP = 20;           // 软上限（按翻倍曲线，正常玩到 8 级就要 1.2 万经验）
+const LEVEL_XP_BASE = 100;      // Lv L 升 Lv L+1 需要 100 * L 经验（线性）
+const LEVEL_CAP = 100;          // 上限 100：正好踩到神之巅的门槛
 const LEVEL_GAIN = {
   hp: 16,       // 每级生命上限
   en: 3,        // 每级能量上限
@@ -480,7 +499,48 @@ const XP_OF = {
 const PROGRESS_KEY = 'seventh_arena.progress.v1';
 
 function xpNeedFor(lv) {
-  return Math.round(LEVEL_XP_BASE * Math.pow(LEVEL_XP_MULT, Math.max(0, lv - 1)));
+  // 线性递增：100 * Lv。翻倍曲线到 100 级是天文数字（100 × 2^99），不可能刷到；
+  // 改成线性后 1→100 级累计约 50.5 万经验，深波刷本才够得着。
+  return Math.round(LEVEL_XP_BASE * Math.max(1, lv));
+}
+
+/* ---------------- 三个主要世界 ----------------
+   PVE 的舞台随等级解锁：新手村（Lv 1–9）→ 主城（Lv 10–99）→ 神之巅（Lv 100+）。
+   场景都复用现有两份 GLB 资产换光照与雾（scene_glb.js 的 CFG），差异落在难度、经验、掉落物品等级。 */
+const WORLDS = {
+  village: {
+    key: 'village', name: '新手村', scene: 'village', minLv: 1, maxLv: 9,
+    desc: '石村回廊 · 杂兵与守卫长，练手刷级',
+    hpMul: 0.9, countMul: 0.85, xpMul: 1.0, ilvlBonus: 0
+  },
+  city: {
+    key: 'city', name: '主城', scene: 'city', minLv: 10, maxLv: 99,
+    desc: '中央广场 · 全怪种与双 BOSS，长线刷本',
+    hpMul: 1.0, countMul: 1.0, xpMul: 1.6, ilvlBonus: 2
+  },
+  peak: {
+    key: 'peak', name: '神之巅', scene: 'peak', minLv: 100, maxLv: 999,
+    desc: '云海之顶 · 终局副本，经验与装备最好',
+    hpMul: 1.3, countMul: 1.15, xpMul: 2.6, ilvlBonus: 5
+  }
+};
+const WORLD_ORDER = ['village', 'city', 'peak'];
+
+function worldFor(key) { return WORLDS[key] || WORLDS.village; }
+function worldUnlocked(key) { return state.lv >= worldFor(key).minLv; }
+// 当前等级能进的最高世界
+function bestWorld() {
+  let k = 'village';
+  for (let i = 0; i < WORLD_ORDER.length; i++) {
+    if (state.lv >= WORLDS[WORLD_ORDER[i]].minLv) k = WORLD_ORDER[i];
+  }
+  return k;
+}
+// 门槛校验：等级不够就退回到能进的最高世界
+function resolveWorld(key) {
+  const W = WORLDS[key];
+  if (!W || state.lv < W.minLv) return bestWorld();
+  return key;
 }
 
 function loadProgress() {
@@ -494,12 +554,18 @@ function loadProgress() {
     if (typeof p.xp === 'number' && isFinite(p.xp)) {
       state.xp = Math.max(0, Math.floor(p.xp));
     }
+    if (typeof p.world === 'string' && WORLDS[p.world]) {
+      state.world = resolveWorld(p.world);
+    } else {
+      state.world = bestWorld();
+    }
   } catch (err) { /* 隐私模式/存储被禁：按 1 级开新档 */ }
+  state.world = resolveWorld(state.world);
 }
 
 function saveProgress() {
   try {
-    localStorage.setItem(PROGRESS_KEY, JSON.stringify({ lv: state.lv, xp: state.xp }));
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify({ lv: state.lv, xp: state.xp, world: state.world }));
   } catch (err) { /* 忽略配额与隐私模式错误 */ }
   refreshMenuLevel();
 }
@@ -510,6 +576,34 @@ function refreshMenuLevel() {
   const capped = state.lv >= LEVEL_CAP;
   menuLvEl.textContent = 'Lv ' + state.lv;
   menuXpEl.textContent = capped ? 'MAX' : state.xp + ' / ' + xpNeedFor(state.lv);
+  refreshWorldUI();
+}
+
+// 世界选择：解锁状态、门槛文案、当前世界高亮
+function refreshWorldUI() {
+  if (!worldToggleEl) return;
+  const btns = worldToggleEl.querySelectorAll('button');
+  for (let i = 0; i < btns.length; i++) {
+    const b = btns[i];
+    const key = b.dataset.world;
+    const W = WORLDS[key];
+    if (!W) continue;
+    const ok = state.lv >= W.minLv;
+    b.classList.toggle('on', state.world === key);
+    b.classList.toggle('locked', !ok);
+    const sm = b.querySelector('small');
+    if (sm) sm.textContent = ok ? ('Lv ' + W.minLv + '+') : ('需 Lv ' + W.minLv);
+  }
+  if (worldDescEl) {
+    const W = worldFor(state.world);
+    let d = W.desc;
+    const idx = WORLD_ORDER.indexOf(W.key);
+    if (state.lv > W.maxLv && idx >= 0 && idx < WORLD_ORDER.length - 1) {
+      d += ' · 已超出本区（Lv ' + W.maxLv + '），建议前往 ' + WORLDS[WORLD_ORDER[idx + 1]].name;
+    }
+    worldDescEl.textContent = d;
+  }
+  if (worldRowEl) worldRowEl.classList.toggle('disabled', state.mode !== 'pve');
 }
 
 function levelBonus() {
@@ -526,7 +620,10 @@ function levelBonus() {
 
 // 升级：满血满能 + 金环 + 播报。属性由 recalcGear 重算，这里只给"瞬间回满"的正反馈
 function onLevelUp() {
-  toast('等级提升 · Lv ' + state.lv, 1500);
+  let msg = '等级提升 · Lv ' + state.lv;
+  if (state.lv === WORLDS.city.minLv) msg = 'Lv ' + state.lv + ' · 主城已开放（菜单里选世界）';
+  else if (state.lv === WORLDS.peak.minLv) msg = 'Lv ' + state.lv + ' · 神之巅已开放（菜单里选世界）';
+  toast(msg, state.lv === WORLDS.city.minLv || state.lv === WORLDS.peak.minLv ? 2200 : 1500);
   sfx('cast');
   spawnRing(yawObj.position.x, 0.12, yawObj.position.z, 0xffcf6b, 3.2);
   spawnShards(new THREE.Vector3(yawObj.position.x, 1.2, yawObj.position.z), 18, 0xffcf6b);
@@ -538,7 +635,9 @@ function onLevelUp() {
 
 function addXp(amount) {
   if (state.mode !== 'pve' || !(amount > 0) || state.lv >= LEVEL_CAP) return;
-  state.xp += Math.round(amount);
+  // 世界倍率：主城 1.6×、神之巅 2.6×，越往上刷越肥
+  const W = worldFor(state.world);
+  state.xp += Math.round(amount * (W.xpMul || 1));
   let guard = 0;
   while (state.xp >= xpNeedFor(state.lv) && state.lv < LEVEL_CAP && guard++ < 20) {
     state.xp -= xpNeedFor(state.lv);
@@ -1241,11 +1340,13 @@ function spawnEnemy(type, pos) {
   if (enemies.length > 26) return;
   const T = TYPES[type];
   const waveScale = 1 + (state.wave - 1) * (isBossType(type) ? 0.1 : 0.16);
+  // 世界难度：神之巅的怪血更厚，新手村的怪更好打
+  const wMul = state.mode === 'pve' ? (worldFor(state.world).hpMul || 1) : 1;
   const e = {
     type: type,
     pos: pos.clone(),
-    hp: T.hp * waveScale,
-    maxHp: T.hp * waveScale,
+    hp: T.hp * waveScale * wMul,
+    maxHp: T.hp * waveScale * wMul,
     speed: T.speed,
     radius: T.radius,
     dmg: T.dmg,
@@ -2123,8 +2224,9 @@ function spawnDamageText(pos, amount, crit) {
 /* ---------------- 波次与对局 ---------------- */
 function buildWaveQueue(wave) {
   const q = [];
-  // 数量随波次递增；首波只放 3 只，留出熟悉跳跃与疾跑的时间
-  const n = wave === 1 ? 3 : Math.min(30, 3 + wave * 2);
+  // 数量随波次递增；首波只放 3 只，留出熟悉跳跃与疾跑的时间。世界再乘一道数量系数（新手村更稀疏）
+  const wCount = state.mode === 'pve' ? (worldFor(state.world).countMul || 1) : 1;
+  const n = Math.max(1, Math.round((wave === 1 ? 3 : Math.min(30, 3 + wave * 2)) * wCount));
   // 小怪按波次解锁：蚀虫第 2 波起成群，石傀与咒术师第 4 波加入，精英第 6 波
   for (let i = 0; i < n; i++) {
     const r = Math.random();
@@ -2232,8 +2334,29 @@ function updateSkills(dt, cdDt) {
 
 /* ---------------- 对局流程 ---------------- */
 function startGame() {
-  // PVE 进首领厅、PVP 留在竞技场：换场只换视觉与障碍，玩法占地仍是 ±HALF
-  // 开局无条件重建一次，避免沿用上一局残留的另一个场景
+  // 1) 等级先落定：调试参数与存档都在这里合并，世界门槛要用到最终等级
+  if (/[?&]resetlv/.test(location.search)) {
+    state.lv = 1;
+    state.xp = 0;
+  }
+  const lq = /[?&]lv=(\d+)/.exec(location.search);
+  if (lq) {
+    state.lv = clamp(parseInt(lq[1], 10) || 1, 1, LEVEL_CAP);
+    state.xp = 0;
+  }
+
+  // 2) 世界：?world=village|city|peak 可指定，但等级不够时退回当前能进的最高世界
+  let worldFallback = null;
+  const wq0 = /[?&]world=(village|city|peak)/.exec(location.search);
+  if (wq0) state.world = wq0[1];
+  if (state.mode === 'pve') {
+    const wantKey = state.world;
+    state.world = resolveWorld(wantKey);
+    if (state.world !== wantKey) worldFallback = wantKey;
+  }
+  saveProgress();
+
+  // 3) 换场：PVE 按世界取场景，PVP 留在竞技场；开局无条件重建一次
   const sceneNow = sceneImpl();
   if (sceneNow) {
     obstacles.length = 0;
@@ -2262,25 +2385,13 @@ function startGame() {
   buildGearPanel();
   toggleBag(false);
 
-  // 调试：?resetlv=1 清掉等级存档从 1 级重刷；?lv=N 直接跳到指定等级（同时把经验归零）
-  if (/[?&]resetlv/.test(location.search)) {
-    state.lv = 1;
-    state.xp = 0;
-    saveProgress();
-  }
-  const lq = /[?&]lv=(\d+)/.exec(location.search);
-  if (lq) {
-    state.lv = clamp(parseInt(lq[1], 10) || 1, 1, LEVEL_CAP);
-    state.xp = 0;
-    saveProgress();
-  }
-
   resetPlayer();
   // 调试：?xp=900 直接灌经验（放在 resetPlayer 之后，才有干净的玩家基础值可叠）
   const xq = /[?&]xp=(\d+)/.exec(location.search);
   if (xq) {
     state.xp = 0;
-    addXp(parseInt(xq[1], 10) || 0);
+    // 世界倍率会乘进 addXp，这里先除回去，保证灌的量就是写的量
+    addXp((parseInt(xq[1], 10) || 0) / (worldFor(state.world).xpMul || 1));
     saveProgress();
   }
   buildWeapon();
@@ -2293,8 +2404,13 @@ function startGame() {
   pausePanel.classList.add('hidden');
   resultPanel.classList.add('hidden');
 
-  modeLabelEl.textContent = state.mode === 'pve' ? 'PVE 副本'
+  modeLabelEl.textContent = state.mode === 'pve'
+    ? worldFor(state.world).name + ' · PVE'
     : state.mode === 'online' ? '局域网对战' : 'PVP 对决';
+  if (worldFallback) {
+    const W = worldFor(worldFallback);
+    toast(W.name + ' 需要 Lv ' + W.minLv + ' · 已回到 ' + worldFor(state.world).name, 2000);
+  }
 
   if (state.mode === 'pve') {
     // 调试：?wave=5 直接从指定波次起手，用来核对 BOSS 波编队
@@ -2362,6 +2478,7 @@ function endGame(win) {
     // 死亡惩罚：掉级在结算前结算一次，只 PVE 生效（PVP/联机不掉级）
     const lost = applyDeathPenalty(win);
     rows = [
+      ['世界', worldFor(state.world).name],
       ['抵达波次', state.wave],
       ['击杀数', state.kills],
       ['玩家等级', 'Lv ' + state.lv + '（' + state.xp + ' / ' + xpNeedFor(state.lv) + '）'],
@@ -2537,6 +2654,26 @@ function bindUI() {
         const roomEl = document.getElementById('roomInput');
         if (roomEl && !roomEl.value) roomEl.value = randomRoomCode();
       }
+      // 世界只对 PVE 有效：切到 PVP / 联机时整行变灰
+      refreshWorldUI();
+    });
+  });
+
+  // 世界选择：等级不够只提示不切；够就当场换场，进局不再等
+  const worldBtns = document.querySelectorAll('#worldToggle button');
+  worldBtns.forEach((b) => {
+    b.addEventListener('click', () => {
+      const key = b.dataset.world;
+      const W = worldFor(key);
+      if (state.mode !== 'pve') return;
+      if (state.lv < W.minLv) {
+        if (worldDescEl) worldDescEl.textContent = W.name + ' 需要 Lv ' + W.minLv + '（当前 Lv ' + state.lv + '）';
+        return;
+      }
+      state.world = key;
+      saveProgress();
+      refreshWorldUI();
+      if (state.phase === 'menu') syncScene();
     });
   });
 
@@ -3386,7 +3523,8 @@ function recalcGear() {
 /* ---------------- 掉落实体 ---------------- */
 function spawnDropsFor(e) {
   if (!window.Loot) return;
-  const items = Loot.dropFor(e.type, state.wave, state.cls);
+  // 世界给物品等级加成：新手村按波次原样，主城 +2、神之巅 +5
+  const items = Loot.dropFor(e.type, state.wave + (worldFor(state.world).ilvlBonus || 0), state.cls);
   if (!items.length) return;
   items.forEach((it, i) => {
     const ang = (i / items.length) * Math.PI * 2 + rand(0, 0.9);

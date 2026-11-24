@@ -367,6 +367,28 @@ html, body {
   box-shadow: 0 0 18px rgba(110, 227, 255, 0.18), inset 0 0 12px rgba(110, 227, 255, 0.1);
 }
 
+/* 世界选择：门槛写在按钮里，未解锁半透明且不可点 */
+#worldToggle button { line-height: 1.25; }
+#worldToggle small {
+  display: block;
+  font-size: 9.5px;
+  letter-spacing: 0.6px;
+  color: #7f93a9;
+  margin-top: 2px;
+}
+#worldToggle button.on small { color: #9fe6ff; }
+#worldToggle button.locked { opacity: 0.42; cursor: not-allowed; }
+#worldToggle button.locked small { color: #ffb04a; }
+#worldToggle button.locked:hover { border-color: var(--line); color: #8ea5bd; }
+.world-desc {
+  margin: 6px 0 0;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  color: #6f86a0;
+  min-height: 15px;
+}
+#worldRow.disabled { opacity: 0.45; pointer-events: none; }
+
 .hint {
   margin-top: 22px;
   font-size: 11.5px;

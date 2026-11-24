@@ -33,7 +33,8 @@
       glowI: 0.3,
       glowD: 46,
       envI: 1.0,
-      exposure: 0.85
+      exposure: 0.85,
+      lift: 0.15
     },
     dungeon: {
       file: 'art/模型/场景/fuben_scene_lod.glb',
@@ -47,7 +48,87 @@
       glowI: 1.25,
       glowD: 30,
       envI: 1.6,
-      exposure: 1.15
+      exposure: 1.15,
+      lift: 0.26
+    },
+
+    /* ---------- 三个主要世界：同资产换气质（新手村=石村暖光 / 主城=白日广场 / 神之巅=云海金白） ---------- */
+    village: {
+      file: 'art/模型/场景/fuben_scene_lod.glb',
+      src: 'dungeon',        // 复用副本几何：石砌回廊当村道
+      mode: 'rect',
+      floorZ: 1.0,
+      targetSpan: 44,
+      fog: [0xe3d3b6, 30, 120],
+      bg: 0xbcb6a4,
+      sky: [0x8ea6b8, 0xe8d9be],
+      glow: 0xffdca0,
+      glowI: 0.85,
+      glowD: 34,
+      envI: 1.20,
+      exposure: 0.92,
+      lift: 0.10,
+      groundDark: false,
+      glowY: 2.2,
+      lights: {
+        hemiSky: 0xdde6da, hemiGround: 0x6a6152, hemi: 1.00,
+        keyColor: 0xfff0d2, key: 1.00,
+        fillColor: 0x9dbcdc, fill: 0.38
+      }
+    },
+    city: {
+      file: 'art/模型/场景/arena_scene_lod.glb',
+      src: 'arena',
+      mode: 'disc',
+      deckR: 6.0,
+      deckZ: 6.2,
+      targetRadius: 24,
+      spin: 0,
+      fog: [0xa9c2d4, 42, 160],
+      bg: 0x8fa7ba,
+      sky: [0x6f9dc4, 0xdbe8f1],
+      glow: 0xd8f0ff,
+      glowI: 0.45,
+      glowD: 50,
+      envI: 0.85,
+      exposure: 0.70,
+      lift: 0.08,
+      groundDark: false,
+      glowY: 1.6,
+      lights: {
+        hemiSky: 0xd6e6f2, hemiGround: 0x7a736a, hemi: 0.72,
+        keyColor: 0xfff4e2, key: 0.82,
+        fillColor: 0xd3dde4, fill: 0.42
+      }
+    },
+    peak: {
+      file: 'art/模型/场景/arena_scene_lod.glb',
+      src: 'arena',
+      mode: 'disc',
+      deckR: 6.0,
+      deckZ: 6.2,
+      targetRadius: 24,
+      spin: 0,
+      /* 云海：远景白得发亮、雾贴着台面压过来，纯粹靠光和天空撑“高处” */
+      fog: [0xffe8bc, 44, 165],
+      bg: 0xd6e4f2,
+      sky: [0xa7b3d6, 0xfff3d2],
+      glow: 0xffe39a,
+      glowI: 2.2,
+      glowD: 44,
+      envI: 1.25,
+      exposure: 0.92,
+      lift: 0.14,
+      groundDark: false,
+      glowY: 1.8,
+      clouds: true,
+    /* 神之巅的补地只铺到台沿外一点，台外直接是云海，看起来像浮在云上的高台 */
+    groundR: 31,
+      lights: {
+        hemiSky: 0xfff0d2, hemiGround: 0xd0a860, hemi: 1.00,
+        keyColor: 0xffd48a, key: 1.10,
+        fillColor: 0xffb060, fill: 1.00
+      }
     }
   };
 
@@ -295,7 +376,7 @@
     var c = document.createElement('canvas');
     c.width = c.height = 256;
     var g = c.getContext('2d');
-    var dark = k === 'dungeon';
+    var dark = (CFG[k] && typeof CFG[k].groundDark === 'boolean') ? CFG[k].groundDark : (k === 'dungeon');
     g.fillStyle = dark ? '#20262a' : '#6a7176';
     g.fillRect(0, 0, 256, 256);
     g.globalAlpha = 0.10;
@@ -323,24 +404,41 @@
     return mesh;
   }
 
-  /* ---------- 灯光按场景分气质 ---------- */
+  /* ---------- 灯光按场景分气质 ----------
+     世界各自带 lights 参数（新手村暖光 / 主城白日 / 神之巅金白），没配的沿用旧二元逻辑 */
   function tuneLights(scene) {
+    var cfg = CFG[kind] || CFG.arena;
+    var L = cfg.lights;
     var isD = kind === 'dungeon';
     var sc = scene || sceneRef;
     if (!sc) return;
     /* GLB 是 PBR 材质、贴图本身偏暗，曝光按场景单独抬一档（程序化场景仍用 0.80） */
     if (window.__renderer && CFG[kind]) {
-      window.__renderer.toneMappingExposure = CFG[kind].exposure || 0.8;
+      window.__renderer.toneMappingExposure = cfg.exposure || 0.8;
     }
     var dirs = 0;
     sc.traverse(function (o) {
       if (o.isHemisphereLight) {
-        o.color.setHex(isD ? 0x7fb0cc : 0xd6e6f2);
-        o.groundColor.setHex(isD ? 0x1b2a33 : 0x7a736a);
-        o.intensity = isD ? 1.35 : 1.05;
+        if (L) {
+          o.color.setHex(L.hemiSky);
+          o.groundColor.setHex(L.hemiGround);
+          o.intensity = L.hemi;
+        } else {
+          o.color.setHex(isD ? 0x7fb0cc : 0xd6e6f2);
+          o.groundColor.setHex(isD ? 0x1b2a33 : 0x7a736a);
+          o.intensity = isD ? 1.35 : 1.05;
+        }
       }
       if (o.isDirectionalLight) {
-        if (dirs === 0) {
+        if (L) {
+          if (dirs === 0) {
+            o.color.setHex(L.keyColor);
+            o.intensity = L.key;
+          } else {
+            o.color.setHex(L.fillColor);
+            o.intensity = L.fill;
+          }
+        } else if (dirs === 0) {
           o.color.setHex(isD ? 0xbfe2f4 : 0xfff4e2);
           o.intensity = isD ? 1.2 : 1.15;
         } else {
@@ -352,12 +450,15 @@
     });
   }
 
-  /* ---------- 载入 ---------- */
+  /* ---------- 载入 ----------
+     世界可以复用同一份资产（CFG[k].src 指到实际模型），缓存与量体都按 src 键走，
+     新手村和旧副本、主城和神之巅各自只下载一次模型。 */
   function load(k, cb) {
-    if (cache[k]) { cb(null, cache[k]); return; }
-    if (loading[k]) { loading[k].push(cb); return; }
-    loading[k] = [cb];
-    var cfg = CFG[k];
+    var sk = (CFG[k] && CFG[k].src) || k;
+    if (cache[sk]) { cb(null, cache[sk]); return; }
+    if (loading[sk]) { loading[sk].push(cb); return; }
+    loading[sk] = [cb];
+    var cfg = CFG[sk];
     var loader = new THREE.GLTFLoader();
     log('load start', cfg.file);
 
@@ -386,23 +487,23 @@
         floor: deckY,
         size: box2.getSize(new THREE.Vector3())
       };
-      prepMaterials(obj, k);
+      prepMaterials(obj, sk);
       var entry = { root: obj, fit: f, tris: trisOf(obj) };
-      cache[k] = entry;
-      log('load ok', k, 'tris', entry.tris, 'scale', f.scale.toFixed(2));
-      var list = loading[k];
-      delete loading[k];
+      cache[sk] = entry;
+      log('load ok', sk, 'tris', entry.tris, 'scale', f.scale.toFixed(2));
+      var list = loading[sk];
+      delete loading[sk];
       for (var i = 0; i < list.length; i++) list[i](null, entry);
     }, function (ev) {
-      if (ev && ev.total && !loading[k]._logged && ev.loaded / ev.total > 0.15) {
-        loading[k]._logged = true;
-        log('loading', k, Math.round(ev.loaded / ev.total * 100) + '%');
+      if (ev && ev.total && !loading[sk]._logged && ev.loaded / ev.total > 0.15) {
+        loading[sk]._logged = true;
+        log('loading', sk, Math.round(ev.loaded / ev.total * 100) + '%');
       }
     }, function (err) {
-      failed[k] = true;
-      log('load FAILED', k, err && (err.message || err.type));
-      var list = loading[k];
-      delete loading[k];
+      failed[sk] = true;
+      log('load FAILED', sk, err && (err.message || err.type));
+      var list = loading[sk];
+      delete loading[sk];
       for (var i = 0; i < list.length; i++) list[i](err || new Error('load failed'));
     });
   }
@@ -468,15 +569,17 @@
     var out = obstacles || [];
     var props = new THREE.Group();
     props.name = 'stageProps';
+    /* 方形世界（副本 / 新手村）与圆台世界（竞技场 / 主城 / 神之巅）两套布局 */
+    var rect = (k === 'dungeon' || k === 'village');
 
-    var tone = k === 'dungeon' ? 0x4a5258 : 0x5c646b;
-    var toneHi = k === 'dungeon' ? 0x565e65 : 0x687077;
+    var tone = rect ? 0x4a5258 : 0x5c646b;
+    var toneHi = rect ? 0x565e65 : 0x687077;
     var map = stoneTex();
     var stone = new THREE.MeshStandardMaterial({ color: tone, map: map, roughness: 0.95, metalness: 0.04, side: THREE.DoubleSide });
     var stoneHi = new THREE.MeshStandardMaterial({ color: toneHi, map: map, roughness: 0.97, metalness: 0.03, side: THREE.DoubleSide });
 
     var shaftGeo, baseGeo, capGeo, rubGeo, coverGeo, chunkGeo;
-    if (k === 'dungeon') {
+    if (rect) {
       shaftGeo = new THREE.CylinderGeometry(0.50, 0.62, 6.6, 10);
       baseGeo = new THREE.BoxGeometry(1.3, 0.3, 1.3);
       capGeo = new THREE.BoxGeometry(1.0, 0.22, 1.0);
@@ -491,38 +594,38 @@
       coverGeo = new THREE.BoxGeometry(2.4, 1.1, 1.1);
       chunkGeo = new THREE.BoxGeometry(0.9, 0.9, 0.7);
     }
-    var shaftTop = k === 'dungeon' ? 6.6 : 2.6;
+    var shaftTop = rect ? 6.6 : 2.6;
 
-    /* 断柱：副本 5 根 r12.6；竞技场 4 根 r10.5，角度整体偏 22.5° 避开出生轴线 */
-    var pil = k === 'dungeon' ? 5 : 4;
+    /* 断柱：副本 / 新手村 5 根 r12.6；圆台世界 4 根 r10.5，角度整体偏 22.5° 避开出生轴线 */
+    var pil = rect ? 5 : 4;
     for (var i = 0; i < pil; i++) {
-      var a = k === 'dungeon' ? (i / 5) * TAU + 0.45 : Math.PI / 8 + (i / 4) * TAU;
-      var r = k === 'dungeon' ? 12.6 : 10.5;
+      var a = rect ? (i / 5) * TAU + 0.45 : Math.PI / 8 + (i / 4) * TAU;
+      var r = rect ? 12.6 : 10.5;
       var x = Math.cos(a) * r, z = Math.sin(a) * r;
       partMesh(props, stone, shaftGeo, x, shaftTop / 2 + 0.15, z);
       partMesh(props, stoneHi, baseGeo, x, 0.15, z);
       partMesh(props, stoneHi, capGeo, x, shaftTop + 0.26, z);
       partMesh(props, stone, rubGeo, x + 0.1, shaftTop + 0.55, z, 0.3);
-      /* 竞技场改成断柱残墩：柱头多堆两块碎石，别让 6m 光柱在台面上一柱擎天 */
-      if (k !== 'dungeon') {
+      /* 圆台世界改成断柱残墩：柱头多堆两块碎石，别让 6m 光柱在台面上一柱擎天 */
+      if (!rect) {
         partMesh(props, stone, rubGeo, x - 0.32, shaftTop + 0.42, z + 0.18, -0.35, 0.12);
         partMesh(props, stoneHi, capGeo, x + 0.34, shaftTop + 0.20, z - 0.22, 0.6, 0.08);
       }
-      out.push({ x: x, z: z, r: k === 'dungeon' ? 0.8 : 0.86 });
+      out.push({ x: x, z: z, r: rect ? 0.8 : 0.86 });
     }
 
-    /* 掩体：副本 8 处 r15.6，竞技场 6 处 r17（偏到出生环内侧之外，不挡住出生视野） */
-    var cov = k === 'dungeon' ? 8 : 6;
-    var covR = k === 'dungeon' ? 15.6 : 17.0;
-    var covPhase = k === 'dungeon' ? 0.18 : Math.PI / 6;
+    /* 掩体：方形世界 8 处 r15.6，圆台世界 6 处 r17（偏到出生环内侧之外，不挡住出生视野） */
+    var cov = rect ? 8 : 6;
+    var covR = rect ? 15.6 : 17.0;
+    var covPhase = rect ? 0.18 : Math.PI / 6;
     for (var c = 0; c < cov; c++) {
       var ca = (c / cov) * TAU + covPhase;
       var cx = Math.cos(ca) * covR, cz = Math.sin(ca) * covR;
       partMesh(props, stone, coverGeo, cx, 0.55, cz, -ca);
       partMesh(props, stoneHi, chunkGeo,
-        cx + Math.cos(ca + (k === 'dungeon' ? 0.5 : 1.2)) * 1.5, 0.5,
-        cz + Math.sin(ca + (k === 'dungeon' ? 0.5 : 1.2)) * 1.5, -ca + 0.25);
-      out.push({ x: cx, z: cz, r: k === 'dungeon' ? 1.4 : 1.35 });
+        cx + Math.cos(ca + (rect ? 0.5 : 1.2)) * 1.5, 0.5,
+        cz + Math.sin(ca + (rect ? 0.5 : 1.2)) * 1.5, -ca + 0.25);
+      out.push({ x: cx, z: cz, r: rect ? 1.4 : 1.35 });
     }
 
     group.add(props);
@@ -535,16 +638,67 @@
     });
   }
 
+  /* ---------- 世界天空层：神之巅的云海（不参与碰撞，纯远景） ----------
+     云面压在台沿以下，从台面往外看是“一圈白云托着高台” */
+  function addSky(k, group) {
+    var cfg = CFG[k];
+    if (!cfg || !cfg.clouds) return;
+    var cloud = new THREE.Group();
+    cloud.name = 'worldClouds';
+    var rings = [
+      { r: 34, y: -1.5, o: 0.62 },
+      { r: 54, y: -3.8, o: 0.46 },
+      { r: 88, y: -7.4, o: 0.30 },
+      { r: 152, y: -12.5, o: 0.16 }
+    ];
+    for (var i = 0; i < rings.length; i++) {
+      var R = rings[i];
+      var m = new THREE.Mesh(
+        new THREE.CircleGeometry(R.r, 64),
+        new THREE.MeshBasicMaterial({
+          color: 0xffffff, transparent: true, opacity: R.o,
+          depthWrite: false, side: THREE.DoubleSide, fog: false
+        })
+      );
+      m.rotation.x = -Math.PI / 2;
+      m.position.y = R.y;
+      m.userData.tag = 'world_cloud';
+      cloud.add(m);
+    }
+    group.add(cloud);
+  }
+
+  /* 天空渐变：同资产的世界靠天色区分最有效——几何被墙挡住，天色却铺满整屏 */
+  function skyTex(topHex, botHex) {
+    var c = document.createElement('canvas');
+    c.width = 8; c.height = 256;
+    var g = c.getContext('2d');
+    var lg = g.createLinearGradient(0, 0, 0, 256);
+    var hex = function (v) { return '#' + ('000000' + v.toString(16)).slice(-6); };
+    lg.addColorStop(0, hex(topHex));
+    lg.addColorStop(0.72, hex(botHex));
+    lg.addColorStop(1, hex(botHex));
+    g.fillStyle = lg;
+    g.fillRect(0, 0, 8, 256);
+    var t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    if (THREE.SRGBColorSpace) t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }
+
   /* 圆形边界：竞技场圆台用半径夹止，副本仍走方形 */
   function boundary() {
-    if (kind === 'arena' && fit && fit.deckRadius) return fit.deckRadius - 1.4;
+    /* 圆台世界（竞技场 / 主城 / 神之巅）都按台面半径夹止，方形世界返回 0 走方场逻辑 */
+    var cfg = CFG[kind];
+    if (cfg && cfg.mode === 'disc' && fit && fit.deckRadius) return fit.deckRadius - 1.4;
     return 0;
   }
 
   /* ---------- 挂模型 ---------- */
   function attach(k, scene, obstacles) {
     if (!group) return;
-    var entry = cache[k];
+    var sk = (CFG[k] && CFG[k].src) || k;
+    var entry = cache[sk];
     if (!entry) {
       log('pending', k);
       load(k, function (err) {
@@ -558,13 +712,26 @@
     group.add(inst);
     root = inst;
     fit = entry.fit;
+    var cfg = CFG[k] || CFG.arena;
     applyEnv(inst, k);
+    /* 几何是按模型键缓存的（新手村复用副本），自发光要按世界再覆盖一档：
+       暖村克制、主城中性、神之巅略提，否则同一批材质在三个世界亮得一模一样 */
+    if (typeof cfg.lift === 'number') {
+      inst.traverse(function (o) {
+        if (!o.isMesh) return;
+        var ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+        for (var i = 0; i < ms.length; i++) {
+          var mm = ms[i];
+          if (mm && mm.userData && mm.userData._lift) mm.emissiveIntensity = cfg.lift;
+        }
+      });
+    }
     collectPulses();
     addProps(k, scene, obstacles);
+    addSky(k, group);
 
-    var cfg = CFG[k];
     glowLight = new THREE.PointLight(cfg.glow, cfg.glowI, cfg.glowD, 1.8);
-    glowLight.position.set(0, k === 'dungeon' ? 2.6 : 1.4, 0);
+    glowLight.position.set(0, cfg.glowY || 1.4, 0);
     group.add(glowLight);
 
     log('attached', k, 'tris', entry.tris, 'deckRadius', fit.deckRadius ? fit.deckRadius.toFixed(1) : '-');
@@ -605,9 +772,10 @@
 
     var cfg = CFG[k] || CFG.arena;
     scene.fog = new THREE.Fog(cfg.fog[0], cfg.fog[1], cfg.fog[2]);
-    scene.background = new THREE.Color(cfg.bg);
+    /* 有 sky 渐变就铺渐变色（破晓暖光 / 正午蓝天 / 金白云端），否则退回纯色 */
+    scene.background = cfg.sky ? skyTex(cfg.sky[0], cfg.sky[1]) : new THREE.Color(cfg.bg);
 
-    ground = makeGround(k, 78);
+    ground = makeGround(k, cfg.groundR || 78);
     group.add(ground);
 
     attach(k, scene, obstacles);
@@ -626,7 +794,7 @@
       var mm = pulses[i];
       if (mm) mm.emissiveIntensity = (mm.userData._base || 1) * s;
     }
-    if (glowLight) glowLight.intensity = CFG[kind === 'dungeon' ? 'dungeon' : 'arena'].glowI * s;
+    if (glowLight) glowLight.intensity = (CFG[kind] ? CFG[kind].glowI : CFG.arena.glowI) * s;
   }
 
   function stats() {
