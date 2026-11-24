@@ -24,6 +24,11 @@
   <div id="hitmarker"></div>
 
   <div id="vitals">
+    <div class="lvline">
+      <span id="lvText">Lv 1</span>
+      <div class="lvbar"><div class="fill xp" id="xpFill"></div></div>
+      <span id="xpText">0 / 100</span>
+    </div>
     <div class="bar">
       <div class="fill hp" id="hpFill"></div>
       <span id="hpText">120 / 120</span>
@@ -78,6 +83,7 @@
     </div>
 
     <p class="hint">WASD 移动 · Shift 疾跑 · 空格跳跃 · 鼠标转向 · 左键攻击 · Q / E / R 技能 · Esc 暂停</p>
+    <div class="menu-lv">玩家等级 <b id="menuLv">Lv 1</b><span id="menuXp">0 / 100</span></div>
     <button id="startBtn" class="primary">进入竞技场</button>
     <p class="tiny">建议使用 Chrome / Edge，进入后鼠标会被锁定，按 Esc 退出</p>
   </div>

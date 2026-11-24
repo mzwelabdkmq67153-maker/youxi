@@ -128,6 +128,10 @@ let hudEl, overlayEl, menuPanel, pausePanel, resultPanel;
 let resultTitleEl, resultSubEl, resultStatsEl;
 let hpFill, hpText, enFill, enText, stFill, stText, skillsEl, objectiveEl, timerEl, modeLabelEl;
 let toastEl, flashEl, hitmarkerEl, dmgLayerEl;
+// 等级与经验条的 HUD 节点
+let lvText, xpFill, xpText, lvLineEl;
+// 菜单面板上的等级读数
+let menuLvEl, menuXpEl;
 
 const state = {
   mode: 'pve', cls: 'blade', phase: 'menu',
@@ -138,7 +142,9 @@ const state = {
   sandbox: /sandbox/i.test(location.search),
   tapTest: /tap/i.test(location.search),
   // 调试：?nolock 不请求指针锁、也不因失锁暂停，便于自动化截图与走位测试
-  noLock: /nolock/i.test(location.search)
+  noLock: /nolock/i.test(location.search),
+  // 玩家等级（跨局累积，只有 PVE 副本给经验；PVP/联机不吃等级加成）
+  lv: 1, xp: 0
 };
 
 const player = {};
@@ -183,6 +189,12 @@ function init() {
   enText = document.getElementById('enText');
   stFill = document.getElementById('stFill');
   stText = document.getElementById('stText');
+  lvText = document.getElementById('lvText');
+  xpFill = document.getElementById('xpFill');
+  xpText = document.getElementById('xpText');
+  lvLineEl = document.querySelector('.lvline');
+  menuLvEl = document.getElementById('menuLv');
+  menuXpEl = document.getElementById('menuXp');
   skillsEl = document.getElementById('skills');
   objectiveEl = document.getElementById('objective');
   timerEl = document.getElementById('timer');
@@ -221,6 +233,8 @@ function init() {
 
   buildArena();
   buildLights();
+  loadProgress();
+  refreshMenuLevel();
   resetPlayer();
   bindUI();
   bindInput();
@@ -437,6 +451,102 @@ function buildWeapon() {
   weaponObj.position.set(weaponBase.x, weaponBase.y, weaponBase.z);
   weaponObj.rotation.set(weaponBase.rx, weaponBase.ry, weaponBase.rz);
   camera.add(weaponObj);
+}
+
+/* ---------------- 玩家等级与经验 ----------------
+
+   口径：
+   - 经验只从 PVE 副本里来（击杀 + 过波），PVP 与局域网对战不结算，避免对局不公平。
+   - 升级需求**每级翻倍**：L1→2 要 100，L2→3 要 200，L3→4 要 400……刷得越深越慢。
+   - 等级加成只在 PVE 生效，PVP/联机按职业原始属性打。
+   - 进度写进 localStorage，刷新页面与换局都保留（?resetlv=1 可清档）。
+   ============================================================================ */
+
+const LEVEL_XP_BASE = 100;      // 1 级升 2 级所需经验
+const LEVEL_XP_MULT = 2;        // 每升一级，需求翻倍
+const LEVEL_CAP = 20;           // 软上限（按翻倍曲线，正常玩到 8 级就要 1.2 万经验）
+const LEVEL_GAIN = {
+  hp: 16,       // 每级生命上限
+  en: 3,        // 每级能量上限
+  dmg: 1.3,     // 每级伤害百分比
+  dr: 0.5,      // 每级减伤百分比（仍与装备一起吃 55% 封顶）
+  speed: 0.4    // 每级移速百分比
+};
+// 单个敌人的基础经验（再乘一个"越深越肥"的波次系数）
+const XP_OF = {
+  swarm: 5, grunt: 12, shooter: 12, golem: 30, hexer: 22, elite: 60,
+  boss: 300, warden: 320, oracle: 320, duelist: 0
+};
+const PROGRESS_KEY = 'seventh_arena.progress.v1';
+
+function xpNeedFor(lv) {
+  return Math.round(LEVEL_XP_BASE * Math.pow(LEVEL_XP_MULT, Math.max(0, lv - 1)));
+}
+
+function loadProgress() {
+  try {
+    const raw = localStorage.getItem(PROGRESS_KEY);
+    if (!raw) return;
+    const p = JSON.parse(raw) || {};
+    if (typeof p.lv === 'number' && isFinite(p.lv)) {
+      state.lv = clamp(Math.floor(p.lv), 1, LEVEL_CAP);
+    }
+    if (typeof p.xp === 'number' && isFinite(p.xp)) {
+      state.xp = Math.max(0, Math.floor(p.xp));
+    }
+  } catch (err) { /* 隐私模式/存储被禁：按 1 级开新档 */ }
+}
+
+function saveProgress() {
+  try {
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify({ lv: state.lv, xp: state.xp }));
+  } catch (err) { /* 忽略配额与隐私模式错误 */ }
+  refreshMenuLevel();
+}
+
+// 菜单上的等级读数：开局前与结算后都要准
+function refreshMenuLevel() {
+  if (!menuLvEl) return;
+  const capped = state.lv >= LEVEL_CAP;
+  menuLvEl.textContent = 'Lv ' + state.lv;
+  menuXpEl.textContent = capped ? 'MAX' : state.xp + ' / ' + xpNeedFor(state.lv);
+}
+
+function levelBonus() {
+  if (state.mode !== 'pve') return { hp: 0, en: 0, dmg: 0, dr: 0, speed: 0 };
+  const n = Math.max(0, state.lv - 1);
+  return {
+    hp: n * LEVEL_GAIN.hp,
+    en: n * LEVEL_GAIN.en,
+    dmg: n * LEVEL_GAIN.dmg,
+    dr: n * LEVEL_GAIN.dr,
+    speed: n * LEVEL_GAIN.speed
+  };
+}
+
+// 升级：满血满能 + 金环 + 播报。属性由 recalcGear 重算，这里只给"瞬间回满"的正反馈
+function onLevelUp() {
+  toast('等级提升 · Lv ' + state.lv, 1500);
+  sfx('cast');
+  spawnRing(yawObj.position.x, 0.12, yawObj.position.z, 0xffcf6b, 3.2);
+  spawnShards(new THREE.Vector3(yawObj.position.x, 1.2, yawObj.position.z), 18, 0xffcf6b);
+  recalcGear();
+  player.hp = player.maxHp;
+  player.en = player.maxEn;
+  player.stamina = player.maxStamina;
+}
+
+function addXp(amount) {
+  if (state.mode !== 'pve' || !(amount > 0) || state.lv >= LEVEL_CAP) return;
+  state.xp += Math.round(amount);
+  let guard = 0;
+  while (state.xp >= xpNeedFor(state.lv) && state.lv < LEVEL_CAP && guard++ < 20) {
+    state.xp -= xpNeedFor(state.lv);
+    state.lv++;
+    onLevelUp();
+  }
+  if (state.lv >= LEVEL_CAP) state.xp = 0;
+  saveProgress();
 }
 
 /* ---------------- 玩家 ---------------- */
@@ -1871,6 +1981,12 @@ function killEnemy(e) {
   // 副本掉落：只在 PVE 里生成，PVP/联机不掉装备（那边是比分模式，装备无处结算）
   if (state.mode === 'pve') spawnDropsFor(e);
 
+  // 经验：基础值 × 波次系数（越深越肥），只在 PVE 结算
+  if (state.mode === 'pve') {
+    const base = XP_OF[e.type] || 0;
+    if (base > 0) addXp(base * (1 + state.wave * 0.06));
+  }
+
   if (isBossType(e.type)) {
     spawnExplosion(e.pos.x, 1.6, e.pos.z, 2.6);
     spawnShards(e.pos, 16, TYPES[e.type].color);
@@ -2025,6 +2141,9 @@ function updateWave(dt) {
     if (state.waveRest === null) state.waveRest = 2.4;
     state.waveRest -= dt;
     if (state.waveRest <= 0) {
+      // 清完的这一波给通关经验：基线随波次走，BOSS 波额外加一笔
+      const cleared = state.wave;
+      addXp(50 + cleared * 20 + (cleared % 5 === 0 ? 150 : 0));
       state.wave++;
       state.waveRest = null;
       startWave();
@@ -2101,7 +2220,27 @@ function startGame() {
   buildGearPanel();
   toggleBag(false);
 
+  // 调试：?resetlv=1 清掉等级存档从 1 级重刷；?lv=N 直接跳到指定等级（同时把经验归零）
+  if (/[?&]resetlv/.test(location.search)) {
+    state.lv = 1;
+    state.xp = 0;
+    saveProgress();
+  }
+  const lq = /[?&]lv=(\d+)/.exec(location.search);
+  if (lq) {
+    state.lv = clamp(parseInt(lq[1], 10) || 1, 1, LEVEL_CAP);
+    state.xp = 0;
+    saveProgress();
+  }
+
   resetPlayer();
+  // 调试：?xp=900 直接灌经验（放在 resetPlayer 之后，才有干净的玩家基础值可叠）
+  const xq = /[?&]xp=(\d+)/.exec(location.search);
+  if (xq) {
+    state.xp = 0;
+    addXp(parseInt(xq[1], 10) || 0);
+    saveProgress();
+  }
   buildWeapon();
   updateSkillUI();
   gearDirty = true;
@@ -2171,6 +2310,7 @@ function endGame(win) {
     rows = [
       ['抵达波次', state.wave],
       ['击杀数', state.kills],
+      ['玩家等级', 'Lv ' + state.lv + '（' + state.xp + ' / ' + xpNeedFor(state.lv) + '）'],
       ['存活时间', fmtTime(state.elapsed)],
       ['职业', state.clsName]
     ];
@@ -2263,6 +2403,16 @@ function updateSkillUI() {
 
 function updateHUD() {
   if (!hudEl || hudEl.classList.contains('hidden')) return;
+  // 等级与经验：满级后条打满、文字显示 MAX
+  if (lvText) {
+    const need = xpNeedFor(state.lv);
+    const capped = state.lv >= LEVEL_CAP;
+    lvText.textContent = 'Lv ' + state.lv;
+    xpFill.style.width = (capped ? 100 : clamp(state.xp / need, 0, 1) * 100) + '%';
+    xpText.textContent = capped ? 'MAX' : state.xp + ' / ' + need;
+    if (lvLineEl) lvLineEl.classList.toggle('boost', state.mode === 'pve' && state.lv > 1);
+  }
+
   const hpPct = clamp(player.hp / player.maxHp, 0, 1);
   hpFill.style.width = (hpPct * 100) + '%';
   hpText.textContent = Math.max(0, Math.ceil(player.hp)) + ' / ' + player.maxHp;
@@ -3151,24 +3301,26 @@ function recalcGear() {
   if (!window.Gear) return;
   const C = CLASSES[state.cls];
   const T = Gear.totals();
+  // 等级加成只在 PVE 副本里叠（PVP/联机对等竞技不吃等级）
+  const L = levelBonus();
 
   // 血量按"当前比例"随上限平移，换装不会凭空回满血
   const oldMax = player.maxHp || C.hp;
   const ratio = oldMax > 0 ? clamp(player.hp / oldMax, 0, 1) : 1;
 
-  player.gDmgPct = T.dmgPct;
+  player.gDmgPct = T.dmgPct + L.dmg;
   player.gCritPct = T.critPct;
   player.gAtkSpeedPct = T.atkSpeedPct;
   player.gRangePct = T.rangePct;
-  player.gDrPct = T.drPct;
+  player.gDrPct = T.drPct + L.dr;
   player.gEnRegenPct = T.enRegenPct;
   player.gearPieces = T.pieces;
 
-  player.maxHp = Math.round(C.hp + T.hpFlat);
+  player.maxHp = Math.round(C.hp + T.hpFlat + L.hp);
   player.hp = clamp(Math.round(player.maxHp * ratio), 1, player.maxHp);
-  player.maxEn = Math.round(C.en + T.enFlat);
+  player.maxEn = Math.round(C.en + T.enFlat + L.en);
   player.en = Math.min(player.en == null ? player.maxEn : player.en, player.maxEn);
-  player.speed = C.speed * (1 + T.speedPct / 100);
+  player.speed = C.speed * (1 + (T.speedPct + L.speed) / 100);
   player.maxStamina = Math.round(100 * (1 + T.stamPct / 100));
   player.stamina = Math.min(player.stamina == null ? player.maxStamina : player.stamina, player.maxStamina);
 
