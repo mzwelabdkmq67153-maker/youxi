@@ -11,52 +11,17 @@ const HALF = 22;
 const WALL_H = 9;
 const PLAYER_H = 1.68;
 
-const CLASSES = {
-  blade: {
-    name: '剑客', hp: 130, en: 100, speed: 6.4, color: 0x6fe3ff,
-    attackType: 'melee',
-    attack: { range: 3.7, arcDeg: 66, dmg: 26, interval: 0.38 },
-    skills: [
-      { key: 'Q', name: '突进斩', cd: 6, cost: 0, id: 'dashSlash' },
-      { key: 'E', name: '旋风斩', cd: 9, cost: 25, id: 'whirl' },
-      { key: 'R', name: '剑域', cd: 30, cost: 60, id: 'swordDomain' }
-    ]
-  },
-  gunner: {
-    name: '枪手', hp: 110, en: 100, speed: 6.6, color: 0x8fd4ff,
-    attackType: 'hitscan',
-    attack: { dmg: 15, interval: 0.12, spread: 0.006, headMul: 1.8 },
-    skills: [
-      { key: 'Q', name: '战术翻滚', cd: 5, cost: 0, id: 'roll' },
-      { key: 'E', name: '爆裂弹', cd: 10, cost: 30, id: 'grenade' },
-      { key: 'R', name: '火力全开', cd: 32, cost: 65, id: 'overdrive' }
-    ]
-  },
-  mage: {
-    name: '术士', hp: 105, en: 120, speed: 6.0, color: 0xb98cff,
-    attackType: 'projectile',
-    attack: { dmg: 24, interval: 0.46, speed: 24, splash: 2.4 },
-    skills: [
-      { key: 'Q', name: '冰霜环', cd: 8, cost: 25, id: 'frostRing' },
-      { key: 'E', name: '相位闪现', cd: 9, cost: 0, id: 'blink' },
-      { key: 'R', name: '陨星', cd: 30, cost: 70, id: 'meteor' }
-    ]
-  }
-};
+/* ---------------- 规则层 ----------------
+   GDD v1.0 的数值与数据全部在 core.js（window.Rules），本文件只消费不定义。
+   六职业、伙伴血量、怪物倍率、世界六段、副本四档都从 Rules 读。 */
+const Rules = window.Rules;
+if (!Rules) throw new Error('[Rules] core.js 未加载：请检查 index.html 的脚本顺序');
 
-const TYPES = {
-  grunt:   { name: '地宫守卫', hp: 58,  speed: 3.1, dmg: 8,  radius: 0.52, color: 0xff5c72, score: 1 },
-  shooter: { name: '弩手',     hp: 44,  speed: 2.7, dmg: 9,  radius: 0.50, color: 0xffa23c, score: 1 },
-  elite:   { name: '精英卫',   hp: 150, speed: 2.9, dmg: 17, radius: 0.78, color: 0xff9a6b, score: 2 },
-  boss:    { name: '地宫主宰', hp: 900, speed: 2.3, dmg: 22, radius: 1.50, color: 0xff3860, score: 5 },
-  duelist: { name: '对手',     hp: 150, speed: 5.2, dmg: 13, radius: 0.50, color: 0xff7a45, score: 1 },
-  /* 地宫副本新增（取材《全职高手》地宫 / 野图副本的机制意象，命名与形象为原创） */
-  golem:   { name: '石傀',     hp: 240, speed: 1.9, dmg: 24, radius: 0.86, color: 0x9aa7b4, score: 2 },
-  swarm:   { name: '蚀虫',     hp: 28,  speed: 3.7, dmg: 6,  radius: 0.36, color: 0xa4ff6b, score: 1 },
-  hexer:   { name: '咒术师',   hp: 70,  speed: 2.5, dmg: 14, radius: 0.52, color: 0xb98cff, score: 2 },
-  warden:  { name: '守卫长',   hp: 1100, speed: 2.5, dmg: 30, radius: 1.35, color: 0xffcf6b, score: 6 },
-  oracle:  { name: '咒缚主祭', hp: 950, speed: 2.2, dmg: 20, radius: 1.30, color: 0xc98cff, score: 6 }
-};
+const CLASSES = Rules.CLASSES;
+const CLASS_ORDER = Rules.CLASS_ORDER;
+/* TYPES 保留旧名字（大量敌人逻辑按 type 取字段），数据源换成 Rules.MOBS：
+   name / speed / radius / color / score 照旧可用，hp / dmg 改由 mobHp() / mobDmg() 现算。 */
+const TYPES = Rules.MOBS;
 
 /* 行为分族：近战类共用一套糊脸/前摇逻辑，BOSS 类共用缩放与出场播报 */
 const BOSS_TYPES = { boss: 1, warden: 1, oracle: 1 };
@@ -132,8 +97,13 @@ let toastEl, flashEl, hitmarkerEl, dmgLayerEl;
 let lvText, xpFill, xpText, lvLineEl;
 // 菜单面板上的等级读数
 let menuLvEl, menuXpEl;
-// 菜单里的世界选择
+// 菜单里的世界选择（六段）与副本档位（四档）
 let worldToggleEl, worldDescEl, worldRowEl;
+let dungeonToggleEl, dungeonDescEl, dungeonRowEl;
+// 菜单顶部的进度读数：金币 / 技能点 / 徽记
+let menuGoldEl, menuSpEl, menuBadgeEl;
+// HUD 顶部战斗读数 + 菜单里的技能面板与职业说明
+let statChipsEl, skillPanelEl, respecBtnEl, classDescEl;
 
 const state = {
   mode: 'pve', cls: 'blade', phase: 'menu',
@@ -145,10 +115,20 @@ const state = {
   tapTest: /tap/i.test(location.search),
   // 调试：?nolock 不请求指针锁、也不因失锁暂停，便于自动化截图与走位测试
   noLock: /nolock/i.test(location.search),
-  // 玩家等级（跨局累积，只有 PVE 副本给经验；PVP/联机不吃等级加成）
+  // 玩家等级（跨局累积，只有 PVE 副本给经验；PVP/联机按 GDD 6.4 分轨，不吃等级成长）
   lv: 1, xp: 0,
-  // 当前世界：village / city / peak（PVE 的舞台，PVP 与联机固定竞技场）
+  // 金币与技能点（GDD 5.3 / 7.5）：金币只进不出会通胀，修装与强化是回收口
+  gold: 300, sp: 0, achv: 0,
+  // 世界徽记：神之领域的入场券，三家 BOSS 各记 1，上限 3
+  badges: 0,
+  // 队内人数：单机 1，局域网联机连接到对手后置 2（BOSS 血量按人数缩放）
+  partySize: 1,
+  // 技能等级 Q/E/R 各 0–5 级（0 = 未点），影响伤害倍率与 CD
+  skillLv: [1, 1, 1],
+  // 当前世界：新手村 / 主城 / 边境野外 / 断崖战场 / 王座回廊 / 神之领域（六段，GDD 4.1）
   world: 'village',
+  // 副本档位：normal / elite / raid / abyss（GDD 8.1）
+  dungeon: 'normal',
   // 调试：?scene=dungeon|arena|village|city|peak 直接指定场景，绕过世界，便于三档美术对照
   dbgScene: (function () {
     const m = /[?&]scene=([a-z]+)/i.exec(location.search);
@@ -207,6 +187,16 @@ function init() {
   worldToggleEl = document.getElementById('worldToggle');
   worldDescEl = document.getElementById('worldDesc');
   worldRowEl = document.getElementById('worldRow');
+  dungeonToggleEl = document.getElementById('dungeonToggle');
+  dungeonDescEl = document.getElementById('dungeonDesc');
+  dungeonRowEl = document.getElementById('dungeonRow');
+  menuGoldEl = document.getElementById('menuGold');
+  menuSpEl = document.getElementById('menuSp');
+  menuBadgeEl = document.getElementById('menuBadge');
+  statChipsEl = document.getElementById('statChips');
+  skillPanelEl = document.getElementById('skillPanel');
+  respecBtnEl = document.getElementById('respecBtn');
+  classDescEl = document.getElementById('classDesc');
   skillsEl = document.getElementById('skills');
   objectiveEl = document.getElementById('objective');
   timerEl = document.getElementById('timer');
@@ -248,6 +238,9 @@ function init() {
   loadProgress();
   refreshMenuLevel();
   resetPlayer();
+  refreshClassPreview();
+  refreshSkillPanel();
+  refreshBattleChip();
   bindUI();
   bindInput();
 
@@ -451,6 +444,61 @@ function buildWeapon() {
     g.add(grip);
     g.scale.setScalar(0.55);
     weaponBase = { x: 0.42, y: -0.4, z: -0.48, rx: -0.3, ry: 0.52, rz: 0.2 };
+  } else if (cls === 'boxer') {
+    // 拳师：双拳套。近战判定靠拳，不做长剑
+    const leather = new THREE.MeshStandardMaterial({ color: 0x3a2418, roughness: 0.85 });
+    const edge = new THREE.MeshStandardMaterial({ color: 0xffb04a, roughness: 0.35, metalness: 0.7, emissive: 0x40220a });
+    for (let i = 0; i < 2; i++) {
+      const fist = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.15, 0.22), leather);
+      fist.position.set(i === 0 ? -0.14 : 0.14, 0, -0.1);
+      g.add(fist);
+      const knuckle = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.05), edge);
+      knuckle.position.set(i === 0 ? -0.14 : 0.14, 0.01, -0.21);
+      g.add(knuckle);
+    }
+    g.scale.setScalar(0.62);
+    weaponBase = { x: 0.3, y: -0.42, z: -0.55, rx: -0.05, ry: -0.35, rz: 0 };
+  } else if (cls === 'assassin') {
+    // 刺客：双短匕，刃更短更窄，出手快
+    const metal = new THREE.MeshStandardMaterial({ color: 0x7ef0b8, roughness: 0.2, metalness: 0.95, emissive: 0x1d6a4a });
+    for (let i = 0; i < 2; i++) {
+      const d = new THREE.Group();
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.05, 0.4), metal);
+      blade.position.set(0, 0, -0.28);
+      d.add(blade);
+      const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.12, 8),
+        new THREE.MeshStandardMaterial({ color: 0x101a22, roughness: 0.9 }));
+      grip.rotation.x = Math.PI / 2;
+      grip.position.set(0, 0, -0.02);
+      d.add(grip);
+      d.position.set(i === 0 ? -0.16 : 0.16, i === 0 ? -0.04 : 0.02, 0);
+      d.rotation.y = i === 0 ? -0.18 : 0.18;
+      g.add(d);
+    }
+    g.scale.setScalar(0.6);
+    weaponBase = { x: 0.3, y: -0.44, z: -0.5, rx: -0.12, ry: -0.2, rz: 0 };
+  } else if (cls === 'priest') {
+    // 牧师：圣杖，金环 + 十字
+    const wood = new THREE.MeshStandardMaterial({ color: 0xe8dcc0, roughness: 0.6, metalness: 0.2 });
+    const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.022, 0.9, 8), wood);
+    staff.rotation.x = Math.PI / 2;
+    staff.position.set(0, 0, -0.4);
+    g.add(staff);
+    const halos = new THREE.Mesh(
+      new THREE.TorusGeometry(0.075, 0.014, 8, 20),
+      new THREE.MeshStandardMaterial({ color: 0xffe39a, roughness: 0.3, metalness: 0.8, emissive: 0x8a6a1a })
+    );
+    halos.position.set(0, 0.02, -0.84);
+    g.add(halos);
+    const crossV = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.1, 0.02),
+      new THREE.MeshStandardMaterial({ color: 0xfff2c8, emissive: 0xa88a2a, roughness: 0.4 }));
+    crossV.position.set(0, 0.02, -0.84);
+    g.add(crossV);
+    const crossH = new THREE.Mesh(new THREE.BoxGeometry(0.062, 0.018, 0.02), crossV.material);
+    crossH.position.set(0, 0.02, -0.84);
+    g.add(crossH);
+    g.scale.setScalar(0.6);
+    weaponBase = { x: 0.38, y: -0.38, z: -0.5, rx: -0.16, ry: -0.22, rz: 0.08 };
   } else {
     const wood = new THREE.MeshStandardMaterial({ color: 0x1d2436, roughness: 0.5, metalness: 0.5 });
     const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.024, 0.95, 8), wood);
@@ -482,70 +530,54 @@ function buildWeapon() {
    - 进度写进 localStorage，刷新页面与换局都保留（?resetlv=1 可清档）。
    ============================================================================ */
 
-const LEVEL_XP_BASE = 100;      // Lv L 升 Lv L+1 需要 100 * L 经验（线性）
-const LEVEL_CAP = 100;          // 上限 100：正好踩到神之巅的门槛
-const LEVEL_GAIN = {
-  hp: 16,       // 每级生命上限
-  en: 3,        // 每级能量上限
-  dmg: 1.3,     // 每级伤害百分比
-  dr: 0.5,      // 每级减伤百分比（仍与装备一起吃 55% 封顶）
-  speed: 0.4    // 每级移速百分比
-};
-// 单个敌人的基础经验（再乘一个"越深越肥"的波次系数）
-const XP_OF = {
-  swarm: 5, grunt: 12, shooter: 12, golem: 30, hexer: 22, elite: 60,
-  boss: 300, warden: 320, oracle: 320, duelist: 0
-};
-const PROGRESS_KEY = 'seventh_arena.progress.v1';
+const LEVEL_CAP = Rules.LEVEL.cap;                  // 75（GDD 4.2）
+/* 存档换到 v2：旧档是 100 级线性曲线，直接读会越界，v1 只做兼容迁移（截断到 75）。 */
+const PROGRESS_KEY = 'seventh_the7.progress.v2';
+const PROGRESS_KEY_V1 = 'seventh_arena.progress.v1';
 
-function xpNeedFor(lv) {
-  // 线性递增：100 * Lv。翻倍曲线到 100 级是天文数字（100 × 2^99），不可能刷到；
-  // 改成线性后 1→100 级累计约 50.5 万经验，深波刷本才够得着。
-  return Math.round(LEVEL_XP_BASE * Math.max(1, lv));
-}
+function xpNeedFor(lv) { return Math.round(Rules.LEVEL.need(lv)); }
+function cumXpFor(lv) { return Math.round(Rules.LEVEL.cum(lv)); }
 
-/* ---------------- 三个主要世界 ----------------
-   PVE 的舞台随等级解锁：新手村（Lv 1–9）→ 主城（Lv 10–99）→ 神之巅（Lv 100+）。
-   场景都复用现有两份 GLB 资产换光照与雾（scene_glb.js 的 CFG），差异落在难度、经验、掉落物品等级。 */
-const WORLDS = {
-  village: {
-    key: 'village', name: '新手村', scene: 'village', minLv: 1, maxLv: 9,
-    desc: '石村回廊 · 杂兵与守卫长，练手刷级',
-    hpMul: 0.9, countMul: 0.85, xpMul: 1.0, ilvlBonus: 0
-  },
-  city: {
-    key: 'city', name: '主城', scene: 'city', minLv: 10, maxLv: 99,
-    desc: '中央广场 · 全怪种与双 BOSS，长线刷本',
-    hpMul: 1.0, countMul: 1.0, xpMul: 1.6, ilvlBonus: 2
-  },
-  peak: {
-    key: 'peak', name: '神之巅', scene: 'peak', minLv: 100, maxLv: 999,
-    desc: '云海之顶 · 终局副本，经验与装备最好',
-    hpMul: 1.3, countMul: 1.15, xpMul: 2.6, ilvlBonus: 5
-  }
-};
-const WORLD_ORDER = ['village', 'city', 'peak'];
+/* ---------------- 世界六段 ----------------
+   GDD 4.1：新手村 1–10 → 主城 10–30 → 边境野外 30–50 → 断崖战场 50–65
+   → 王座回廊 65–75 → 神之领域 75+（需集齐三枚徽记）。
+   场景复用三份 GLB（scene_glb.js 的 CFG），差异在光照、难度与掉落物品等级。 */
+const WORLDS = {};
+Rules.WORLDS.forEach(function (W) { WORLDS[W.key] = W; });
+const WORLD_ORDER = Rules.WORLDS.map(function (W) { return W.key; });
+/* 三枚徽记：击杀三类 BOSS 各记一枚，凑齐才开神之领域 */
+const BADGE_SOURCE = { warden: 1, oracle: 1, boss: 1 };
 
 function worldFor(key) { return WORLDS[key] || WORLDS.village; }
-function worldUnlocked(key) { return state.lv >= worldFor(key).minLv; }
-// 当前等级能进的最高世界
+function worldUnlocked(key) {
+  const W = worldFor(key);
+  if (state.lv < W.min) return false;
+  if (W.key === 'peak' && state.badges < 3) return false;
+  return true;
+}
+// 当前等级能进的最高世界（不考虑徽记：徽记只卡 peak，不影响回退）
 function bestWorld() {
   let k = 'village';
   for (let i = 0; i < WORLD_ORDER.length; i++) {
-    if (state.lv >= WORLDS[WORLD_ORDER[i]].minLv) k = WORLD_ORDER[i];
+    if (state.lv >= WORLDS[WORLD_ORDER[i]].min) k = WORLD_ORDER[i];
   }
   return k;
 }
 // 门槛校验：等级不够就退回到能进的最高世界
 function resolveWorld(key) {
   const W = WORLDS[key];
-  if (!W || state.lv < W.minLv) return bestWorld();
+  if (!W || !worldUnlocked(key)) {
+    const fallback = bestWorld();
+    if (fallback === 'peak' && state.badges < 3) return 'throne';
+    return fallback;
+  }
   return key;
 }
 
 function loadProgress() {
   try {
-    const raw = localStorage.getItem(PROGRESS_KEY);
+    let raw = localStorage.getItem(PROGRESS_KEY);
+    if (!raw) raw = localStorage.getItem(PROGRESS_KEY_V1);   // 旧档兼容
     if (!raw) return;
     const p = JSON.parse(raw) || {};
     if (typeof p.lv === 'number' && isFinite(p.lv)) {
@@ -554,6 +586,16 @@ function loadProgress() {
     if (typeof p.xp === 'number' && isFinite(p.xp)) {
       state.xp = Math.max(0, Math.floor(p.xp));
     }
+    if (typeof p.gold === 'number' && isFinite(p.gold)) state.gold = Math.max(0, Math.floor(p.gold));
+    if (typeof p.badges === 'number' && isFinite(p.badges)) state.badges = clamp(Math.floor(p.badges), 0, 3);
+    if (typeof p.dungeon === 'string' && Rules.dungeonFor(p.dungeon).key === p.dungeon) state.dungeon = p.dungeon;
+    state.skillLv = [1, 1, 1];
+    if (Array.isArray(p.skillLv)) {
+      for (let i = 0; i < 3; i++) {
+        const v = Math.floor(p.skillLv[i]);
+        if (isFinite(v)) state.skillLv[i] = clamp(v, 1, Rules.SKILL.maxLv);
+      }
+    }
     if (typeof p.world === 'string' && WORLDS[p.world]) {
       state.world = resolveWorld(p.world);
     } else {
@@ -561,25 +603,51 @@ function loadProgress() {
     }
   } catch (err) { /* 隐私模式/存储被禁：按 1 级开新档 */ }
   state.world = resolveWorld(state.world);
+  syncSkillPoints();
 }
 
 function saveProgress() {
   try {
-    localStorage.setItem(PROGRESS_KEY, JSON.stringify({ lv: state.lv, xp: state.xp, world: state.world }));
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify({
+      lv: state.lv, xp: state.xp, world: state.world,
+      gold: state.gold, badges: state.badges, dungeon: state.dungeon, skillLv: state.skillLv
+    }));
   } catch (err) { /* 忽略配额与隐私模式错误 */ }
   refreshMenuLevel();
 }
 
+/* 技能点 = 已花掉的 + 剩余；等级/成就点由 Rules.SKILL.pointsAt 给总量
+   GDD 5.3：1 级起每级 1 点，30 级一次性补 10 成就点 → 75 级合计 85 点 */
+function spentSkillPoints() {
+  let s = 0;
+  for (let i = 0; i < 3; i++) s += Math.max(0, state.skillLv[i] - 1);
+  return s;
+}
+function totalSkillPoints() {
+  return Rules.SKILL.pointsAt(state.lv, state.lv >= 30 ? 10 : 0);
+}
+function syncSkillPoints() {
+  state.sp = Math.max(0, totalSkillPoints() - spentSkillPoints());
+}
+
 // 菜单上的等级读数：开局前与结算后都要准
 function refreshMenuLevel() {
+  applyLevelGate();
+  refreshMenuLevelText();
+}
+
+function refreshMenuLevelText() {
   if (!menuLvEl) return;
   const capped = state.lv >= LEVEL_CAP;
   menuLvEl.textContent = 'Lv ' + state.lv;
   menuXpEl.textContent = capped ? 'MAX' : state.xp + ' / ' + xpNeedFor(state.lv);
+  syncSkillPoints();
   refreshWorldUI();
+  refreshDungeonUI();
+  refreshProgressChips();
 }
 
-// 世界选择：解锁状态、门槛文案、当前世界高亮
+// 世界选择：解锁状态、门槛文案、当前世界高亮（六段）
 function refreshWorldUI() {
   if (!worldToggleEl) return;
   const btns = worldToggleEl.querySelectorAll('button');
@@ -588,42 +656,134 @@ function refreshWorldUI() {
     const key = b.dataset.world;
     const W = WORLDS[key];
     if (!W) continue;
-    const ok = state.lv >= W.minLv;
+    const ok = worldUnlocked(key);
     b.classList.toggle('on', state.world === key);
     b.classList.toggle('locked', !ok);
     const sm = b.querySelector('small');
-    if (sm) sm.textContent = ok ? ('Lv ' + W.minLv + '+') : ('需 Lv ' + W.minLv);
+    if (sm) {
+      if (ok) sm.textContent = W.min + '–' + (W.max >= 99 ? '∞' : W.max);
+      else if (W.key === 'peak' && state.lv >= W.min) sm.textContent = '徽记 ' + state.badges + '/3';
+      else sm.textContent = '需 Lv ' + W.min;
+    }
   }
   if (worldDescEl) {
     const W = worldFor(state.world);
     let d = W.desc;
     const idx = WORLD_ORDER.indexOf(W.key);
-    if (state.lv > W.maxLv && idx >= 0 && idx < WORLD_ORDER.length - 1) {
-      d += ' · 已超出本区（Lv ' + W.maxLv + '），建议前往 ' + WORLDS[WORLD_ORDER[idx + 1]].name;
+    if (state.lv > W.max && idx >= 0 && idx < WORLD_ORDER.length - 1) {
+      d += ' · 已超出本区（Lv ' + W.max + '），建议前往 ' + WORLDS[WORLD_ORDER[idx + 1]].name;
     }
-    worldDescEl.textContent = d;
+    worldDescEl.textContent = d + ' · 难度 ×' + W.hpMul.toFixed(2) + ' · 装等 +' + W.ilvlBonus;
   }
   if (worldRowEl) worldRowEl.classList.toggle('disabled', state.mode !== 'pve');
 }
 
-function levelBonus() {
-  if (state.mode !== 'pve') return { hp: 0, en: 0, dmg: 0, dr: 0, speed: 0 };
-  const n = Math.max(0, state.lv - 1);
-  return {
-    hp: n * LEVEL_GAIN.hp,
-    en: n * LEVEL_GAIN.en,
-    dmg: n * LEVEL_GAIN.dmg,
-    dr: n * LEVEL_GAIN.dr,
-    speed: n * LEVEL_GAIN.speed
-  };
+function refreshDungeonUI() {
+  if (!dungeonToggleEl) return;
+  const btns = dungeonToggleEl.querySelectorAll('button');
+  for (let i = 0; i < btns.length; i++) {
+    const b = btns[i];
+    const key = b.dataset.dungeon;
+    const D = Rules.dungeonFor(key);
+    if (!D) continue;
+    // 团队 / 深渊在原型里需要组队（局域网联机），单人只开放普通与精英
+    const ok = key === 'normal' || key === 'elite' || state.mode === 'online';
+    b.classList.toggle('on', state.dungeon === key);
+    b.classList.toggle('locked', !ok);
+  }
+  if (dungeonDescEl) {
+    const D = Rules.dungeonFor(state.dungeon);
+    dungeonDescEl.textContent = D.name + '副本 · ' + D.party + ' 人 · ' + D.cd + ' · ' + D.minutes + ' 分钟 · ' + D.desc;
+  }
+  if (dungeonRowEl) dungeonRowEl.classList.toggle('disabled', state.mode !== 'pve');
 }
 
-// 升级：满血满能 + 金环 + 播报。属性由 recalcGear 重算，这里只给"瞬间回满"的正反馈
+/* 菜单顶部进度条：金币、技能点、徽记 */
+function refreshProgressChips() {
+  if (menuGoldEl) menuGoldEl.textContent = '金币 ' + fmtNum(state.gold);
+  if (menuSpEl) menuSpEl.textContent = '技能点 ' + state.sp + ' / ' + totalSkillPoints();
+  if (menuBadgeEl) menuBadgeEl.textContent = '徽记 ' + state.badges + '/3';
+}
+
+/* HUD 顶部战斗读数：攻击 / 装等 / 剩余技能点 */
+function refreshStatChips() {
+  if (!statChipsEl) return;
+  statChipsEl.textContent = '攻 ' + Math.round(player.atk || 0) +
+    ' · 装等 ' + (player.gearIlvl || 0) +
+    ' · 点 ' + (state.sp || 0);
+}
+
+/* 顶部模式条：世界 + 副本档 + 职业 */
+function refreshBattleChip() {
+  if (!modeLabelEl) return;
+  const C = CLASSES[state.cls];
+  if (state.mode === 'pve') {
+    modeLabelEl.textContent = worldFor(state.world).name + ' · ' + Rules.dungeonFor(state.dungeon).name + ' · ' + C.name;
+  } else if (state.mode === 'pvp') {
+    modeLabelEl.textContent = 'PVP 竞技 · ' + C.name;
+  } else {
+    modeLabelEl.textContent = '局域网对战 · ' + C.name;
+  }
+}
+
+var RES_NAME = { mana: '法力', rage: '怒气', stam: '耐力' };
+
+/* 职业说明行：定位、资源、生命与攻击基准 */
+function refreshClassPreview() {
+  const C = CLASSES[state.cls];
+  if (classDescEl) {
+    const st = Rules.playerStats(state.cls, state.lv, window.Gear ? Gear.totals() : null, state.mode);
+    classDescEl.textContent = C.name + ' · ' + C.family + '系 · ' + RES_NAME[C.res] +
+      ' · 生命 ' + st.maxHp + ' · 攻击 ' + st.atk + ' · 秒伤 ' + st.dps;
+  }
+  refreshBattleChip();
+}
+
+/* 技能面板：三行，每行显示等级、当前效果、加点按钮 */
+function refreshSkillPanel() {
+  if (!skillPanelEl) return;
+  const C = CLASSES[state.cls];
+  const rows = [];
+  for (let i = 0; i < 3; i++) {
+    const S = C.skills[i];
+    const lv = state.skillLv[i] || 1;
+    const maxed = lv >= Rules.SKILL.maxLv;
+    const dmgTxt = S.mul > 0 ? ('伤害 ' + Math.round((S.mul * Rules.SKILL.dmgMul(lv)) * 100) / 100 + '×') : '无伤害';
+    rows.push(
+      '<div class="skill-row">' +
+        '<b class="sk-key">' + S.key + '</b>' +
+        '<span class="sk-name">' + S.name + '</span>' +
+        '<span class="sk-meta">Lv ' + lv + ' · ' + dmgTxt + ' · ' + Math.max(1, S.cd - Rules.SKILL.cdCut(lv)) + 's</span>' +
+        '<button data-skillup="' + i + '"' + (maxed || state.sp <= 0 ? ' disabled' : '') + '>+1</button>' +
+      '</div>'
+    );
+  }
+  skillPanelEl.innerHTML = rows.join('');
+  if (respecBtnEl) {
+    respecBtnEl.textContent = '洗点（' + Rules.SKILL.respecCost(state.lv) + ' 金币）';
+    respecBtnEl.disabled = state.gold < Rules.SKILL.respecCost(state.lv);
+  }
+  refreshStatChips();
+}
+
+function fmtNum(n) {
+  if (!isFinite(n)) return '0';
+  return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+}
+
+// 升级：满血满能 + 金环 + 播报 + 技能点。属性由 recalcGear 重算
 function onLevelUp() {
   let msg = '等级提升 · Lv ' + state.lv;
-  if (state.lv === WORLDS.city.minLv) msg = 'Lv ' + state.lv + ' · 主城已开放（菜单里选世界）';
-  else if (state.lv === WORLDS.peak.minLv) msg = 'Lv ' + state.lv + ' · 神之巅已开放（菜单里选世界）';
-  toast(msg, state.lv === WORLDS.city.minLv || state.lv === WORLDS.peak.minLv ? 2200 : 1500);
+  let big = 1500;
+  for (let i = 0; i < WORLD_ORDER.length; i++) {
+    const W = WORLDS[WORLD_ORDER[i]];
+    if (W.min === state.lv) {
+      msg = 'Lv ' + state.lv + ' · ' + W.name + '已开放（菜单里选世界）';
+      big = 2200;
+    }
+  }
+  syncSkillPoints();
+  toast(msg + ' · 技能点 ' + state.sp, big);
   sfx('cast');
   spawnRing(yawObj.position.x, 0.12, yawObj.position.z, 0xffcf6b, 3.2);
   spawnShards(new THREE.Vector3(yawObj.position.x, 1.2, yawObj.position.z), 18, 0xffcf6b);
@@ -635,9 +795,8 @@ function onLevelUp() {
 
 function addXp(amount) {
   if (state.mode !== 'pve' || !(amount > 0) || state.lv >= LEVEL_CAP) return;
-  // 世界倍率：主城 1.6×、神之巅 2.6×，越往上刷越肥
-  const W = worldFor(state.world);
-  state.xp += Math.round(amount * (W.xpMul || 1));
+  // GDD 4.3 的经验已经按等级写死在公式里，这里不再叠世界倍率
+  state.xp += Math.round(amount);
   let guard = 0;
   while (state.xp >= xpNeedFor(state.lv) && state.lv < LEVEL_CAP && guard++ < 20) {
     state.xp -= xpNeedFor(state.lv);
@@ -646,6 +805,17 @@ function addXp(amount) {
   }
   if (state.lv >= LEVEL_CAP) state.xp = 0;
   saveProgress();
+}
+
+function addGold(n) {
+  if (!(n > 0)) return;
+  state.gold += Math.round(n);
+  saveProgress();
+}
+
+// 升级门槛守卫：PVE 里若当前世界已超上限，自动推到下一段（不打扰玩家手动选择）
+function applyLevelGate() {
+  state.world = resolveWorld(state.world);
 }
 
 // 死亡惩罚档位：'level' 掉一级并把本级经验清零；'xp' 只清本级经验（等级不动）
@@ -671,10 +841,14 @@ function applyDeathPenalty(win) {
 /* ---------------- 玩家 ---------------- */
 function resetPlayer() {
   const C = CLASSES[state.cls];
-  player.hp = C.hp;
-  player.maxHp = C.hp;
-  player.en = C.en;
-  player.maxEn = C.en;
+  // 基础属性按 GDD 14.1 公式推导（等级 + 武器主属性），装备词条在 recalcGear 里再叠
+  const base = Rules.playerStats(state.cls, state.lv, null, state.mode);
+  player.hp = base.maxHp;
+  player.maxHp = base.maxHp;
+  player.en = base.maxEn;
+  player.maxEn = base.maxEn;
+  player.atk = base.atk;
+  player.dps = base.dps;
   player.speed = C.speed;
   player.attackCd = 0;
   player.attackAnim = 0;
@@ -685,6 +859,8 @@ function resetPlayer() {
   player.domain = 0;
   player.domainTick = 0;
   player.overdrive = 0;
+  player.turret = 0;
+  player.turretShot = 0;
   player.alive = true;
   player.respawn = 0;
   player.hurtT = 0;
@@ -737,6 +913,12 @@ function updatePlayer(dt) {
   player.sprintT = Math.max(0, player.sprintT - dt);
   player.sprintCd = Math.max(0, player.sprintCd - dt);
   player.jumpCd = Math.max(0, player.jumpCd - dt);
+  // 投技落空的 1.5 秒硬直（GDD 5.2 拳师的代价）：不能移动、不能出招
+  player.lockT = Math.max(0, (player.lockT || 0) - dt);
+  if (player.lockT > 0) return;
+  // 炮台持续时间与背刺暴露计时
+  player.turret = Math.max(0, (player.turret || 0) - dt);
+  player.exposeT = Math.max(0, (player.exposeT || 0) - dt);
 
   // 疾跑：Shift 按住，持续消耗耐力
   const wantsRun = !!input.keys['shift'] && mag > 0 && player.stamina > 0;
@@ -892,22 +1074,30 @@ function spawnTrailGhost() {
   spawnRing(yawObj.position.x, 0.06, yawObj.position.z, CLASSES[state.cls].color, 0.9);
 }
 
-/* ---------------- 攻击 ---------------- */
+/* ---------------- 攻击 ----------------
+   伤害不再是表里的固定数字，而是 GDD 14.1 的推导值：
+     单次伤害 = 基础攻击(等级, 武器主属性) × 职业普攻倍率 × 装备/暴击乘子
+   这样换等级、换武器、换装等都会直接体现，且 PVE/PVP 走同一入口再乘分轨系数。 */
 function tryAttack() {
   const A = CLASSES[state.cls].attack;
-  // 装备加成：伤害% → 乘子，攻击速度% → 冷却缩短，暴击率% → 额外暴击概率
   const gDmg = 1 + (player.gDmgPct || 0) / 100;
   const gHaste = 1 / (1 + (player.gAtkSpeedPct || 0) / 100);
+  const atk = player.atk || 1;
+  // 炮台：8 秒内射速 +45%
+  const haste = player.turret > 0 ? 1.45 : 1;
+  const critChance = (A.crit || 0) + (player.gCritPct || 0) / 100;
   let mul = (player.overdrive > 0 ? 1.35 : 1) * gDmg;
-  const interval = A.interval * (player.overdrive > 0 ? 0.5 : 1) * gHaste;
-  const crit = Math.random() < (player.gCritPct || 0) / 100;
-  if (crit) mul *= 1.6;
+  const crit = Math.random() < critChance;
+  if (crit) mul *= (A.critMul || 1.6);
+
+  const dmg = atk * (A.mul || 1) * mul * Rules.tuneOf(state.mode).dmg;
+  const interval = A.interval * (player.overdrive > 0 ? 0.5 : 1) * gHaste / haste;
   player.attackCd = interval;
   player.attackAnim = 0.22;
 
-  if (CLASSES[state.cls].attackType === 'melee') meleeAttack(A.dmg * mul, crit);
-  else if (CLASSES[state.cls].attackType === 'hitscan') hitscanAttack(A.dmg * mul, A, crit);
-  else projectileAttack(A.dmg * mul, A);
+  if (CLASSES[state.cls].attackType === 'melee') meleeAttack(dmg, crit);
+  else if (CLASSES[state.cls].attackType === 'hitscan') hitscanAttack(dmg, A, crit);
+  else projectileAttack(dmg, A);
 }
 
 function meleeAttack(dmg, crit) {
@@ -978,7 +1168,7 @@ function meleeAttack(dmg, crit) {
   }
 }
 
-function hitscanAttack(dmg, A) {
+function hitscanAttack(dmg, A, crit) {
   const origin = camera.getWorldPosition(new THREE.Vector3());
   const dir = camera.getWorldDirection(new THREE.Vector3());
   dir.x += rand(-A.spread, A.spread);
@@ -1024,11 +1214,15 @@ function hitscanAttack(dmg, A) {
   spawnTracer(origin, dir, len, CLASSES[state.cls].color);
 
   if (best) {
-    const crit = Math.random() < (0.16 + (player.gCritPct || 0) / 100);
+    // 暴击由 tryAttack 统一判定，这里只给"精准命中"的倍率，不再二次掷骰
     damageEnemy(best, dmg * (crit ? A.headMul : 1), crit);
+    // 炮台补弹：每 3 发追加一发 1.5 倍穿透弹
+    if (player.turret > 0) {
+      player.turretShot = (player.turretShot || 0) + 1;
+      if (player.turretShot % 3 === 0) damageEnemy(best, dmg * 1.5, true);
+    }
     flashHit();
   } else if (bestRemote) {
-    const crit = Math.random() < (0.16 + (player.gCritPct || 0) / 100);
     if (netApplyLocalHit(bestRemote, dmg * (crit ? A.headMul : 1), crit)) {
       flashHit();
     }
@@ -1076,7 +1270,21 @@ function rayCylinder(origin, dir, cx, cz, radius, yMin, yMax) {
   return t;
 }
 
-/* ---------------- 技能 ---------------- */
+/* ---------------- 技能 ----------------
+   GDD 5.3：技能点每级 1 点，单技能上限 5 级；每级伤害 +8%，3/5 级各 −1 秒 CD，
+   第 4 级起范围 +20%。装备的"技能等级 +1"叠在技能等级上（紫装特性）。 */
+function skillLvOf(idx) {
+  const base = state.skillLv[idx] || 1;
+  return clamp(base + (player.skillGearBonus || 0), 1, Rules.SKILL.maxLv + 2);
+}
+function skillMul(idx) { return Rules.SKILL.dmgMul(skillLvOf(idx)); }
+function skillRangeMul(idx) { return Rules.SKILL.rangeMul(skillLvOf(idx)); }
+/* 技能伤害入口：基础攻击 × 技能倍率 × 技能等级加成 × 分轨系数 */
+function skillDmg(idx, mult) {
+  const tune = Rules.tuneOf(state.mode);
+  return (player.atk || 1) * mult * skillMul(idx) * tune.dmg;
+}
+
 function castSkill(idx) {
   if (!player.alive) return;
   const C = CLASSES[state.cls];
@@ -1088,8 +1296,10 @@ function castSkill(idx) {
     return;
   }
   player.en -= S.cost;
-  player.skillCd[idx] = S.cd;
-  runSkill(S.id);
+  // 技能等级 3 / 5 各减 1 秒 CD，最低 1 秒
+  const cd = Math.max(1, S.cd - Rules.SKILL.cdCut(skillLvOf(idx)));
+  player.skillCd[idx] = cd;
+  runSkill(S.id, idx);
 }
 
 /* 范围/锥形技能对远端对手的判定：联机下技能不能只打 PVE 敌人 */
@@ -1108,12 +1318,16 @@ function aoeHitRemote(px, pz, radius, dmg, crit, fx, fz) {
   return true;
 }
 
-function runSkill(id) {
+function runSkill(id, idx) {
+  idx = idx == null ? 0 : idx;
   const yaw = yawObj.rotation.y;
   const fx = -Math.sin(yaw);
   const fz = -Math.cos(yaw);
   const px = yawObj.position.x;
   const pz = yawObj.position.z;
+  const RM = skillRangeMul(idx);        // 技能 4 级起范围 +20%
+  const D = function (m) { return skillDmg(idx, m); };
+  const tune = Rules.tuneOf(state.mode);
 
   switch (id) {
     case 'dashSlash': {
@@ -1125,9 +1339,9 @@ function runSkill(id) {
         const dz = e.pos.z - pz;
         const d = hyp(dx, dz);
         const dot = d > 0.0001 ? (dx / d) * fx + (dz / d) * fz : 1;
-        if (d < 6.5 && dot > 0.55) { damageEnemy(e, 55, true); hit++; }
+        if (d < 6.5 * RM && dot > 0.55) { damageEnemy(e, D(2.1), true); e.stunT = Math.max(e.stunT || 0, 0.35 * tune.stiff); hit++; }
       }
-      if (aoeHitRemote(px, pz, 6.5, 55, true, fx, fz)) hit++;
+      if (aoeHitRemote(px, pz, 6.5 * RM, D(2.1), true, fx, fz)) hit++;
       yawObj.position.x = clamp(px + fx * 5.6, -HALF + 1, HALF - 1);
       yawObj.position.z = clamp(pz + fz * 5.6, -HALF + 1, HALF - 1);
       clampPos(yawObj.position, 0.55);
@@ -1143,9 +1357,9 @@ function runSkill(id) {
         const e = enemies[i];
         if (e.dead) continue;
         const d = hyp(e.pos.x - px, e.pos.z - pz);
-        if (d < 4.4) damageEnemy(e, 42);
+        if (d < 4.4 * RM) damageEnemy(e, D(1.6));
       }
-      aoeHitRemote(px, pz, 4.4, 42, false);
+      aoeHitRemote(px, pz, 4.4 * RM, D(1.6), false);
       spawnSlashArc(0x8ff0ff);
       spawnCastCircle(px, pz, 0x8ff0ff);
       spawnRing(px, 0.9, pz, 0x8ff0ff, 4.4);
@@ -1183,7 +1397,7 @@ function runSkill(id) {
       const dir = camera.getWorldDirection(new THREE.Vector3());
       const gx = clamp(origin.x + dir.x * 16, -HALF + 1.5, HALF - 1.5);
       const gz = clamp(origin.z + dir.z * 16, -HALF + 1.5, HALF - 1.5);
-      spawnDelayedBlast(gx, gz, 0.9, 4.2, 62, 0xff9a6b);
+      spawnDelayedBlast(gx, gz, 0.9, 4.2, D(4.1), 0xff9a6b);
       spawnCastCircle(gx, gz, 0xff9a6b);
       sfx('cast');
       break;
@@ -1200,9 +1414,9 @@ function runSkill(id) {
         const e = enemies[i];
         if (e.dead) continue;
         const d = hyp(e.pos.x - px, e.pos.z - pz);
-        if (d < 6.5) { damageEnemy(e, 14); e.slow = 3.2; }
+        if (d < 6.5 * RM) { damageEnemy(e, D(0.6)); e.slow = 3.2 * tune.ctrl; e.stunT = Math.max(e.stunT || 0, 1.4 * tune.ctrl); }
       }
-      aoeHitRemote(px, pz, 6.5, 14, false);
+      aoeHitRemote(px, pz, 6.5 * RM, D(0.6), false);
       spawnCastCircle(px, pz, 0x8fc9ff);
       spawnRing(px, 0.4, pz, 0x8fc9ff, 6.5);
       sfx('skill');
@@ -1225,8 +1439,253 @@ function runSkill(id) {
     case 'meteor': {
       const mx = clamp(px + fx * 13, -HALF + 2, HALF - 2);
       const mz = clamp(pz + fz * 13, -HALF + 2, HALF - 2);
-      spawnDelayedBlast(mx, mz, 1.1, 6.2, 100, 0xb98cff);
+      spawnDelayedBlast(mx, mz, 1.1, 6.2 * RM, D(4.2), 0xb98cff);
       spawnCastCircle(mx, mz, 0xb98cff);
+      sfx('cast');
+      break;
+    }
+
+    /* ---- 拳师 ---- */
+    case 'comboPunch': {
+      // 三段直拳：每段独立判定，第三段补 1 米击退
+      let facing = 0;
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+        if (e.dead) continue;
+        const dx = e.pos.x - px, dz = e.pos.z - pz;
+        const d = hyp(dx, dz);
+        const dot = d > 0.0001 ? (dx / d) * fx + (dz / d) * fz : 1;
+        if (d < 2.4 * RM && dot > 0.5) {
+          damageEnemy(e, D(0.8));
+          damageEnemy(e, D(0.8));
+          damageEnemy(e, D(0.8));
+          e.knockV = { x: fx * 1.0, z: fz * 1.0, t: 0.18 };
+          facing++;
+        }
+      }
+      aoeHitRemote(px, pz, 2.4 * RM, D(0.8), false, fx, fz);
+      spawnSlashArc(0xffb04a);
+      spawnRing(px + fx * 1.2, 1.0, pz + fz * 1.2, 0xffb04a, 1.1);
+      shake = facing ? 0.28 : 0.1;
+      sfx(facing ? 'hit' : 'slash');
+      break;
+    }
+    case 'throwGrab': {
+      // 抓取 3 米内最近目标：命中定身 1.2 秒；落空自身 1.5 秒硬直（GDD 5.2 的代价）
+      let best = null, bestD = Infinity;
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+        if (e.dead) continue;
+        const d = hyp(e.pos.x - px, e.pos.z - pz);
+        if (d < 3.0 * RM && d < bestD) { best = e; bestD = d; }
+      }
+      if (best) {
+        damageEnemy(best, D(2.2));
+        best.stunT = Math.max(best.stunT || 0, 1.2 * tune.ctrl);
+        toast('投技命中 · 定身', 900);
+        shake = 0.3;
+        sfx('hit');
+      } else {
+        player.lockT = 1.5;
+        toast('投技落空 · 硬直', 900);
+        sfx('whiff');
+      }
+      spawnRing(px + fx * 1.4, 1.0, pz + fz * 1.4, 0xffb04a, 1.6);
+      break;
+    }
+    case 'shoulderRam': {
+      // 前冲撞击：位移 3.5 米，锥形范围 + 击退
+      let hit = 0;
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+        if (e.dead) continue;
+        const dx = e.pos.x - px, dz = e.pos.z - pz;
+        const d = hyp(dx, dz);
+        const dot = d > 0.0001 ? (dx / d) * fx + (dz / d) * fz : 1;
+        if (d < 4.2 * RM && dot > 0.4) {
+          damageEnemy(e, D(3.0));
+          e.knockV = { x: fx * 6, z: fz * 6, t: 0.35 };
+          hit++;
+        }
+      }
+      yawObj.position.x = clamp(px + fx * 3.5, -HALF + 1, HALF - 1);
+      yawObj.position.z = clamp(pz + fz * 3.5, -HALF + 1, HALF - 1);
+      clampPos(yawObj.position, 0.55);
+      player.invul = Math.max(player.invul, 0.25);
+      spawnRing(yawObj.position.x, 0.6, yawObj.position.z, 0xffb04a, 3.2);
+      shake = 0.4;
+      sfx(hit ? 'hit' : 'dash');
+      break;
+    }
+
+    /* ---- 枪炮师 ---- */
+    case 'scatterShot': {
+      // 前方 3 米扇形多目标，每目标一次全额结算
+      let hit = 0;
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+        if (e.dead) continue;
+        const dx = e.pos.x - px, dz = e.pos.z - pz;
+        const d = hyp(dx, dz);
+        const dot = d > 0.0001 ? (dx / d) * fx + (dz / d) * fz : 1;
+        if (d < 3.0 * RM && dot > 0.35) { damageEnemy(e, D(1.1)); hit++; }
+      }
+      aoeHitRemote(px, pz, 3.0 * RM, D(1.1), false, 0.3, 0.3);
+      spawnTracer(camera.getWorldPosition(new THREE.Vector3()), camera.getWorldDirection(new THREE.Vector3()), 6, 0x8fd4ff);
+      spawnMuzzleFlash();
+      shake = hit ? 0.24 : 0.08;
+      sfx('shot');
+      break;
+    }
+    case 'turret': {
+      player.turret = 8;
+      player.turretShot = 0;
+      toast('炮台部署 · 射速 +45%', 1000);
+      spawnRing(px + fx * 1.2, 0.4, pz + fz * 1.2, 0x8fd4ff, 2.2);
+      sfx('skill');
+      break;
+    }
+    case 'bombard': {
+      const bx = clamp(px + fx * 13, -HALF + 2, HALF - 2);
+      const bz = clamp(pz + fz * 13, -HALF + 2, HALF - 2);
+      spawnDelayedBlast(bx, bz, 1.2, 6.0 * RM, D(4.0), 0xff9a6b);
+      spawnCastCircle(bx, bz, 0xff9a6b);
+      sfx('cast');
+      break;
+    }
+
+    /* ---- 元素法师 ---- */
+    case 'fireLance': {
+      // 直线穿透：12 米内所有敌人吃一次，命中点燃
+      let hit = 0;
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+        if (e.dead) continue;
+        const dx = e.pos.x - px, dz = e.pos.z - pz;
+        const d = hyp(dx, dz);
+        const dot = d > 0.0001 ? (dx / d) * fx + (dz / d) * fz : 1;
+        if (d < 12 * RM && dot > 0.85) {
+          damageEnemy(e, D(2.6));
+          e.burn = { t: 3, dps: D(0.5) };
+          hit++;
+        }
+      }
+      spawnTracer(new THREE.Vector3(px, 1.1, pz), new THREE.Vector3(fx, 0, fz), 12 * RM, 0xff8a4a);
+      spawnCastCircle(px, pz, 0xff8a4a);
+      shake = hit ? 0.3 : 0.12;
+      sfx(hit ? 'hit' : 'cast');
+      break;
+    }
+    case 'thunderfall': {
+      const tx = clamp(px + fx * 12, -HALF + 2, HALF - 2);
+      const tz = clamp(pz + fz * 12, -HALF + 2, HALF - 2);
+      spawnDelayedBlast(tx, tz, 0.8, 5.0 * RM, D(4.4), 0x9fd8ff);
+      spawnCastCircle(tx, tz, 0x9fd8ff);
+      sfx('cast');
+      break;
+    }
+
+    /* ---- 刺客 ---- */
+    case 'backstab': {
+      // 背后命中 2.2 倍；正面命中只有 1 倍，且暴露（自身 1 秒不能隐身类位移）
+      let hit = 0;
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+        if (e.dead) continue;
+        const dx = e.pos.x - px, dz = e.pos.z - pz;
+        const d = hyp(dx, dz);
+        if (d > 2.8 * RM) continue;
+        // 敌人朝向：用其到玩家的方向近似为"正面"
+        const ex = e.pos.x - px, ez = e.pos.z - pz;
+        const behind = (ex * fx + ez * fz) > 0.35;   // 玩家在敌人背后
+        damageEnemy(e, D(2.4) * (behind ? 2.2 : 1.0), !!behind);
+        if (behind) { e.stunT = Math.max(e.stunT || 0, 0.5 * tune.stiff); toast('背刺命中 ×2.2', 800); }
+        hit++;
+      }
+      if (!hit) { player.exposeT = 1.0; sfx('whiff'); }
+      spawnSlashArc(0x7ef0b8);
+      sfx(hit ? 'hit' : 'slash');
+      break;
+    }
+    case 'shadowStep': {
+      const sx = clamp(px + fx * 7, -HALF + 1.2, HALF - 1.2);
+      const sz = clamp(pz + fz * 7, -HALF + 1.2, HALF - 1.2);
+      // 穿身而过：路径上 1.2 米内的敌人吃一次伤害
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+        if (e.dead) continue;
+        const mx = (px + sx) / 2, mz = (pz + sz) / 2;
+        if (hyp(e.pos.x - mx, e.pos.z - mz) < 2.2 * RM) damageEnemy(e, D(1.2));
+      }
+      spawnCastCircle(px, pz, 0x7ef0b8);
+      yawObj.position.x = sx;
+      yawObj.position.z = sz;
+      clampPos(yawObj.position, 0.55);
+      player.invul = Math.max(player.invul, 0.3);
+      spawnCastCircle(sx, sz, 0x7ef0b8);
+      sfx('dash');
+      break;
+    }
+    case 'poisonBlade': {
+      // 命中叠 3 层毒，每层每 0.5 秒 0.25 倍，持续 6 秒
+      let hit = 0;
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+        if (e.dead) continue;
+        const dx = e.pos.x - px, dz = e.pos.z - pz;
+        const d = hyp(dx, dz);
+        const dot = d > 0.0001 ? (dx / d) * fx + (dz / d) * fz : 1;
+        if (d < 2.6 * RM && dot > 0.4) {
+          damageEnemy(e, D(0.9));
+          e.poison = { n: Math.min(3, (e.poison ? e.poison.n : 0) + 1), t: 6, tickDmg: D(0.25) };
+          hit++;
+        }
+      }
+      spawnSlashArc(0x7ef0b8);
+      sfx(hit ? 'hit' : 'slash');
+      break;
+    }
+
+    /* ---- 牧师 ---- */
+    case 'healChain': {
+      // 三段治疗，每段 22% 最大生命；单机时全部落在自己身上
+      const per = Math.max(1, Math.round(player.maxHp * 0.22 * tune.heal));
+      for (let i = 0; i < 3; i++) {
+        player.hp = Math.min(player.maxHp, player.hp + per);
+      }
+      spawnRing(px, 0.4, pz, 0xffe39a, 2.4);
+      spawnShards(new THREE.Vector3(px, 1.2, pz), 10, 0xffe39a);
+      toast('治疗链 · +' + (per * 3), 900);
+      sfx('cast');
+      break;
+    }
+    case 'dispel': {
+      // 清除自身减益并对 4 米内敌人造成伤害、打断咏唱
+      player.hurtT = 0;
+      player.slowT = 0;
+      player.burnT = 0;
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+        if (e.dead) continue;
+        if (hyp(e.pos.x - px, e.pos.z - pz) < 4.0 * RM) damageEnemy(e, D(1.0));
+      }
+      spawnCastCircle(px, pz, 0xfff3d2);
+      spawnRing(px, 0.5, pz, 0xfff3d2, 4.0);
+      sfx('skill');
+      break;
+    }
+    case 'holyWord': {
+      const R0 = 5.0 * RM;
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+        if (e.dead) continue;
+        if (hyp(e.pos.x - px, e.pos.z - pz) < R0) damageEnemy(e, D(3.2));
+      }
+      player.hp = Math.min(player.maxHp, player.hp + Math.round(player.maxHp * 0.30 * tune.heal));
+      spawnCastCircle(px, pz, 0xffe39a);
+      spawnRing(px, 1.0, pz, 0xffe39a, R0);
+      toast('圣言', 900);
+      shake = 0.32;
       sfx('cast');
       break;
     }
@@ -1339,20 +1798,29 @@ function buildEnemyMesh(type) {
 function spawnEnemy(type, pos) {
   if (enemies.length > 26) return;
   const T = TYPES[type];
-  const waveScale = 1 + (state.wave - 1) * (isBossType(type) ? 0.1 : 0.16);
-  // 世界难度：神之巅的怪血更厚，新手村的怪更好打
+  // GDD 14.1：血量 = (300 + 40L) × 类型倍率 × 人数比 × 世界难度 × 波次进度
+  const waveMul = 1 + (state.wave - 1) * (isBossType(type) ? 0.1 : 0.16);
   const wMul = state.mode === 'pve' ? (worldFor(state.world).hpMul || 1) : 1;
+  const lvRef = state.mode === 'pve' ? state.lv : 30;
+  const party = state.partySize || 1;
+  const hp = state.mode === 'pve'
+    ? Rules.mobHp(type, lvRef, { party: party, worldMul: wMul, waveMul: waveMul })
+    : 0;
   const e = {
     type: type,
     pos: pos.clone(),
-    hp: T.hp * waveScale * wMul,
-    maxHp: T.hp * waveScale * wMul,
+    hp: hp || 1,
+    maxHp: hp || 1,
     speed: T.speed,
     radius: T.radius,
-    dmg: T.dmg,
+    dmg: state.mode === 'pve' ? Rules.mobDmg(type, lvRef) : Rules.mobDmg(type, 30),
     attackCd: rand(0.2, 0.8),
     flash: 0,
     slow: 0,
+    stunT: 0,
+    knockV: null,
+    poison: null,
+    burn: null,
     dead: false,
     spawn: 0.55,
     strafe: Math.random() < 0.5 ? 1 : -1,
@@ -1363,6 +1831,12 @@ function spawnEnemy(type, pos) {
     baseScale: window.ArenaArt ? ArenaArt.scaleOf(type) : 1,
     mesh: buildEnemyMesh(type)
   };
+  // PVP 的对手按玩家当前血量与攻击折算，保证双方对等（GDD 6.4）
+  if (type === 'duelist') {
+    e.hp = Math.round(player.maxHp || 1000);
+    e.maxHp = e.hp;
+    e.dmg = Math.round((player.atk || Rules.LEVEL.attack(75, 200)) * 0.5);
+  }
   e.mesh.position.copy(e.pos);
   e.mesh.scale.setScalar(e.baseScale * 0.08);
   decorateEnemy(e);
@@ -1414,6 +1888,39 @@ function updateEnemies(dt) {
     }
     if (e.flash > 0) e.flash -= dt;
     if (e.slow > 0) e.slow -= dt;
+
+    /* ---- 状态机（GDD 6.1）：定身 / 击退 / 中毒 / 点燃 ---- */
+    if (e.stunT > 0) {
+      e.stunT -= dt;
+      e.mesh.position.copy(e.pos);
+      continue;                       // 定身期间不移动、不出手
+    }
+    if (e.knockV) {
+      e.pos.x += e.knockV.x * dt;
+      e.pos.z += e.knockV.z * dt;
+      e.knockV.t -= dt;
+      clampPos(e.pos, e.radius + 0.2);
+      if (e.knockV.t <= 0) e.knockV = null;
+    }
+    if (e.poison) {
+      e.poison.t -= dt;
+      e.poison.acc = (e.poison.acc || 0) + dt;
+      if (e.poison.acc >= 0.5) {
+        e.poison.acc -= 0.5;
+        damageEnemy(e, e.poison.tickDmg * e.poison.n, false, true);
+      }
+      if (e.poison.t <= 0 || e.dead) e.poison = null;
+    }
+    if (e.burn) {
+      e.burn.t -= dt;
+      e.burn.acc = (e.burn.acc || 0) + dt;
+      if (e.burn.acc >= 0.5) {
+        e.burn.acc -= 0.5;
+        damageEnemy(e, e.burn.dps * 0.5, false, true);
+      }
+      if (e.burn.t <= 0 || e.dead) e.burn = null;
+    }
+    if (e.dead) { enemies.splice(i, 1); continue; }
     // 调试图鉴：冻结 AI，只保留待机与朝向，方便比对形象
     if (e.frozen) {
       e.mesh.position.copy(e.pos);
@@ -2091,12 +2598,16 @@ function updateEffects(dt) {
 }
 
 /* ---------------- 伤害与死亡 ---------------- */
-function damageEnemy(e, dmg, crit) {
+function damageEnemy(e, dmg, crit, silent) {
   if (e.dead) return;
   e.hp -= dmg;
   e.flash = 0.12;
-  spawnDamageText(e.pos, dmg, !!crit);
+  if (!silent) spawnDamageText(e.pos, dmg, !!crit);
   // 打击感统一入口：按伤害与暴击判档，方向取玩家视线，位置取命中点
+  if (silent) {
+    if (e.hp <= 0) killEnemy(e);
+    return;
+  }
   const fwd = camera.getWorldDirection(_v2);
   const dist = hyp(e.pos.x - yawObj.position.x, e.pos.z - yawObj.position.z);
   if (window.HitFeel) {
@@ -2124,10 +2635,28 @@ function killEnemy(e) {
   // 副本掉落：只在 PVE 里生成，PVP/联机不掉装备（那边是比分模式，装备无处结算）
   if (state.mode === 'pve') spawnDropsFor(e);
 
-  // 经验：基础值 × 波次系数（越深越肥），只在 PVE 结算
+  // 经验与金币：GDD 4.3 的经验表 + 7.5 的金币流入，只在 PVE 结算
   if (state.mode === 'pve') {
-    const base = XP_OF[e.type] || 0;
-    if (base > 0) addXp(base * (1 + state.wave * 0.06));
+    // 内容等级 = min(玩家等级, 当前世界推荐上限)，打低等级区会按 14.4 衰减
+    const contentLv = Math.min(state.lv, worldFor(state.world).max);
+    const xp = Rules.XP.of(e.type, contentLv, state.lv);
+    if (xp > 0) addXp(xp);
+
+    let gold = 0;
+    if (isBossType(e.type)) {
+      const D = Rules.dungeonFor(state.dungeon);
+      gold = (Rules.ECON.gold[state.dungeon] || 800) + Math.round(state.lv * 6);
+      if (gold > 0) addGold(gold);
+      // 徽记：三类 BOSS 各一枚，凑齐 3 枚开神之领域
+      if (BADGE_SOURCE[e.type] && state.badges < 3) {
+        state.badges = Math.min(3, state.badges + BADGE_SOURCE[e.type]);
+        saveProgress();
+        toast('获得徽记 · ' + state.badges + '/3', 1800);
+      }
+    } else {
+      gold = Math.round(state.lv * (e.type === 'elite' ? 4 : 1.2));
+      if (gold > 0) addGold(gold);
+    }
   }
 
   if (isBossType(e.type)) {
@@ -2159,6 +2688,9 @@ function damagePlayer(dmg) {
   if (state.mode === 'online') return;
   // 调试沙盒：地址带 ?sandbox 时不掉血，用于检查动作与特效
   if (state.sandbox) return;
+  // 分轨：PVP / 联机的伤害系数 0.55（GDD 6.4），PVE 为 1.00
+  const tune = Rules.tuneOf(state.mode);
+  if (tune.dmg !== 1) dmg = Math.max(1, dmg * tune.dmg);
   // 装备减伤：叠在上限 55%，避免高减伤后副本失去压力
   const dr = clamp(player.gDrPct || 0, 0, 55);
   if (dr > 0) dmg = Math.max(1, dmg * (1 - dr / 100));
@@ -2224,9 +2756,10 @@ function spawnDamageText(pos, amount, crit) {
 /* ---------------- 波次与对局 ---------------- */
 function buildWaveQueue(wave) {
   const q = [];
-  // 数量随波次递增；首波只放 3 只，留出熟悉跳跃与疾跑的时间。世界再乘一道数量系数（新手村更稀疏）
-  const wCount = state.mode === 'pve' ? (worldFor(state.world).countMul || 1) : 1;
-  const n = Math.max(1, Math.round((wave === 1 ? 3 : Math.min(30, 3 + wave * 2)) * wCount));
+  // 数量随波次递增；首波只放 3 只，留出熟悉跳跃与疾跑的时间。
+  // 副本档位决定怪量密度（GDD 8.1）：普通 1.0 / 精英 1.15 / 深渊 1.3（团队档单机不开）
+  const dens = state.mode === 'pve' ? ({ normal: 1.0, elite: 1.15, raid: 1.25, abyss: 1.3 }[state.dungeon] || 1) : 1;
+  const n = Math.max(1, Math.round((wave === 1 ? 3 : Math.min(30, 3 + wave * 2)) * dens));
   // 小怪按波次解锁：蚀虫第 2 波起成群，石傀与咒术师第 4 波加入，精英第 6 波
   for (let i = 0; i < n; i++) {
     const r = Math.random();
@@ -2344,11 +2877,16 @@ function startGame() {
     state.lv = clamp(parseInt(lq[1], 10) || 1, 1, LEVEL_CAP);
     state.xp = 0;
   }
+  // 深链参数：?cls= 指定六职业之一，?dungeon= 指定四档副本（回归脚本与分享链接用）
+  const cq = /[?&]cls=([a-z]+)/.exec(location.search);
+  if (cq && CLASSES[cq[1]]) state.cls = cq[1];
+  const dgq = /[?&]dungeon=([a-z]+)/.exec(location.search);
+  if (dgq && Rules.dungeonFor(dgq[1]).key === dgq[1]) state.dungeon = dgq[1];
 
-  // 2) 世界：?world=village|city|peak 可指定，但等级不够时退回当前能进的最高世界
+  // 2) 世界：?world=village|city|wild|cliff|throne|peak 可指定，但等级/徽记不够时退回当前能进的最高世界
   let worldFallback = null;
-  const wq0 = /[?&]world=(village|city|peak)/.exec(location.search);
-  if (wq0) state.world = wq0[1];
+  const wq0 = /[?&]world=([a-z]+)/.exec(location.search);
+  if (wq0 && WORLDS[wq0[1]]) state.world = wq0[1];
   if (state.mode === 'pve') {
     const wantKey = state.world;
     state.world = resolveWorld(wantKey);
@@ -2384,14 +2922,15 @@ function startGame() {
   clearLoot();
   buildGearPanel();
   toggleBag(false);
+  // 调试：?bag=1 自动打开背包，方便截图核对五档稀有度与强化读数
+  if (/[?&]bag=1/.test(location.search)) toggleBag(true);
 
   resetPlayer();
   // 调试：?xp=900 直接灌经验（放在 resetPlayer 之后，才有干净的玩家基础值可叠）
   const xq = /[?&]xp=(\d+)/.exec(location.search);
   if (xq) {
     state.xp = 0;
-    // 世界倍率会乘进 addXp，这里先除回去，保证灌的量就是写的量
-    addXp((parseInt(xq[1], 10) || 0) / (worldFor(state.world).xpMul || 1));
+    addXp(parseInt(xq[1], 10) || 0);
     saveProgress();
   }
   buildWeapon();
@@ -2404,12 +2943,10 @@ function startGame() {
   pausePanel.classList.add('hidden');
   resultPanel.classList.add('hidden');
 
-  modeLabelEl.textContent = state.mode === 'pve'
-    ? worldFor(state.world).name + ' · PVE'
-    : state.mode === 'online' ? '局域网对战' : 'PVP 对决';
+  refreshBattleChip();
   if (worldFallback) {
     const W = worldFor(worldFallback);
-    toast(W.name + ' 需要 Lv ' + W.minLv + ' · 已回到 ' + worldFor(state.world).name, 2000);
+    toast(W.name + ' 需要 Lv ' + W.min + ' · 已回到 ' + worldFor(state.world).name, 2000);
   }
 
   if (state.mode === 'pve') {
@@ -2479,10 +3016,14 @@ function endGame(win) {
     const lost = applyDeathPenalty(win);
     rows = [
       ['世界', worldFor(state.world).name],
+      ['副本档位', Rules.dungeonFor(state.dungeon).name],
       ['抵达波次', state.wave],
       ['击杀数', state.kills],
       ['玩家等级', 'Lv ' + state.lv + '（' + state.xp + ' / ' + xpNeedFor(state.lv) + '）'],
       ['等级损失', lost ? ('Lv ' + lost + ' → Lv ' + state.lv) : '无（1 级不吃惩罚）'],
+      ['金币', state.gold + '（击杀与清波所得）'],
+      ['技能点', state.sp + ' / ' + totalSkillPoints()],
+      ['世界徽记', state.badges + ' / 3'],
       ['存活时间', fmtTime(state.elapsed)],
       ['职业', state.clsName]
     ];
@@ -2620,6 +3161,8 @@ function updateHUD() {
     objectiveEl.textContent = state.scoreP + ' : ' + state.scoreE + ' · 先到 3 杀';
   }
   timerEl.textContent = fmtTime(state.elapsed);
+  refreshStatChips();
+  refreshBattleChip();
 
   refreshGearPanel();
 }
@@ -2659,15 +3202,19 @@ function bindUI() {
     });
   });
 
-  // 世界选择：等级不够只提示不切；够就当场换场，进局不再等
+  // 世界选择（六段）：等级不够或徽记不足只提示不切；够就当场换场
   const worldBtns = document.querySelectorAll('#worldToggle button');
   worldBtns.forEach((b) => {
     b.addEventListener('click', () => {
       const key = b.dataset.world;
       const W = worldFor(key);
       if (state.mode !== 'pve') return;
-      if (state.lv < W.minLv) {
-        if (worldDescEl) worldDescEl.textContent = W.name + ' 需要 Lv ' + W.minLv + '（当前 Lv ' + state.lv + '）';
+      if (!worldUnlocked(key)) {
+        if (worldDescEl) {
+          worldDescEl.textContent = (W.key === 'peak' && state.lv >= W.min)
+            ? W.name + ' 需要集齐三枚徽记（当前 ' + state.badges + '/3）'
+            : W.name + ' 需要 Lv ' + W.min + '（当前 Lv ' + state.lv + '）';
+        }
         return;
       }
       state.world = key;
@@ -2676,6 +3223,56 @@ function bindUI() {
       if (state.phase === 'menu') syncScene();
     });
   });
+
+  // 副本档位（四档）：普通 / 精英单机可开，团队与深渊需要联机房间
+  const dgBtns = document.querySelectorAll('#dungeonToggle button');
+  dgBtns.forEach((b) => {
+    b.addEventListener('click', () => {
+      const key = b.dataset.dungeon;
+      const D = Rules.dungeonFor(key);
+      if (state.mode !== 'pve' && state.mode !== 'online') return;
+      if (!(key === 'normal' || key === 'elite' || state.mode === 'online')) {
+        if (dungeonDescEl) dungeonDescEl.textContent = D.name + '副本需要 ' + D.party + ' 人组队（用局域网房间）';
+        return;
+      }
+      state.dungeon = key;
+      saveProgress();
+      refreshDungeonUI();
+      refreshBattleChip();
+    });
+  });
+
+  // 技能加点：事件委托到面板（面板会随职业/等级重建，不能逐按钮绑定）
+  if (skillPanelEl) {
+    skillPanelEl.addEventListener('click', (ev) => {
+      const btn = ev.target.closest ? ev.target.closest('[data-skillup]') : null;
+      if (!btn) return;
+      const i = Number(btn.dataset.skillup);
+      if (!(i >= 0 && i < 3)) return;
+      if (state.sp <= 0) { toast('没有可用技能点', 900); return; }
+      if (state.skillLv[i] >= Rules.SKILL.maxLv) { toast('该技能已满级', 900); return; }
+      state.skillLv[i]++;
+      syncSkillPoints();
+      saveProgress();
+      refreshSkillPanel();
+      toast('技能升级 · ' + CLASSES[state.cls].skills[i].name + ' Lv ' + state.skillLv[i], 1100);
+    });
+  }
+
+  // 洗点（GDD 5.3：金币 等级 × 200）
+  const respecBtn = document.getElementById('respecBtn');
+  if (respecBtn) {
+    respecBtn.addEventListener('click', () => {
+      const cost = Rules.SKILL.respecCost(state.lv);
+      if (state.gold < cost) { toast('金币不足（需 ' + cost + '）', 1100); return; }
+      state.gold -= cost;
+      state.skillLv = [1, 1, 1];
+      syncSkillPoints();
+      saveProgress();
+      refreshSkillPanel();
+      toast('已洗点 · −' + cost + ' 金币', 1200);
+    });
+  }
 
   const onlineQuit = document.getElementById('onlineQuit');
   if (onlineQuit) {
@@ -2699,6 +3296,11 @@ function bindUI() {
       clsBtns.forEach(x => x.classList.remove('on'));
       b.classList.add('on');
       state.cls = b.dataset.cls;
+      state.clsName = CLASSES[state.cls].name;
+      state.skillLv = [1, 1, 1];
+      syncSkillPoints();
+      refreshSkillPanel();
+      refreshClassPreview();
     });
   });
 
@@ -2740,6 +3342,8 @@ function bindInput() {
       if (k === 'arrowdown') { bagMove(1); return; }
       if (k === 'enter') { bagEquipSelected(); return; }
       if (k === 'x') { bagDiscardSelected(); return; }
+      // 强化选中装备（GDD 7.4）：+1–+5 必成，+6 起有失败率，失败掉 1 级
+      if (k === '=' || k === '+') { bagEnhanceSelected(); return; }
       if (k === 'escape') { toggleBag(false); return; }
       if (k === ' ') e.preventDefault();
       return; // 背包打开时不吃移动/技能键，避免误操作
@@ -3491,40 +4095,56 @@ window.__arenaDebug = {
    ============================================================================ */
 
 function recalcGear() {
-  if (!window.Gear) return;
   const C = CLASSES[state.cls];
-  const T = Gear.totals();
-  // 等级加成只在 PVE 副本里叠（PVP/联机对等竞技不吃等级）
-  const L = levelBonus();
+  const T = window.Gear ? Gear.totals() : {
+    dmgPct: 0, critPct: 0, atkSpeedPct: 0, rangePct: 0, hpFlat: 0, drPct: 0,
+    speedPct: 0, stamPct: 0, stamRegenPct: 0, enFlat: 0, enRegenPct: 0,
+    mainWeapon: 0, pieces: 0, ilvlAvg: 0, skillBonus: 0, uniques: []
+  };
+
+  // 统一走规则层：等级主属性 / 装备主属性 / 基础攻击 / 生命缩放都在 core.js
+  const st = Rules.playerStats(state.cls, state.lv, T, state.mode);
 
   // 血量按"当前比例"随上限平移，换装不会凭空回满血
-  const oldMax = player.maxHp || C.hp;
+  const oldMax = player.maxHp || st.maxHp;
   const ratio = oldMax > 0 ? clamp(player.hp / oldMax, 0, 1) : 1;
 
-  player.gDmgPct = T.dmgPct + L.dmg;
+  player.gDmgPct = T.dmgPct;
   player.gCritPct = T.critPct;
   player.gAtkSpeedPct = T.atkSpeedPct;
   player.gRangePct = T.rangePct;
-  player.gDrPct = T.drPct + L.dr;
+  player.gDrPct = T.drPct;
   player.gEnRegenPct = T.enRegenPct;
+  player.gStamRegenPct = T.stamRegenPct;
   player.gearPieces = T.pieces;
+  player.gearIlvl = T.ilvlAvg;
+  player.skillBonus = T.skillBonus;
+  player.uniques = T.uniques;
 
-  player.maxHp = Math.round(C.hp + T.hpFlat + L.hp);
+  player.atk = st.atk;
+  player.dps = st.dps;
+  // 技能点附加：紫装"技能等级 +1"直接抬该技能的实际等级上限内效果
+  player.skillGearBonus = T.skillBonus || 0;
+
+  player.maxHp = st.maxHp;
   player.hp = clamp(Math.round(player.maxHp * ratio), 1, player.maxHp);
-  player.maxEn = Math.round(C.en + T.enFlat + L.en);
+  player.maxEn = st.maxEn;
   player.en = Math.min(player.en == null ? player.maxEn : player.en, player.maxEn);
-  player.speed = C.speed * (1 + (T.speedPct + L.speed) / 100);
-  player.maxStamina = Math.round(100 * (1 + T.stamPct / 100));
+  player.speed = st.speed;
+  player.maxStamina = st.stam;
   player.stamina = Math.min(player.stamina == null ? player.maxStamina : player.stamina, player.maxStamina);
 
   gearDirty = true;
+  refreshStatChips();
 }
 
 /* ---------------- 掉落实体 ---------------- */
 function spawnDropsFor(e) {
   if (!window.Loot) return;
-  // 世界给物品等级加成：新手村按波次原样，主城 +2、神之巅 +5
-  const items = Loot.dropFor(e.type, state.wave + (worldFor(state.world).ilvlBonus || 0), state.cls);
+  // 物品等级按 GDD 7.2：随等级换算（L75 → ilvl 80）再叠世界装等加成
+  const W = worldFor(state.world);
+  const ilvl = Rules.ilvlFor(state.lv, W);
+  const items = Loot.dropFor(e.type, { ilvl: ilvl, dungeon: state.dungeon, cls: state.cls });
   if (!items.length) return;
   items.forEach((it, i) => {
     const ang = (i / items.length) * Math.PI * 2 + rand(0, 0.9);
@@ -3662,19 +4282,21 @@ function pickupLoot(d, idx) {
   if (bagOpen) renderBag();
 }
 
-/* ?loottest=1：出生点正前方先摆六槽各一件（逐槽高一档）用于验证装备，
-   再摆四件低档同槽，用来验证"更弱 → 进背包"的分支与背包面板 */
+/* ?loottest=1：出生点正前方按 12 槽各摆一件（白→绿→蓝→紫→橙→银武 循环），
+   用于核对五档稀有度、主属性、强化等级与背包面板；再摆四件同槽低档验证"更弱→进背包"分支 */
 function spawnTestLoot() {
   if (!window.Loot) return;
-  const rar = ['common', 'rare', 'epic', 'legend', 'rare', 'epic'];
+  const rar = ['white', 'green', 'blue', 'purple', 'orange', 'silver'];
   Loot.SLOTS.forEach((s, i) => {
-    const it = Loot.roll({ ilvl: 4 + i, slot: s.key, rarity: rar[i], cls: state.cls });
-    addLootDrop(it, (i - 2.5) * 1.5, 10.4);
+    const it = Loot.roll({ ilvl: 4 + i, slot: s.key, rarity: rar[i % rar.length], cls: state.cls });
+    const col = i % 6;
+    const row = i < 6 ? 10.6 : 8.6;
+    addLootDrop(it, (col - 2.5) * 1.6, row);
   });
   const weak = ['chest', 'legs', 'boots', 'ring'];
   weak.forEach((slot, i) => {
-    const it = Loot.roll({ ilvl: 1, slot: slot, rarity: 'common', cls: state.cls });
-    addLootDrop(it, (i - 1.5) * 1.5, 8.2);
+    const it = Loot.roll({ ilvl: 1, slot: slot, rarity: 'white', cls: state.cls });
+    addLootDrop(it, (i - 1.5) * 1.5, 6.8);
   });
 }
 
@@ -3763,7 +4385,7 @@ function renderBag() {
   if (!bg || !window.Gear) return;
   const list = Gear.bag;
   const head = '<div class="bag-head">背包 ' + list.length + '/' + Gear.bagMax +
-    '<span class="bag-keys">↑↓ 选择 · Enter 装备 · X 丢弃 · B 关闭</span></div>';
+    '<span class="bag-keys">↑↓ 选择 · Enter 装备 · = 强化 · X 丢弃 · B 关闭</span></div>';
   if (!list.length) {
     bg.innerHTML = head + '<div class="bag-empty">空 · 击杀守卫与首领获得掉落</div>';
     return;
@@ -3775,7 +4397,7 @@ function renderBag() {
     return '<div class="bag-item' + (i === bagSel ? ' sel' : '') + '">' +
       '<span class="bi-slot">' + it.slotName + '</span>' +
       '<span class="bi-name" style="color:' + it.color + '">' + it.name + '</span>' +
-      '<span class="bi-ilvl">Lv' + it.ilvl + '</span>' +
+      '<span class="bi-ilvl">Lv' + it.ilvl + (it.enh ? ' +' + it.enh : '') + '</span>' +
       '<span class="bi-cmp ' + (better ? 'up' : 'down') + '">' + (better ? '↑ 更强' : '↓ 较弱') + '</span>' +
       '<div class="bi-stats">' + Loot.lines(it).join(' · ') + '</div>' +
       '</div>';
@@ -3810,6 +4432,23 @@ function bagDiscardSelected() {
   bagSel = clamp(bagSel, 0, Math.max(0, Gear.bag.length - 1));
   renderBag();
   refreshGearPanel();
+}
+
+/* 强化选中装备：费用 = ilvl × 35（GDD 7.4），失败掉 1 级 */
+function bagEnhanceSelected() {
+  const it = Gear.bag[bagSel];
+  if (!it) return;
+  if ((it.enh || 0) >= 10) { toast('已满强化 +10', 1000); return; }
+  const cost = Rules.ECON.enhanceCost(it.ilvl);
+  if (state.gold < cost) { toast('金币不足（需 ' + cost + '）', 1100); return; }
+  state.gold -= cost;
+  const res = Loot.tryEnhance(it);
+  recalcGear();
+  gearDirty = true;
+  toast(res.msg + ' · −' + cost + ' 金币', 1400);
+  renderBag();
+  refreshGearPanel();
+  saveProgress();
 }
 
 /* ---------------- 启动 ---------------- */

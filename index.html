@@ -4,18 +4,39 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#05070d" />
-<title>第七竞技场 · 第一人称 PVP / PVE 原型</title>
+<title>第七世界 · 第一人称 PVP / PVE 原型</title>
 <link rel="stylesheet" href="style.css" />
+<script>
+  /* 运行时错误直接贴在页面上：无头回归与手测都能一眼看到，不必开 console */
+  (function () {
+    var box = null;
+    function paint(msg, extra) {
+      if (!box) box = document.getElementById('errBox');
+      if (!box) return;
+      box.style.display = 'block';
+      box.textContent = (box.textContent ? box.textContent + '\n' : '') + msg + (extra ? '\n  ' + extra : '');
+    }
+    window.addEventListener('error', function (e) {
+      paint('ERR ' + (e.message || e.type), (e.filename || '') + ':' + (e.lineno || 0));
+    });
+    window.addEventListener('unhandledrejection', function (e) {
+      paint('REJECT ' + (e.reason && e.reason.message ? e.reason.message : e.reason));
+    });
+    window.__paintErr = paint;
+  })();
+</script>
 </head>
 <body>
 
 <canvas id="gl"></canvas>
+<pre id="errBox"></pre>
 
 <div id="hud" class="hidden">
   <div id="topbar">
     <div class="chip" id="modeLabel">PVE 副本</div>
     <div class="chip" id="objective">WAVE 1</div>
     <div class="chip" id="timer">00:00</div>
+    <div class="chip" id="statChips">攻 0 · 装等 0 · 点 0</div>
   </div>
 
   <div id="crosshair">
@@ -53,8 +74,8 @@
 
 <div id="overlay">
   <div class="panel" id="menuPanel">
-    <h1>第七竞技场</h1>
-    <p class="sub">SEVENTH ARENA · 第一人称 PVP / PVE 原型</p>
+    <h1>第七世界</h1>
+    <p class="sub">THE SEVENTH WORLD · 第一人称 PVP / PVE 原型（GDD v1.0 底层）</p>
 
     <div class="row">
       <label>模式</label>
@@ -75,21 +96,53 @@
 
     <div class="row" id="worldRow">
       <label>世界</label>
-      <div class="toggle" id="worldToggle">
-        <button data-world="village" class="on">新手村<small>Lv 1</small></button>
-        <button data-world="city">主城<small>Lv 10</small></button>
-        <button data-world="peak">神之巅<small>Lv 100</small></button>
+      <div class="toggle six" id="worldToggle">
+        <button data-world="village" class="on">新手村<small>1–10</small></button>
+        <button data-world="city">主城<small>10–30</small></button>
+        <button data-world="wild">边境野外<small>30–50</small></button>
+        <button data-world="cliff">断崖战场<small>50–65</small></button>
+        <button data-world="throne">王座回廊<small>65–75</small></button>
+        <button data-world="peak">神之领域<small>徽记 0/3</small></button>
       </div>
     </div>
-    <p class="world-desc" id="worldDesc">石村回廊 · 杂兵与守卫长，练手刷级</p>
+    <p class="world-desc" id="worldDesc">石村回廊 · 教学任务与第一个普通副本</p>
+
+    <div class="row" id="dungeonRow">
+      <label>副本</label>
+      <div class="toggle" id="dungeonToggle">
+        <button data-dungeon="normal" class="on">普通<small>5 人</small></button>
+        <button data-dungeon="elite">精英<small>5 人</small></button>
+        <button data-dungeon="raid">团队<small>25 人</small></button>
+        <button data-dungeon="abyss">深渊<small>5 人</small></button>
+      </div>
+    </div>
+    <p class="world-desc" id="dungeonDesc">普通副本 · 5 人 · 每日 1 次 · 5–8 分钟 · 日常练手与经验</p>
 
     <div class="row">
       <label>职业</label>
-      <div class="toggle" id="classToggle">
-        <button data-cls="blade" class="on">剑客</button>
-        <button data-cls="gunner">枪手</button>
-        <button data-cls="mage">术士</button>
+      <div class="toggle six" id="classToggle">
+        <button data-cls="blade" class="on">剑客<small>剑士</small></button>
+        <button data-cls="boxer">拳师<small>格斗</small></button>
+        <button data-cls="gunner">枪炮师<small>枪手</small></button>
+        <button data-cls="mage">元素法师<small>法师</small></button>
+        <button data-cls="assassin">刺客<small>暗夜</small></button>
+        <button data-cls="priest">牧师<small>圣职</small></button>
       </div>
+    </div>
+    <p class="world-desc" id="classDesc">剑客 · 剑士系 · 中距离持续输出 · 法力</p>
+
+    <div class="row" id="skillRow">
+      <label>技能</label>
+      <div class="skills-panel" id="skillPanel"></div>
+    </div>
+    <div class="row">
+      <label>洗点</label>
+      <button id="respecBtn" class="ghost small">洗点（300 金币）</button>
+    </div>
+    <div class="menu-chips">
+      <span id="menuGold">金币 0</span>
+      <span id="menuSp">技能点 2 / 2</span>
+      <span id="menuBadge">徽记 0/3</span>
     </div>
 
     <p class="hint">WASD 移动 · Shift 疾跑 · 空格跳跃 · 鼠标转向 · 左键攻击 · Q / E / R 技能 · Esc 暂停</p>
@@ -173,6 +226,8 @@
 <script src="scene.js"></script>
 <!-- 场景模型档：把 Tripo 生成的副本 / 竞技场 GLB 接进实时场景（?stage=proc 退回程序化场景） -->
 <script src="scene_glb.js"></script>
+<!-- 规则层必须先于 loot / game 加载：GDD v1.0 的所有数值都在 core.js -->
+<script src="core.js"></script>
 <script src="loot.js"></script>
 <script src="net.js"></script>
 <script src="night.js"></script>

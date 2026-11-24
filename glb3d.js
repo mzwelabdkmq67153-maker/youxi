@@ -23,27 +23,34 @@
 
   /* ---------- kind → 模型映射（冻结） ---------- */
   var KIND_MAP = {
-    swordsman: 'swordsman_idle', blade: 'swordsman_idle', grunt: 'swordsman_idle', elite: 'swordsman_idle',
+    swordsman: 'swordsman_idle', blade: 'swordsman_idle', grunt: 'grunt_stone', elite: 'swordsman_idle',
+    /* 拳师：重装近战，暂借剑客模型；刺客借枪手（轻装细身），牧师借术士（长袍） */
+    boxer: 'swordsman_idle', assassin: 'gunner_idle', priest: 'mage_idle',
     gunner: 'gunner_idle', shooter: 'gunner_idle', duelist: 'gunner_idle',
-    warlock: 'mage_idle', mage: 'mage_idle', boss: 'mage_idle',
-    /* 地宫副本新增：重甲近战借剑客模型，法系借术士模型（体型差异全交给 game.js 根 scale） */
-    golem: 'swordsman_idle', swarm: 'swordsman_idle', warden: 'swordsman_idle',
+    warlock: 'mage_idle', mage: 'mage_idle', boss: 'boss_stone',
+    /* 地宫副本新增：重甲近战借刀客模型，法系借术士模型（体型差异全交给 game.js 根 scale） */
+    golem: 'golem_lava', swarm: 'swordsman_idle', warden: 'boss_stone',
     hexer: 'mage_idle', oracle: 'mage_idle'
   };
+  /* 独立 Tripo 静态模型（无骨骼、无 clip）：保留自身的程序化动作 */
+  var STATIC_MODEL = { grunt_stone: 1, golem_lava: 1, boss_stone: 1 };
   /* GLB 自带名义身高（m） */
-  var GLB_H = { swordsman_idle: 1.84, gunner_idle: 1.89, mage_idle: 1.96 };
+  var GLB_H = {
+    swordsman_idle: 1.84, gunner_idle: 1.89, mage_idle: 1.96,
+    grunt_stone: 2.05, golem_lava: 2.60, boss_stone: 3.00
+  };
   /* fit 只做「敌人基准 1.800m / GLB 名义身高」归一；类型差异（elite/boss 放大）全部交给
      game.js 根 scale，禁止把根 scale 再算进 FIT（否则重复放大）。玩家/远端 fit=1。 */
   var FIT = {
-    grunt: 1.800 / 1.84,
+    grunt: 1.800 / 2.05,
     shooter: 1.800 / 1.89,
     duelist: 1.800 / 1.89,
     elite: 1.800 / 1.84,
-    boss: 1.800 / 1.96,
-    golem: 1.800 / 1.84,
+    boss: 1.800 / 3.00,
+    golem: 1.800 / 2.60,
     swarm: 1.800 / 1.84,
     hexer: 1.800 / 1.96,
-    warden: 1.800 / 1.84,
+    warden: 1.800 / 3.00,
     oracle: 1.800 / 1.96
   };
   var BASE_DIR = 'art/模型/glb/';
@@ -52,7 +59,7 @@
      策略：hero 组 2K、enemy 组 1024；?tex=1024 / ?tex=2k 全局覆盖做对比。
      同一模型可同时存在 2K 与 1024 两个 URL，cache 按 URL 分开。 */
   var qs = new URLSearchParams(location.search);
-  var HERO_KINDS = { swordsman: 1, blade: 1, gunner: 1, warlock: 1, mage: 1 };
+  var HERO_KINDS = { swordsman: 1, blade: 1, boxer: 1, gunner: 1, assassin: 1, warlock: 1, mage: 1, priest: 1 };
   var ENEMY_KINDS = { grunt: 1, shooter: 1, duelist: 1, elite: 1, boss: 1, golem: 1, swarm: 1, hexer: 1, warden: 1, oracle: 1 };
   var policy = { hero: '2k', enemy: '1024' };
   var urlOverride = qs.get('tex') === '1024' ? '1024' : (qs.get('tex') === '2k' ? '2k' : null);
@@ -68,6 +75,8 @@
 
   function tierForKind(kind) {
     if (urlOverride) return urlOverride;
+    /* Tripo 静态怪只有 2K 一份，不走 _1024 命名，避免 404 回退 */
+    if (STATIC_MODEL[resolveModel(kind)]) return '2k';
     var grp = HERO_KINDS[kind] ? 'hero' : 'enemy';
     return policy[grp] || '2k';
   }
@@ -177,17 +186,45 @@
 
     var clone = T.SkeletonUtils.clone(gltf.scene);
 
+    var isStatic = !!STATIC_MODEL[model];
+
     /* 材质按实例 clone（贴图共享引用）；几何/材质守卫 */
     clone.traverse(function (o) {
       if (!o.isMesh) return;
       o.geometry.userData.shared = true;
+      var fix = function (m) {
+        if (!m) return m;
+        var c = m.clone(); c.userData.shared = true;
+        /* Tripo 导出的金属度常写成 1（specular 工作流），无 metalnessMap 时压到 0.08，
+           否则在无 HDR 环境里会整片发黑；双面渲染兜住个别法线朝内的小碎面。 */
+        if (isStatic) {
+          if (!c.metalnessMap && (c.metalness == null || c.metalness > 0.2)) c.metalness = 0.08;
+          c.side = T.DoubleSide;
+          /* Tripo 的 MR 贴图里 roughness 偏低，配上强环境光会在每块石面上炸出白高光，
+             远看像黑白噪点。静态怪统一走「粗石面」：金属 0、粗糙 0.92，法线弱化到 0.45。 */
+          c.metalness = 0;
+          if (c.metalnessMap) { c.metalnessMap = null; }
+          if (c.roughnessMap) { c.roughnessMap = null; }
+          c.roughness = 0.92;
+          if (c.normalMap && c.normalScale) c.normalScale.set(0.45, 0.45);
+          c.envMapIntensity = 0.3;
+          /* 石面偏冷偏暗一点：Tripo 贴图里的亮灰岩片在日光下会读成「白铁皮」，
+             乘一层冷灰把整体压回蓝灰岩，同时保住熔岩缝的暖色 */
+          c.color = new T.Color(0xb3c2cf);
+          /* 岩缝里的熔岩要自己亮：albedo 兼作自发光贴图，低强度只提亮缝隙与橙红，
+             不改变整体石面曝光 */
+          if (c.map) {
+            c.emissiveMap = c.map;
+            c.emissive = new T.Color(0xffffff);
+            c.emissiveIntensity = 0.3;
+          }
+        }
+        return c;
+      };
       if (Array.isArray(o.material)) {
-        o.material = o.material.map(function (m) {
-          if (!m) return m;
-          var c = m.clone(); c.userData.shared = true; return c;
-        });
+        o.material = o.material.map(fix);
       } else if (o.material) {
-        var c = o.material.clone(); c.userData.shared = true; o.material = c;
+        o.material = fix(o.material);
       }
     });
 
@@ -216,6 +253,7 @@
     var mi = collectMatInfo(clone);
     var rig = {
       inner: inner, clone: clone, mixer: mixer, action: action, clip: clip,
+      static: isStatic, groundY: -minY,
       bones: bones, rest: rest, model: model, fit: fit,
       tier: tier, url: url,
       hips: hips, hipsRest: hipsRest,
@@ -397,6 +435,37 @@
     }
   }
 
+  /* ---------- 静态 Tripo 模型：无骨骼，用根节点微位移做呼吸/踏步/受击/攻击 ---------- */
+  function staticMotion(rig, dt, st, moving, speed) {
+    var t = rig.t;
+    var amp = speed > 0.4 ? 0.030 : 0.010;         // 走路踏步 3cm、待机呼吸 1cm
+    var freq = speed > 0.4 ? 5.2 : 1.35;
+    var bob = Math.sin(t * freq) * amp;
+    var lean = moving ? Math.min(0.16, 0.02 + speed * 0.026) : 0;  // 移动前倾
+    var hit = st.hitT || 0;
+
+    /* 攻击：前 0.25 段蓄力后仰，中段前冲，尾段回位（不吃骨骼） */
+    var lunge = 0;
+    if (rig.attack) {
+      var c = rig.attack;
+      c.t += dt;
+      var q = clamp(c.t / c.dur, 0, 1);
+      var punch = q < 0.35 ? -0.06 * (q / 0.35) : Math.sin((q - 0.35) / 0.65 * PI) * 0.22;
+      lunge = punch;
+      if (q >= 1) {
+        c.release = (c.release || 0) + dt;
+        lunge = Math.max(0, 0.22 * (1 - c.release / 0.2)) * (c.name === 'shoot' ? 0.4 : 1);
+        if (c.release >= 0.2) { rig.attack = null; lunge = 0; }
+      }
+    }
+
+    rig.inner.position.y = rig.groundY + bob;
+    /* 冲量沿模型朝向前推 + 移动前倾 + 受击后仰（都用根节点旋转，单轴、可叠加） */
+    rig.inner.position.z = lunge * 1.2;
+    rig.inner.rotation.x = lean - 0.18 * hit;
+    rig.inner.rotation.z = Math.sin(t * 0.9) * 0.015 * (moving ? 0.6 : 1);
+  }
+
   function update(mesh, dt, st) {
     if (!mesh || !mesh.userData) return;
     if (mesh.userData.glbFallback) {
@@ -412,6 +481,8 @@
     var moving = speed > 0.25;
     if (rig.action) rig.action.timeScale = moving ? Math.min(1.6, 1 + speed * 0.08) : 1;
     rig.mixer.update(dt);
+
+    if (rig.static) { staticMotion(rig, dt, st, moving, speed); return; }
 
     /* Root motion：锁 Hips x/z */
     if (rig.hips && rig.hipsRest) {
