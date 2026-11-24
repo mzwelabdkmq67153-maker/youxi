@@ -101,7 +101,7 @@ let menuLvEl, menuXpEl;
 let worldToggleEl, worldDescEl, worldRowEl;
 let dungeonToggleEl, dungeonDescEl, dungeonRowEl;
 // 菜单顶部的进度读数：金币 / 技能点 / 徽记
-let menuGoldEl, menuSpEl, menuBadgeEl;
+let menuGoldEl, menuSpEl, menuBadgeEl, menuArchEl;
 // HUD 顶部战斗读数 + 菜单里的技能面板与职业说明
 let statChipsEl, skillPanelEl, respecBtnEl, classDescEl;
 
@@ -193,6 +193,7 @@ function init() {
   menuGoldEl = document.getElementById('menuGold');
   menuSpEl = document.getElementById('menuSp');
   menuBadgeEl = document.getElementById('menuBadge');
+  menuArchEl = document.getElementById('menuArch');
   statChipsEl = document.getElementById('statChips');
   skillPanelEl = document.getElementById('skillPanel');
   respecBtnEl = document.getElementById('respecBtn');
@@ -698,11 +699,12 @@ function refreshDungeonUI() {
   if (dungeonRowEl) dungeonRowEl.classList.toggle('disabled', state.mode !== 'pve');
 }
 
-/* 菜单顶部进度条：金币、技能点、徽记 */
+/* 菜单顶部进度条：金币、技能点、徽记、职业架构开放进度 */
 function refreshProgressChips() {
   if (menuGoldEl) menuGoldEl.textContent = '金币 ' + fmtNum(state.gold);
   if (menuSpEl) menuSpEl.textContent = '技能点 ' + state.sp + ' / ' + totalSkillPoints();
   if (menuBadgeEl) menuBadgeEl.textContent = '徽记 ' + state.badges + '/3';
+  if (menuArchEl) menuArchEl.textContent = '职业 ' + Rules.archCheck().p0 + '/24';
 }
 
 /* HUD 顶部战斗读数：攻击 / 装等 / 剩余技能点 */
@@ -728,13 +730,16 @@ function refreshBattleChip() {
 
 var RES_NAME = { mana: '法力', rage: '怒气', stam: '耐力' };
 
-/* 职业说明行：定位、资源、生命与攻击基准 */
+/* 职业说明行：定位、资源、生命与攻击基准，外带 24 架构的 P1 排期提示 */
 function refreshClassPreview() {
   const C = CLASSES[state.cls];
   if (classDescEl) {
     const st = Rules.playerStats(state.cls, state.lv, window.Gear ? Gear.totals() : null, state.mode);
+    const plan = Rules.archPlan();
+    const next = plan.length ? plan[0] : null;
+    const p1 = next ? ' · P1 待开 S' + next.season + '：' + next.classes.map((c) => c.name).join(' / ') : '';
     classDescEl.textContent = C.name + ' · ' + C.family + '系 · ' + RES_NAME[C.res] +
-      ' · 生命 ' + st.maxHp + ' · 攻击 ' + st.atk + ' · 秒伤 ' + st.dps;
+      ' · 生命 ' + st.maxHp + ' · 攻击 ' + st.atk + ' · 秒伤 ' + st.dps + p1;
   }
   refreshBattleChip();
 }

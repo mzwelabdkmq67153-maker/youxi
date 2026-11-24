@@ -129,6 +129,87 @@
         keyColor: 0xffd48a, key: 1.10,
         fillColor: 0xffb060, fill: 1.00
       }
+    },
+
+    /* ---------- 六段世界里后三段的专属配置（同一批 GLB 上加专属地貌道具层） ---------- */
+    wild: {
+      file: 'art/模型/场景/arena_scene_lod.glb',
+      src: 'arena',
+      mode: 'disc',
+      deckR: 6.0,
+      deckZ: 6.2,
+      targetRadius: 24,
+      spin: 0,
+      props: 'wild',
+      /* 边境野外：黄昏斜光 + 沙尘雾，天色压成土黄，和主城的正午冷白拉开 */
+      fog: [0xc9a06a, 40, 155],
+      bg: 0xbfa07a,
+      sky: [0x8f6f48, 0xf2d8a8],
+      glow: 0xffb066,
+      glowI: 0.9,
+      glowD: 42,
+      envI: 1.10,
+      exposure: 0.86,
+      lift: 0.12,
+      groundDark: false,
+      glowY: 1.6,
+      lights: {
+        hemiSky: 0xf0d6ac, hemiGround: 0x6a5238, hemi: 0.95,
+        keyColor: 0xffd08a, key: 1.05,
+        fillColor: 0x8fa8c8, fill: 0.30
+      }
+    },
+    cliff: {
+      file: 'art/模型/场景/arena_scene_lod.glb',
+      src: 'arena',
+      mode: 'disc',
+      deckR: 6.0,
+      deckZ: 6.2,
+      targetRadius: 24,
+      spin: 0,
+      props: 'cliff',
+      /* 断崖战场：冷灰蓝、强反差，远景雾压低让崖口显得高 */
+      fog: [0xb8c6d2, 45, 170],
+      bg: 0xa9bccb,
+      sky: [0x5c7794, 0xd6e2ec],
+      glow: 0x9fd8ff,
+      glowI: 0.7,
+      glowD: 46,
+      envI: 1.15,
+      exposure: 0.88,
+      lift: 0.10,
+      groundDark: false,
+      glowY: 1.7,
+      lights: {
+        hemiSky: 0xdbe8f2, hemiGround: 0x59646e, hemi: 1.05,
+        keyColor: 0xf2f8ff, key: 1.15,
+        fillColor: 0x9fc0da, fill: 0.50
+      }
+    },
+    throne: {
+      file: 'art/模型/场景/fuben_scene_lod.glb',
+      src: 'dungeon',
+      mode: 'rect',
+      floorZ: 1.0,
+      targetSpan: 44,
+      props: 'throne',
+      /* 王座回廊：黑石 + 幽金，雾更近更暗，把注意力收到王座上 */
+      fog: [0x2a1f16, 40, 130],
+      bg: 0x181008,
+      sky: [0x2a1a10, 0x6b4a22],
+      glow: 0xffcf6b,
+      glowI: 1.5,
+      glowD: 32,
+      envI: 1.35,
+      exposure: 1.00,
+      lift: 0.22,
+      groundDark: false,
+      glowY: 1.9,
+      lights: {
+        hemiSky: 0xffdca8, hemiGround: 0x3a2818, hemi: 0.85,
+        keyColor: 0xffc978, key: 1.00,
+        fillColor: 0xff9a4a, fill: 0.60
+      }
     }
   };
 
@@ -569,8 +650,9 @@
     var out = obstacles || [];
     var props = new THREE.Group();
     props.name = 'stageProps';
-    /* 方形世界（副本 / 新手村）与圆台世界（竞技场 / 主城 / 神之巅）两套布局 */
-    var rect = (k === 'dungeon' || k === 'village');
+    /* 方形世界（副本 / 新手村 / 王座回廊）与圆台世界（竞技场 / 主城 / 神之巅 / 野外 / 断崖）两套布局 */
+    var cfg0 = CFG[k] || {};
+    var rect = cfg0.mode === 'rect';
 
     var tone = rect ? 0x4a5258 : 0x5c646b;
     var toneHi = rect ? 0x565e65 : 0x687077;
@@ -629,13 +711,198 @@
     }
 
     group.add(props);
+    /* 后三段世界的专属地貌件（枯树/断桥/王座），叠在通用断柱与掩体之上 */
+    addWorldProps(k, props, out, stone, stoneHi);
     applyEnv(props, k);
     /* 代理件比模型更暗一档，避免在白色大理石台面上抢眼 */
     props.traverse(function (o) {
       if (!o.isMesh || !o.material || !o.material.isMeshStandardMaterial) return;
+      var ud = o.material.userData || {};
+      if (ud.noEnv) {
+        o.material.envMapIntensity = ud.envKeep != null ? ud.envKeep : 0;
+        o.material.needsUpdate = true;
+        return;
+      }
       o.material.envMapIntensity = (CFG[k] ? CFG[k].envI : 1) * 0.55;
       o.material.needsUpdate = true;
     });
+  }
+
+  /* ---------- 后三段世界的专属地貌 ----------
+     在同一批 GLB 上加一组只属于这个世界的道具，让"换光换天"之外还有能走过去的实物。
+     全部用基础几何拼，单件 3–6 个面，进来只多几十个 mesh。 */
+  function addWorldProps(k, parent, out, stone, stoneHi) {
+    var key = (CFG[k] && CFG[k].props) || '';
+    if (!key) return;
+
+    function mesh(geo, mat, x, y, z, rx, ry, rz) {
+      var m = new THREE.Mesh(geo, mat);
+      m.position.set(x, y, z);
+      if (rx) m.rotation.x = rx;
+      if (ry) m.rotation.y = ry;
+      if (rz) m.rotation.z = rz;
+      m.receiveShadow = true;
+      parent.add(m);
+      return m;
+    }
+
+    /* 专属件的材质吃环境贴图会被洗成大理石白，这里统一关掉反照；
+       只有王座的金件需要一点金属反光，单独给强度 */
+    function noEnv(m, keep) {
+      m.userData.noEnv = true;
+      if (typeof keep === 'number') m.userData.envKeep = keep;
+      return m;
+    }
+
+    if (key === 'wild') {
+      /* 边境野外：枯树 6 株 + 岩堆 4 处 + 篝火残址 2 处 + 半塌木栅栏 3 段 */
+      var bark = noEnv(new THREE.MeshStandardMaterial({ color: 0x3a2b1c, roughness: 0.95, metalness: 0.02 }));
+      var barkHi = noEnv(new THREE.MeshStandardMaterial({ color: 0x4b3a26, roughness: 0.92 }));
+      var rockM = noEnv(new THREE.MeshStandardMaterial({ color: 0x6f6355, roughness: 0.98, metalness: 0.02 }));
+      var ashM = noEnv(new THREE.MeshStandardMaterial({ color: 0x2e2a26, roughness: 1.0 }));
+      var emberM = new THREE.MeshBasicMaterial({ color: 0xff9a3c });
+      var trunkGeo = new THREE.CylinderGeometry(0.22, 0.34, 3.8, 7);
+      var branchGeo = new THREE.CylinderGeometry(0.07, 0.11, 2.2, 5);
+
+      for (var t = 0; t < 6; t++) {
+        var ta = (t / 6) * TAU + 0.4;
+        var tr = 19.0 + (t % 3) * 1.7;
+        var tx = Math.cos(ta) * tr, tz = Math.sin(ta) * tr;
+        mesh(trunkGeo, bark, tx, 1.9, tz, 0, ta);
+        for (var b = 0; b < 3; b++) {
+          mesh(branchGeo, barkHi, tx + Math.cos(ta + b) * 0.5, 2.6 + b * 0.5,
+            tz + Math.sin(ta + b) * 0.5, 0.45 + b * 0.12, ta + b * 1.6, 0.55);
+        }
+        out.push({ x: tx, z: tz, r: 0.55 });
+      }
+
+      for (var r0 = 0; r0 < 4; r0++) {
+        var ra = (r0 / 4) * TAU + 1.1;
+        var rx0 = Math.cos(ra) * 21.0, rz0 = Math.sin(ra) * 21.0;
+        mesh(new THREE.BoxGeometry(1.5, 1.1, 1.3), rockM, rx0, 0.55, rz0, 0.10, ra);
+        mesh(new THREE.BoxGeometry(0.9, 0.7, 0.8), rockM, rx0 + 0.7, 0.35, rz0 + 0.4, -0.12, ra + 0.7);
+        mesh(new THREE.BoxGeometry(0.7, 0.55, 0.6), rockM, rx0 - 0.6, 0.28, rz0 - 0.3, 0.2, ra - 0.4);
+        out.push({ x: rx0, z: rz0, r: 1.2 });
+      }
+
+      for (var c0 = 0; c0 < 2; c0++) {
+        var ca0 = c0 * Math.PI + 2.2;
+        var cx0 = Math.cos(ca0) * 15.5, cz0 = Math.sin(ca0) * 15.5;
+        mesh(new THREE.CylinderGeometry(0.52, 0.34, 0.34, 10), stone, cx0, 0.17, cz0);
+        mesh(new THREE.CircleGeometry(0.46, 16), ashM, cx0, 0.35, cz0, -Math.PI / 2);
+        mesh(new THREE.SphereGeometry(0.10, 8, 6), emberM, cx0, 0.44, cz0);
+        mesh(new THREE.SphereGeometry(0.06, 6, 5), emberM, cx0 + 0.22, 0.40, cz0 - 0.12);
+        out.push({ x: cx0, z: cz0, r: 0.55 });
+      }
+
+      var plankGeo = new THREE.BoxGeometry(2.4, 0.12, 0.12);
+      var postGeo = new THREE.CylinderGeometry(0.09, 0.09, 1.1, 6);
+      for (var g0 = 0; g0 < 3; g0++) {
+        var ga = (g0 / 3) * TAU + 0.9;
+        var gx = Math.cos(ga) * 22.0, gz = Math.sin(ga) * 22.0;
+        mesh(postGeo, bark, gx - 1.0, 0.55, gz);
+        mesh(postGeo, bark, gx + 1.0, 0.55, gz);
+        mesh(plankGeo, barkHi, gx, 0.78, gz, 0, ga);
+        mesh(plankGeo, barkHi, gx, 0.52, gz, 0.12, ga + 0.08);
+        out.push({ x: gx, z: gz, r: 1.1 });
+      }
+      return;
+    }
+
+    if (key === 'cliff') {
+      /* 断崖战场：断桥 2 段 + 弩台 2 座 + 裂痕 4 道 + 破旗 3 面 */
+      var slabM = noEnv(new THREE.MeshStandardMaterial({ color: 0x767e87, roughness: 0.9, metalness: 0.06 }));
+      var darkM = noEnv(new THREE.MeshStandardMaterial({ color: 0x2b333b, roughness: 0.85, metalness: 0.2 }));
+      var poleM = noEnv(new THREE.MeshStandardMaterial({ color: 0x3c4650, roughness: 0.7, metalness: 0.4 }));
+      var flagM = noEnv(new THREE.MeshStandardMaterial({
+        color: 0xc0242f, roughness: 0.8, side: THREE.DoubleSide, transparent: true, opacity: 0.92
+      }));
+      var crackM = new THREE.MeshBasicMaterial({ color: 0x141a20, transparent: true, opacity: 0.95 });
+
+      for (var s0 = 0; s0 < 2; s0++) {
+        var sa = 4.6 + s0 * 3.0;
+        var sx = Math.cos(sa) * 19.5, sz = Math.sin(sa) * 19.5;
+        mesh(new THREE.BoxGeometry(3.4, 0.26, 1.5), slabM, sx, 0.62, sz, 0.18, sa);
+        mesh(new THREE.BoxGeometry(1.2, 0.22, 1.2), darkM, sx + 2.2, 0.55, sz + 0.9, -0.1, sa + 0.5);
+        out.push({ x: sx, z: sz, r: 1.7 });
+      }
+
+      for (var n0 = 0; n0 < 2; n0++) {
+        var na = 5.6 + n0 * 3.0;
+        var nx = Math.cos(na) * 21.0, nz = Math.sin(na) * 21.0;
+        for (var lg = 0; lg < 3; lg++) {
+          mesh(new THREE.CylinderGeometry(0.07, 0.09, 1.7, 6), poleM,
+            nx + Math.cos(na + lg * 2.1) * 0.5, 0.85, nz + Math.sin(na + lg * 2.1) * 0.5,
+            Math.cos(lg * 2.1) * 0.28, na, Math.sin(lg * 2.1) * 0.28);
+        }
+        mesh(new THREE.BoxGeometry(1.7, 0.10, 0.22), darkM, nx, 1.55, nz, 0, na);
+        mesh(new THREE.BoxGeometry(0.06, 0.06, 0.9), poleM, nx, 1.62, nz, 0, na + Math.PI / 2);
+        out.push({ x: nx, z: nz, r: 0.8 });
+      }
+
+      for (var k0 = 0; k0 < 4; k0++) {
+        var ka = (k0 / 4) * TAU + 1.9;
+        mesh(new THREE.BoxGeometry(0.8, 0.02, 6.4), crackM,
+          Math.cos(ka) * 19.0, 0.02, Math.sin(ka) * 19.0, 0, ka);
+      }
+
+      for (var f0 = 0; f0 < 3; f0++) {
+        var fa = 4.2 + f0 * 1.1;
+        var fx0 = Math.cos(fa) * 22.0, fz0 = Math.sin(fa) * 22.0;
+        mesh(new THREE.CylinderGeometry(0.07, 0.09, 4.4, 6), poleM, fx0, 2.2, fz0);
+        var flag = mesh(new THREE.PlaneGeometry(1.5, 2.0), flagM, fx0 + 0.7, 3.0, fz0, 0, fa);
+        flag.castShadow = false;
+        out.push({ x: fx0, z: fz0, r: 0.4 });
+      }
+      return;
+    }
+
+    if (key === 'throne') {
+      /* 王座回廊：三层台阶王座 + 金柱 4 根 + 垂幔 2 面 + 烛台 6 座 */
+      var goldM = noEnv(new THREE.MeshStandardMaterial({
+        color: 0xa9772a, roughness: 0.55, metalness: 0.55, emissive: 0x2e1c06
+      }), 1.25);
+      var blackM = noEnv(new THREE.MeshStandardMaterial({ color: 0x1d1a17, roughness: 0.75, metalness: 0.15 }));
+      var redM = noEnv(new THREE.MeshStandardMaterial({
+        color: 0x6b1420, roughness: 0.9, side: THREE.DoubleSide
+      }));
+      var flameM = new THREE.MeshBasicMaterial({ color: 0xffc45c });
+
+      /* 王座坐北朝南，出生点在 +z 侧，王座在 -z */
+      var bx = 0, bz = -13.5;
+      mesh(new THREE.BoxGeometry(7.0, 0.35, 3.2), blackM, bx, 0.18, bz);
+      mesh(new THREE.BoxGeometry(5.2, 0.32, 2.5), blackM, bx, 0.50, bz);
+      mesh(new THREE.BoxGeometry(3.6, 0.30, 1.9), blackM, bx, 0.80, bz);
+      mesh(new THREE.BoxGeometry(2.4, 2.6, 1.4), blackM, bx, 2.25, bz - 0.4, -0.08);
+      mesh(new THREE.BoxGeometry(2.7, 0.28, 1.6), goldM, bx, 3.62, bz - 0.4);
+      mesh(new THREE.BoxGeometry(0.3, 0.62, 0.9), goldM, bx - 1.55, 1.55, bz + 0.55);
+      mesh(new THREE.BoxGeometry(0.3, 0.62, 0.9), goldM, bx + 1.55, 1.55, bz + 0.55);
+      out.push({ x: bx, z: bz, r: 3.0 });
+
+      for (var p0 = 0; p0 < 4; p0++) {
+        var pa = (p0 / 4) * TAU + Math.PI / 4;
+        var px = Math.cos(pa) * 9.6, pz = Math.sin(pa) * 9.6;
+        mesh(new THREE.CylinderGeometry(0.42, 0.48, 7.2, 12), goldM, px, 3.6, pz);
+        mesh(new THREE.BoxGeometry(1.3, 0.3, 1.3), blackM, px, 0.15, pz);
+        mesh(new THREE.BoxGeometry(0.9, 0.24, 0.9), goldM, px, 7.32, pz);
+        out.push({ x: px, z: pz, r: 0.75 });
+      }
+
+      for (var q0 = 0; q0 < 2; q0++) {
+        var qx = q0 === 0 ? -2.6 : 2.6;
+        mesh(new THREE.PlaneGeometry(1.6, 4.6), redM, qx, 2.9, bz - 0.2);
+        mesh(new THREE.BoxGeometry(1.8, 0.12, 0.12), goldM, qx, 5.2, bz - 0.2);
+      }
+
+      for (var l0 = 0; l0 < 6; l0++) {
+        var la = (l0 / 6) * TAU;
+        var lx = Math.cos(la) * 12.8, lz = Math.sin(la) * 12.8;
+        mesh(new THREE.CylinderGeometry(0.16, 0.24, 1.25, 8), goldM, lx, 0.62, lz);
+        mesh(new THREE.SphereGeometry(0.13, 8, 6), flameM, lx, 1.36, lz);
+        out.push({ x: lx, z: lz, r: 0.35 });
+      }
+      return;
+    }
   }
 
   /* ---------- 世界天空层：神之巅的云海（不参与碰撞，纯远景） ----------
@@ -727,7 +994,6 @@
       });
     }
     collectPulses();
-    addProps(k, scene, obstacles);
     addSky(k, group);
 
     glowLight = new THREE.PointLight(cfg.glow, cfg.glowI, cfg.glowD, 1.8);
@@ -755,7 +1021,9 @@
     clearAll();
     if (window.ArenaScene && scene) {
       if (obstacles) obstacles.length = 0;
-      window.ArenaScene.build(k, scene, obstacles || []);
+      /* 程序化场景只有 arena / dungeon 两套：后三段世界按 src 映射回去 */
+      var proc = (CFG[k] && CFG[k].src) || k;
+      window.ArenaScene.build(proc, scene, obstacles || []);
       window.ArenaScene.tuneLights(scene);
     }
   }
@@ -777,6 +1045,10 @@
 
     ground = makeGround(k, cfg.groundR || 78);
     group.add(ground);
+
+    /* 道具层先于模型落地：GLB 是异步下载的，等它就等于世界在头几秒是空的。
+       断柱 / 掩体 / 专属地貌都不依赖模型，先把台面撑起来，模型到了再叠上去。 */
+    addProps(k, scene, obstacles);
 
     attach(k, scene, obstacles);
     tuneLights(scene);

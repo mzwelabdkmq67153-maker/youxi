@@ -610,6 +610,9 @@
     animated.length = 0;
   }
 
+  function isDungeonLike(k) { return k === 'dungeon' || k === 'throne'; }
+  function isArenaLike(k) { return k === 'arena' || k === 'city' || k === 'wild' || k === 'cliff' || k === 'peak' || k === 'village'; }
+
   function build(k, scene, obstacles) {
     clear();
     kind = k;
@@ -617,11 +620,12 @@
     group.name = 'scene_' + k;
     scene.add(group);
     animated.length = 0;
-    if (k === 'dungeon') buildDungeon(scene, obstacles || []);
+    /* 六段世界在程序化档里也分开：王座回廊走地宫、其余竞技场 */
+    if (isDungeonLike(k)) buildDungeon(scene, obstacles || []);
     else buildArena(scene, obstacles || []);
 
     // 天光与雾按场景分开：竞技场是白日扬尘，首领厅是暗青地宫
-    if (k === 'dungeon') {
+    if (isDungeonLike(k)) {
       scene.fog = new THREE.Fog(0x0a1418, 26, 74);
       scene.background = new THREE.Color(0x081014);
     } else {
@@ -647,9 +651,9 @@
     for (var i = 0; i < animated.length; i++) animated[i](acc);
   }
 
-  /* 灯光按场景分气质：竞技场是暖白日场，首领厅是冷青地宫 */
+  /* 灯光按场景分气质：竞技场是暖白日场，首领厅（含王座回廊）是冷青地宫 */
   function tuneLights(scene) {
-    var isD = kind === 'dungeon';
+    var isD = isDungeonLike(kind);
     var dirs = 0;
     scene.traverse(function (o) {
       if (o.isHemisphereLight) {

@@ -175,6 +175,86 @@
     priest:   { strong: ['blade'], weak: ['assassin', 'gunner'] }
   };
 
+  /* ---------------------------------------------------------------- 24 职业架构
+     GDD 5.1 / 12.2：六系 × 4 = 24 个架构。P0 每系先出 1 个（本原型实现的 6 个），
+     P1 起每季开 2 个（跨系配对，保证每次都补齐"缺一个定位"的短板），共 9 季 = 18 个。
+     hp / atk 是"该架构建档时的基准"，P0 六职业直接沿用 CLASSES 的真实值。 */
+  var ARCH = [
+    { family: '剑士', res: 'mana', classes: [
+      { key: 'blade',      name: '剑客',   role: '持续输出', hp: 1000, atk: 120, p0: true },
+      { key: 'greatsword', name: '重剑士', role: '破甲爆发', hp: 1120, atk: 135, season: 1 },
+      { key: 'dancer',     name: '剑舞者', role: '多目标位移', hp: 940, atk: 125, season: 4 },
+      { key: 'warlord',    name: '破军',   role: '前排压制', hp: 1180, atk: 128, season: 7 }
+    ] },
+    { family: '格斗', res: 'rage', classes: [
+      { key: 'boxer',    name: '拳师',     role: '贴身连段', hp: 1150, atk: 100, p0: true },
+      { key: 'monk',     name: '武僧',     role: '控场反击', hp: 1080, atk: 118, season: 1 },
+      { key: 'wrestler', name: '摔跤手',   role: '抓取投掷', hp: 1200, atk: 112, season: 4 },
+      { key: 'bulwark',  name: '铁卫',     role: '主坦护盾', hp: 1320, atk: 96,  season: 7 }
+    ] },
+    { family: '枪手', res: 'mana', classes: [
+      { key: 'gunner',    name: '枪炮师',   role: '中距压制', hp: 820,  atk: 140, p0: true },
+      { key: 'sniper',    name: '狙击手',   role: '单点爆发', hp: 780,  atk: 165, season: 2 },
+      { key: 'chaingun',  name: '机炮手',   role: '弹幕覆盖', hp: 860,  atk: 132, season: 5 },
+      { key: 'grenadier', name: '掷弹兵',   role: '区域封锁', hp: 840,  atk: 138, season: 8 }
+    ] },
+    { family: '法师', res: 'mana', classes: [
+      { key: 'mage',     name: '元素法师', role: '范围爆发', hp: 760,  atk: 160, p0: true },
+      { key: 'frost',    name: '冰霜法师', role: '减速控制', hp: 790,  atk: 152, season: 2 },
+      { key: 'blood',    name: '血术士',   role: '吸血持续', hp: 810,  atk: 158, season: 5 },
+      { key: 'occult',   name: '秘术师',   role: '召唤增益', hp: 770,  atk: 164, season: 8 }
+    ] },
+    { family: '暗夜', res: 'stam', classes: [
+      { key: 'assassin',   name: '刺客',   role: '背刺处决', hp: 900,  atk: 120, p0: true },
+      { key: 'nightrunner', name: '夜行者', role: '游击追杀', hp: 910,  atk: 126, season: 3 },
+      { key: 'poisoner',   name: '毒术士', role: '持续腐化', hp: 880,  atk: 130, season: 6 },
+      { key: 'shadowdance', name: '影舞',  role: '分身扰乱', hp: 920,  atk: 122, season: 9 }
+    ] },
+    { family: '圣职', res: 'mana', classes: [
+      { key: 'priest',  name: '牧师',   role: '治疗净化', hp: 880,  atk: 170, p0: true },
+      { key: 'paladin', name: '圣骑士', role: '增益主坦', hp: 1200, atk: 134, season: 3 },
+      { key: 'seer',    name: '先知',   role: '预判辅助', hp: 850,  atk: 168, season: 6 },
+      { key: 'ascetic', name: '苦修者', role: '自伤换强', hp: 1000, atk: 150, season: 9 }
+    ] }
+  ];
+
+  /* 24 条扁平表：菜单、排期表与自检都从这里取 */
+  var ARCH_LIST = [];
+  for (var ai = 0; ai < ARCH.length; ai++) {
+    var grp = ARCH[ai];
+    for (var aj = 0; aj < grp.classes.length; aj++) {
+      var ac = grp.classes[aj];
+      ARCH_LIST.push({
+        key: ac.key, name: ac.name, role: ac.role,
+        family: grp.family, res: grp.res,
+        hp: ac.hp, atk: ac.atk, p0: !!ac.p0, season: ac.season || 0
+      });
+    }
+  }
+  function archOf(key) {
+    for (var i = 0; i < ARCH_LIST.length; i++) if (ARCH_LIST[i].key === key) return ARCH_LIST[i];
+    return null;
+  }
+  /* P1 排期：按季聚合，每季 2 个 */
+  function archPlan() {
+    var bySeason = {};
+    for (var i = 0; i < ARCH_LIST.length; i++) {
+      var a = ARCH_LIST[i];
+      if (a.p0 || !a.season) continue;
+      (bySeason[a.season] = bySeason[a.season] || []).push(a);
+    }
+    var out = [];
+    for (var s in bySeason) if (bySeason.hasOwnProperty(s)) out.push({ season: Number(s), classes: bySeason[s] });
+    out.sort(function (x, y) { return x.season - y.season; });
+    return out;
+  }
+  function p0Count() {
+    var n = 0;
+    for (var i = 0; i < ARCH_LIST.length; i++) if (ARCH_LIST[i].p0) n++;
+    return n;
+  }
+
+
   /* ---------------------------------------------------------------- 怪物
      GDD 14.1：普通怪血 300 + 40L；倍率 1 / 6 / 150 / 1900。
      hpMul 以"普通怪"为 1；boss 的 150 是"设计 5 人"的倍率，
@@ -244,9 +324,9 @@
   var WORLDS = [
     { key: 'village', name: '新手村', min: 1,  max: 10, scene: 'village', hpMul: 0.90, ilvlBonus: 0, desc: '石村回廊 · 教学任务与第一个普通副本' },
     { key: 'city',    name: '主城',   min: 10, max: 30, scene: 'city',    hpMul: 1.00, ilvlBonus: 1, desc: '中央广场 · 拍卖行 / 公会 / 竞技场入口' },
-    { key: 'wild',    name: '边境野外', min: 30, max: 50, scene: 'city',  hpMul: 1.15, ilvlBonus: 2, desc: '开放野外 · 精英点与世界事件' },
-    { key: 'cliff',   name: '断崖战场', min: 50, max: 65, scene: 'peak',  hpMul: 1.25, ilvlBonus: 3, desc: '团队副本前置 · 公会战战场' },
-    { key: 'throne',  name: '王座回廊', min: 65, max: 75, scene: 'peak',  hpMul: 1.35, ilvlBonus: 4, desc: '主线终章 · 最高装等掉落' },
+    { key: 'wild',    name: '边境野外', min: 30, max: 50, scene: 'wild',   hpMul: 1.15, ilvlBonus: 2, desc: '开放野外 · 精英点与世界事件' },
+    { key: 'cliff',   name: '断崖战场', min: 50, max: 65, scene: 'cliff',  hpMul: 1.25, ilvlBonus: 3, desc: '团队副本前置 · 公会战战场' },
+    { key: 'throne',  name: '王座回廊', min: 65, max: 75, scene: 'throne', hpMul: 1.35, ilvlBonus: 4, desc: '主线终章 · 最高装等掉落' },
     { key: 'peak',    name: '神之领域', min: 75, max: 99, scene: 'peak',  hpMul: 1.50, ilvlBonus: 5, desc: '隐藏地图 · 需集齐三枚徽记，只放顶尖装备与称号' }
   ];
 
@@ -387,12 +467,32 @@
     return rows;
   }
 
+  /* 架构自检：24 条总表、6 个 P0、9 季排期且每季 2 个 */
+  function archCheck() {
+    var plan = archPlan();
+    var perSeason = [];
+    for (var i = 0; i < plan.length; i++) perSeason.push(plan[i].classes.length);
+    return {
+      total: ARCH_LIST.length,
+      p0: p0Count(),
+      seasons: plan.length,
+      perSeason: perSeason,
+      ok: ARCH_LIST.length === 24 && p0Count() === 6 && plan.length === 9 &&
+          perSeason.every(function (n) { return n === 2; })
+    };
+  }
+
   window.Rules = {
     LEVEL: LEVEL,
     SKILL: SKILL,
     CLASSES: CLASSES,
     CLASS_ORDER: CLASS_ORDER,
     COUNTER: COUNTER,
+    ARCH: ARCH,
+    ARCH_LIST: ARCH_LIST,
+    archOf: archOf,
+    archPlan: archPlan,
+    archCheck: archCheck,
     MOBS: MOBS,
     XP: { of: xpOf, rules: XP_RULES, decay: xpDecay },
     WORLDS: WORLDS,
