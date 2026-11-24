@@ -160,10 +160,45 @@
         { key: 'E', name: '驱散', cd: 10, cost: 25, id: 'dispel', mul: 1.0, desc: '清除自身全部减益，并对 4 米内敌人造成伤害并打断咏唱' },
         { key: 'R', name: '圣言', cd: 24, cost: 60, id: 'holyWord', mul: 3.2, desc: '2.5 秒咏唱（原型压缩为 0.9 秒），5 米圣光伤害并回复 30% 生命' }
       ]
+    },
+
+    /* ---- P1 · S1 赛季开放（ARCH 里 season:1 的两个，2026 版先做可玩骨架） ---- */
+    greatsword: {
+      name: '重剑士', family: '剑士', hp: 1120, en: 145, res: 'mana',
+      speed: 6.0, color: 0xffd28a, kind: 'greatsword',
+      attackType: 'melee',
+      attack: { range: 4.2, arcDeg: 92, mul: 0.62, interval: 0.52, crit: 0.10, critMul: 1.7 },
+      skills: [
+        { key: 'Q', name: '破甲斩', cd: 10, cost: 25, id: 'sunderSlash', mul: 2.3, desc: '直线穿透 6.5 米，命中破甲 6 秒（受到的伤害 +18%）' },
+        { key: 'E', name: '震地', cd: 9, cost: 25, id: 'groundSlam', mul: 1.5, desc: '半径 4.6 米击倒 0.6 秒，减速 40% 持续 2.6 秒' },
+        { key: 'R', name: '巨剑回旋', cd: 26, cost: 50, id: 'greatWhirl', mul: 1.2, desc: '3 秒持续回旋，每 0.5 秒对 5 米内全体结算，自身移速 −40%' }
+      ]
+    },
+    monk: {
+      name: '武僧', family: '格斗', hp: 1080, en: 120, res: 'rage',
+      speed: 6.6, color: 0xffe0a3, kind: 'monk',
+      attackType: 'melee',
+      attack: { range: 2.4, arcDeg: 52, mul: 0.40, interval: 0.26, crit: 0.12, critMul: 1.6 },
+      skills: [
+        { key: 'Q', name: '崩拳', cd: 6, cost: 20, id: 'shockFist', mul: 1.9, desc: '3.2 米正面，击退 1.6 米并硬直 0.4 秒' },
+        { key: 'E', name: '借力打力', cd: 8, cost: 25, id: 'counterStance', mul: 2.4, desc: '1.6 秒招架：受伤 −65%，被击中的瞬间反击 2.4 倍' },
+        { key: 'R', name: '气爆', cd: 20, cost: 45, id: 'kiBurst', mul: 2.6, desc: '5.5 米气浪推开并伤害，自身回复 12% 生命' }
+      ]
     }
   };
 
   var CLASS_ORDER = ['blade', 'boxer', 'gunner', 'mage', 'assassin', 'priest'];
+  /* 已经可以上手的 P1 职业：菜单会多出一行，rules 层跟着 ARCH 的赛季标注走 */
+  var CLASS_P1_OPEN = ['greatsword', 'monk'];
+  function classMenu() {
+    var out = [];
+    for (var i = 0; i < CLASS_ORDER.length; i++) out.push({ key: CLASS_ORDER[i], tier: 'P0', arch: archOf(CLASS_ORDER[i]) });
+    for (var j = 0; j < CLASS_P1_OPEN.length; j++) {
+      var k = CLASS_P1_OPEN[j];
+      if (CLASSES[k]) out.push({ key: k, tier: 'P1', arch: archOf(k) });
+    }
+    return out;
+  }
 
   /* 职业克制（GDD 5.4）：只影响 AI 行为与提示，不直接改数字 */
   var COUNTER = {
@@ -487,6 +522,8 @@
     SKILL: SKILL,
     CLASSES: CLASSES,
     CLASS_ORDER: CLASS_ORDER,
+    CLASS_P1_OPEN: CLASS_P1_OPEN,
+    classMenu: classMenu,
     COUNTER: COUNTER,
     ARCH: ARCH,
     ARCH_LIST: ARCH_LIST,

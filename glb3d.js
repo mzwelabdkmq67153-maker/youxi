@@ -30,7 +30,9 @@
     warlock: 'mage_idle', mage: 'mage_idle', boss: 'boss_stone',
     /* 地宫副本新增：重甲近战借刀客模型，法系借术士模型（体型差异全交给 game.js 根 scale） */
     golem: 'golem_lava', swarm: 'swordsman_idle', warden: 'boss_stone',
-    hexer: 'mage_idle', oracle: 'mage_idle'
+    hexer: 'mage_idle', oracle: 'mage_idle',
+    /* P1 · S1：重剑士仍借剑客（体型靠根 scale 拉高），武僧借剑客轻装版 */
+    greatsword: 'swordsman_idle', monk: 'swordsman_idle'
   };
   /* 独立 Tripo 静态模型（无骨骼、无 clip）：保留自身的程序化动作 */
   var STATIC_MODEL = { grunt_stone: 1, golem_lava: 1, boss_stone: 1 };
@@ -59,7 +61,7 @@
      策略：hero 组 2K、enemy 组 1024；?tex=1024 / ?tex=2k 全局覆盖做对比。
      同一模型可同时存在 2K 与 1024 两个 URL，cache 按 URL 分开。 */
   var qs = new URLSearchParams(location.search);
-  var HERO_KINDS = { swordsman: 1, blade: 1, boxer: 1, gunner: 1, assassin: 1, warlock: 1, mage: 1, priest: 1 };
+  var HERO_KINDS = { swordsman: 1, blade: 1, boxer: 1, gunner: 1, assassin: 1, warlock: 1, mage: 1, priest: 1, greatsword: 1, monk: 1 };
   var ENEMY_KINDS = { grunt: 1, shooter: 1, duelist: 1, elite: 1, boss: 1, golem: 1, swarm: 1, hexer: 1, warden: 1, oracle: 1 };
   var policy = { hero: '2k', enemy: '1024' };
   var urlOverride = qs.get('tex') === '1024' ? '1024' : (qs.get('tex') === '2k' ? '2k' : null);

@@ -500,6 +500,42 @@ function buildWeapon() {
     g.add(crossH);
     g.scale.setScalar(0.6);
     weaponBase = { x: 0.38, y: -0.38, z: -0.5, rx: -0.16, ry: -0.22, rz: 0.08 };
+  } else if (cls === 'greatsword') {
+    // 重剑士：宽刃大剑，刃体加厚、配重球压手，视觉上一眼比剑客沉
+    const metal = new THREE.MeshStandardMaterial({ color: 0xd8c6a0, roughness: 0.35, metalness: 0.85, emissive: 0x3a2c12 });
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 1.02), metal);
+    blade.position.set(0, 0, -0.62);
+    g.add(blade);
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.05, 0.07), metal);
+    guard.position.set(0, 0, -0.1);
+    g.add(guard);
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.26, 8),
+      new THREE.MeshStandardMaterial({ color: 0x2a1a10, roughness: 0.85 }));
+    grip.rotation.x = Math.PI / 2;
+    grip.position.set(0, 0, 0.06);
+    g.add(grip);
+    const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 10),
+      new THREE.MeshStandardMaterial({ color: 0xffd28a, metalness: 0.8, roughness: 0.3, emissive: 0x5a3a10 }));
+    pommel.position.set(0, 0, 0.2);
+    g.add(pommel);
+    g.scale.setScalar(0.6);
+    weaponBase = { x: 0.44, y: -0.42, z: -0.5, rx: -0.34, ry: 0.5, rz: 0.18 };
+  } else if (cls === 'monk') {
+    // 武僧：齐眉短棍，两端铜环，比双拳套的攻击距离长一截
+    const wood = new THREE.MeshStandardMaterial({ color: 0x6b4a2a, roughness: 0.7, metalness: 0.1 });
+    const ringM = new THREE.MeshStandardMaterial({ color: 0xd9b169, roughness: 0.4, metalness: 0.7 });
+    const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 1.1, 8), wood);
+    staff.rotation.x = Math.PI / 2;
+    staff.position.set(0, 0, -0.45);
+    g.add(staff);
+    for (let i = 0; i < 2; i++) {
+      const r0 = new THREE.Mesh(new THREE.TorusGeometry(0.042, 0.012, 8, 16), ringM);
+      r0.position.set(0, 0, i === 0 ? -0.98 : 0.08);
+      r0.rotation.y = Math.PI / 2;
+      g.add(r0);
+    }
+    g.scale.setScalar(0.62);
+    weaponBase = { x: 0.34, y: -0.4, z: -0.5, rx: -0.1, ry: -0.3, rz: 0 };
   } else {
     const wood = new THREE.MeshStandardMaterial({ color: 0x1d2436, roughness: 0.5, metalness: 0.5 });
     const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.024, 0.95, 8), wood);
@@ -704,7 +740,7 @@ function refreshProgressChips() {
   if (menuGoldEl) menuGoldEl.textContent = '金币 ' + fmtNum(state.gold);
   if (menuSpEl) menuSpEl.textContent = '技能点 ' + state.sp + ' / ' + totalSkillPoints();
   if (menuBadgeEl) menuBadgeEl.textContent = '徽记 ' + state.badges + '/3';
-  if (menuArchEl) menuArchEl.textContent = '职业 ' + Rules.archCheck().p0 + '/24';
+  if (menuArchEl) menuArchEl.textContent = '职业 ' + Rules.classMenu().length + '/24';
 }
 
 /* HUD 顶部战斗读数：攻击 / 装等 / 剩余技能点 */
@@ -736,8 +772,14 @@ function refreshClassPreview() {
   if (classDescEl) {
     const st = Rules.playerStats(state.cls, state.lv, window.Gear ? Gear.totals() : null, state.mode);
     const plan = Rules.archPlan();
-    const next = plan.length ? plan[0] : null;
-    const p1 = next ? ' · P1 待开 S' + next.season + '：' + next.classes.map((c) => c.name).join(' / ') : '';
+    const open = Rules.CLASS_P1_OPEN || [];
+    // 已开放的赛季不再算"待开"，提示往后顺延一季
+    const next = plan.filter(function (s) {
+      return s.classes.every(function (c) { return open.indexOf(c.key) < 0; });
+    })[0];
+    const p1 = next
+      ? ' · P1 待开 S' + next.season + '：' + next.classes.map((c) => c.name).join(' / ')
+      : ' · P1 全部开放';
     classDescEl.textContent = C.name + ' · ' + C.family + '系 · ' + RES_NAME[C.res] +
       ' · 生命 ' + st.maxHp + ' · 攻击 ' + st.atk + ' · 秒伤 ' + st.dps + p1;
   }
@@ -866,6 +908,11 @@ function resetPlayer() {
   player.overdrive = 0;
   player.turret = 0;
   player.turretShot = 0;
+  // P1 两职业的专属状态：巨剑回旋计时与移速惩罚、武僧招架窗口
+  player.whirl = 0;
+  player.whirlTick = 0;
+  player.counterT = 0;
+  player.moveMul = 1;
   player.alive = true;
   player.respawn = 0;
   player.hurtT = 0;
@@ -935,7 +982,7 @@ function updatePlayer(dt) {
     player.runT = 0;
   }
   const runMul = wantsRun ? 1.45 : 1;
-  const speed = player.speed * (player.sprintT > 0 ? 1.7 : 1) * runMul;
+  const speed = player.speed * (player.sprintT > 0 ? 1.7 : 1) * runMul * (player.moveMul || 1);
 
   // 疾跑拉 FOV：+6°，冲刺再叠 +4°；插值过渡，不跳变
   const targetFov = 72 + (wantsRun ? 6 : 0) + (player.sprintT > 0 ? 4 : 0);
@@ -1694,6 +1741,124 @@ function runSkill(id, idx) {
       sfx('cast');
       break;
     }
+
+    /* ---------- P1 · S1：重剑士 ---------- */
+    case 'sunderSlash': {
+      // 直线穿透：正前方 6.5 米、锥角约 ±42° 内全部命中，命中后挂破甲（后续伤害 +18%）
+      let hit = 0;
+      const R0 = 6.5 * RM;
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+        if (e.dead) continue;
+        const dx = e.pos.x - px;
+        const dz = e.pos.z - pz;
+        const d = hyp(dx, dz);
+        const dot = d > 0.0001 ? (dx / d) * fx + (dz / d) * fz : 1;
+        if (d < R0 && dot > 0.72) {
+          damageEnemy(e, D(2.3), true);
+          e.sunderT = 6;
+          hit++;
+        }
+      }
+      if (aoeHitRemote(px, pz, R0, D(2.3), true, fx, fz)) hit++;
+      spawnSlashArc(0xffd28a);
+      spawnRing(px, 1.0, pz, 0xffd28a, R0);
+      shake = 0.35;
+      sfx(hit ? 'hit' : 'skill');
+      break;
+    }
+    case 'groundSlam': {
+      const R1 = 4.6 * RM;
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+        if (e.dead) continue;
+        if (hyp(e.pos.x - px, e.pos.z - pz) < R1) {
+          damageEnemy(e, D(1.5));
+          e.stunT = Math.max(e.stunT || 0, 0.6 * tune.ctrl);
+          e.slow = Math.max(e.slow || 0, 2.6 * tune.ctrl);
+        }
+      }
+      aoeHitRemote(px, pz, R1, D(1.5), false);
+      spawnExplosion(px, 0.35, pz, 1.3);
+      spawnCastCircle(px, pz, 0xffbf6a);
+      spawnRing(px, 0.25, pz, 0xffbf6a, R1);
+      shake = 0.42;
+      sfx('skill');
+      break;
+    }
+    case 'greatWhirl': {
+      player.whirl = 3;
+      player.whirlTick = 0;
+      player.moveMul = 0.6;
+      toast('巨剑回旋', 900);
+      spawnCastCircle(px, pz, 0xffd28a);
+      spawnRing(px, 0.6, pz, 0xffd28a, 2.4);
+      sfx('skill');
+      break;
+    }
+
+    /* ---------- P1 · S1：武僧 ---------- */
+    case 'shockFist': {
+      // 正前方最近的单个目标：击退 + 硬直，落空只出拳不空耗判定
+      const R2 = 3.2 * RM;
+      let best = null;
+      let bestD = 1e9;
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+        if (e.dead) continue;
+        const dx = e.pos.x - px;
+        const dz = e.pos.z - pz;
+        const d = hyp(dx, dz);
+        const dot = d > 0.0001 ? (dx / d) * fx + (dz / d) * fz : 1;
+        if (d < R2 && dot > 0.6 && d < bestD) { best = e; bestD = d; }
+      }
+      if (best) {
+        damageEnemy(best, D(1.9), true);
+        best.pos.x = clamp(best.pos.x + fx * 1.6, -HALF + 1, HALF - 1);
+        best.pos.z = clamp(best.pos.z + fz * 1.6, -HALF + 1, HALF - 1);
+        best.stunT = Math.max(best.stunT || 0, 0.4 * tune.stiff);
+      }
+      aoeHitRemote(px, pz, R2, D(1.9), true, fx, fz);
+      spawnSlashArc(0xffe0a3);
+      spawnRing(px, 1.0, pz, 0xffe0a3, 2.0);
+      shake = 0.24;
+      sfx(best ? 'hit' : 'skill');
+      break;
+    }
+    case 'counterStance': {
+      player.counterT = 1.6;
+      toast('借力打力 · 招架 1.6s', 900);
+      spawnRing(px, 0.5, pz, 0xffe0a3, 2.2);
+      spawnCastCircle(px, pz, 0xffe0a3);
+      sfx('skill');
+      break;
+    }
+    case 'kiBurst': {
+      const R3 = 5.5 * RM;
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+        if (e.dead) continue;
+        const dx = e.pos.x - px;
+        const dz = e.pos.z - pz;
+        const d = hyp(dx, dz);
+        if (d >= R3) continue;
+        damageEnemy(e, D(2.6));
+        if (d > 0.0001) {
+          e.pos.x = clamp(e.pos.x + (dx / d) * 2.4, -HALF + 1, HALF - 1);
+          e.pos.z = clamp(e.pos.z + (dz / d) * 2.4, -HALF + 1, HALF - 1);
+        }
+        e.stunT = Math.max(e.stunT || 0, 0.3 * tune.stiff);
+      }
+      aoeHitRemote(px, pz, R3, D(2.6), false);
+      player.hp = Math.min(player.maxHp, player.hp + Math.round(player.maxHp * 0.12 * tune.heal));
+      spawnExplosion(px, 0.9, pz, 1.6);
+      spawnCastCircle(px, pz, 0xffe0a3);
+      spawnRing(px, 0.7, pz, 0xffe0a3, R3);
+      toast('气爆', 800);
+      shake = 0.4;
+      sfx('skill');
+      break;
+    }
   }
 }
 
@@ -1894,7 +2059,8 @@ function updateEnemies(dt) {
     if (e.flash > 0) e.flash -= dt;
     if (e.slow > 0) e.slow -= dt;
 
-    /* ---- 状态机（GDD 6.1）：定身 / 击退 / 中毒 / 点燃 ---- */
+    /* ---- 状态机（GDD 6.1）：定身 / 击退 / 中毒 / 点燃 / 破甲 ---- */
+    if (e.sunderT > 0) e.sunderT = Math.max(0, e.sunderT - dt);
     if (e.stunT > 0) {
       e.stunT -= dt;
       e.mesh.position.copy(e.pos);
@@ -2605,6 +2771,8 @@ function updateEffects(dt) {
 /* ---------------- 伤害与死亡 ---------------- */
 function damageEnemy(e, dmg, crit, silent) {
   if (e.dead) return;
+  // 重剑士破甲：被破甲的目标受到的伤害 +18%
+  if (e.sunderT > 0) dmg *= 1.18;
   e.hp -= dmg;
   e.flash = 0.12;
   if (!silent) spawnDamageText(e.pos, dmg, !!crit);
@@ -2695,6 +2863,25 @@ function damagePlayer(dmg) {
   if (state.sandbox) return;
   // 分轨：PVP / 联机的伤害系数 0.55（GDD 6.4），PVE 为 1.00
   const tune = Rules.tuneOf(state.mode);
+  // 武僧招架：1.6 秒窗口内挨打只吃 35%，且立刻对 3.8 米内最近目标反击
+  if (player.counterT > 0) {
+    player.counterT = 0;
+    dmg = Math.max(1, dmg * 0.35);
+    let cbest = null;
+    let cbestD = 1e9;
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i];
+      if (e.dead) continue;
+      const d = hyp(e.pos.x - yawObj.position.x, e.pos.z - yawObj.position.z);
+      if (d < 3.8 && d < cbestD) { cbest = e; cbestD = d; }
+    }
+    if (cbest) {
+      damageEnemy(cbest, skillDmg(1, 2.4), true);
+      cbest.stunT = Math.max(cbest.stunT || 0, 0.3 * tune.stiff);
+    }
+    toast('招架反击', 800);
+    spawnRing(yawObj.position.x, 0.9, yawObj.position.z, 0xffe0a3, 2.4);
+  }
   if (tune.dmg !== 1) dmg = Math.max(1, dmg * tune.dmg);
   // 装备减伤：叠在上限 55%，避免高减伤后副本失去压力
   const dr = clamp(player.gDrPct || 0, 0, 55);
@@ -2868,6 +3055,34 @@ function updateSkills(dt, cdDt) {
     }
     if (player.domain <= 0) toast('剑域结束', 700);
   }
+  // 武僧招架窗口
+  if (player.counterT > 0) {
+    player.counterT -= dt;
+    if (player.counterT <= 0) player.counterT = 0;
+  }
+  // 重剑士巨剑回旋：3 秒内每 0.5 秒对 5 米内全体结算，期间移速 −40%
+  if (player.whirl > 0) {
+    player.whirl -= dt;
+    player.whirlTick -= dt;
+    if (player.whirlTick <= 0) {
+      player.whirlTick = 0.5;
+      const wd = skillDmg(2, 1.2);
+      const wx = yawObj.position.x;
+      const wz = yawObj.position.z;
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+        if (e.dead) continue;
+        if (hyp(e.pos.x - wx, e.pos.z - wz) < 5.0) damageEnemy(e, wd);
+      }
+      aoeHitRemote(wx, wz, 5.0, wd, false);
+      spawnRing(wx, 0.8, wz, 0xffd28a, 5.0);
+    }
+    if (player.whirl <= 0) {
+      player.whirl = 0;
+      player.moveMul = 1;
+      toast('回旋结束', 700);
+    }
+  }
 }
 
 /* ---------------- 对局流程 ---------------- */
@@ -2979,6 +3194,20 @@ function startGame() {
           endGame(false);
         }
       }, 800);
+    }
+    // 调试：?skillauto=0|1|2 每 1.4 秒自动放一个技能（不传槽位则 Q→E→R 轮换），
+    // 无头回归与截图核对技能特效时不必模拟键盘
+    const sa = /[?&]skillauto=(\d)?/.exec(location.search);
+    if (sa) {
+      let si = 0;
+      const fixed = sa[1] != null ? parseInt(sa[1], 10) : -1;
+      window.setInterval(() => {
+        if (state.phase !== 'playing' || !player.alive) return;
+        const slot = fixed >= 0 ? fixed : (si++ % 3);
+        player.skillCd[slot] = 0;
+        if (player.en < 60) player.en = player.maxEn;
+        castSkill(slot);
+      }, 1400);
     }
   } else if (state.mode === 'online') {
     // 出生点由服务端分配，双方各占一侧，避免两人叠在同一格

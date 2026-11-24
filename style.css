@@ -424,6 +424,15 @@ html, body {
 }
 .toggle.six button.on small { color: #9fe6ff; }
 #classToggle button.locked { opacity: 0.42; cursor: not-allowed; }
+/* P1 已开放职业：金色边区分 P0 / P1，小字写赛季 */
+#classToggle button.p1 { border-color: rgba(255, 210, 138, 0.45); }
+#classToggle button.p1 small { color: #d9b169; }
+#classToggle button.p1.on {
+  border-color: rgba(255, 210, 138, 0.8);
+  background: rgba(120, 88, 30, 0.32);
+  box-shadow: 0 0 18px rgba(255, 210, 138, 0.16), inset 0 0 12px rgba(255, 210, 138, 0.1);
+}
+#classToggle button.p1.on small { color: #ffd28a; }
 
 /* 技能面板：Q/E/R 三行，每行带可点击的加点按钮 */
 .skills-panel { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
