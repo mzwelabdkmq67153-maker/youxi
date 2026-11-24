@@ -600,9 +600,13 @@ function resetPlayer() {
   player.runT = 0;
   player.trailT = 0;
 
-  // 竞技场（PVP）：出生点从台面十字光槽移开，站到平整台面；对手点同步镜像
-  yawObj.position.set(state.mode === 'pve' ? 0 : 6.5, PLAYER_H, 14);
-  yawObj.rotation.y = 0;
+  // 竞技场（PVP）：出生点从台面十字光槽移到斜角空地上并朝向台心（能看到十字与台面全貌）；
+  // 对手点取镜像位置，保证双方到台心距离与视野对称
+  const pvp = state.mode !== 'pve';
+  const spawnX = pvp ? 10 : 0;
+  const spawnZ = pvp ? 16 : 14;
+  yawObj.position.set(spawnX, PLAYER_H, spawnZ);
+  yawObj.rotation.y = pvp ? Math.atan2(spawnX, spawnZ) : 0;
   pitchObj.rotation.x = 0;
   camera.position.set(0, 0, 0);
 
@@ -2329,7 +2333,7 @@ function startGame() {
     ensureRemoteMesh();
     toast('对战开始', 1200);
   } else {
-    spawnEnemy('duelist', new THREE.Vector3(-6.5, 0, -14));
+    spawnEnemy('duelist', new THREE.Vector3(-10, 0, -16));
     toast('对决开始', 1200);
   }
 

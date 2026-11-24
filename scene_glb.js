@@ -21,14 +21,19 @@
       /* 模型自带的圆台：半径 6.0、台面高 6.2（离线量体测出，单位=模型单位） */
       deckR: 6.0,
       deckZ: 6.2,
-      targetRadius: 22.8,
-      fog: [0xa8bccb, 120, 320],
-      bg: 0xa8bccb,
+      /* 玩法占地是 ±22 的方场，方场对角 30.3m；圆台半径取 31.2 让四角都落在台面上，
+         否则玩家走到角上会“跨出”台沿 */
+      targetRadius: 24,
+      /* 台面十字沟压在出生轴线上，靠打光压住亮度即可（不做整体旋转：
+         模型不是中心对称，转 45° 会把圆台从居中位置挪开） */
+      spin: 0,
+      fog: [0x8fa6b6, 120, 320],
+      bg: 0x7d95a8,
       glow: 0xb8e2ff,
-      glowI: 0.34,
+      glowI: 0.3,
       glowD: 46,
-      envI: 1.2,
-      exposure: 0.95
+      envI: 1.0,
+      exposure: 0.85
     },
     dungeon: {
       file: 'art/模型/场景/fuben_scene_lod.glb',
@@ -104,8 +109,30 @@
     };
   }
 
-  function trisOf(obj) {
-    var n = 0;
+  /* 圆台中心的定位：从上方打一片射线，取落在台面高度的那批点的重心。
+     竞技场模型的圆台相对包围盒中心是偏的，按包围盒居中会让台面偏出去，
+     一旦再转 45°（把发光十字沟移到对角）偏移会更明显，所以这里单独量台心。 */
+  function deckCenterOf(obj, cfg) {
+    var box = boxOf(obj);
+    var fromY = box.max.y + 2;
+    var cx = (box.min.x + box.max.x) / 2;
+    var cz = (box.min.z + box.max.z) / 2;
+    var lim = (cfg.deckR || 6) * 1.4;
+    var sx = 0, sz = 0, n = 0;
+    for (var i = -10; i <= 10; i++) {
+      for (var j = -10; j <= 10; j++) {
+        var x = cx + i * lim / 10;
+        var z = cz + j * lim / 10;
+        var h = hitY(obj, x, z, fromY);
+        if (h === null || Math.abs(h - cfg.deckZ) > 0.35) continue;
+        sx += x; sz += z; n++;
+      }
+    }
+    if (!n) return { x: cx, z: cz, y: cfg.deckZ };
+    return { x: sx / n, z: sz / n, y: cfg.deckZ };
+  }
+
+  function trisOf(obj) {    var n = 0;
     obj.traverse(function (o) {
       if (!o.isMesh || !o.geometry) return;
       var g = o.geometry;
@@ -115,7 +142,7 @@
     return n;
   }
 
-  function prepMaterials(obj) {
+  function prepMaterials(obj, k) {
     obj.traverse(function (o) {
       if (!o.isMesh) return;
       o.castShadow = false;
@@ -141,7 +168,7 @@
         if (mm.map) {
           mm.emissiveMap = mm.map;
           mm.emissive = new THREE.Color(0xffffff);
-          mm.emissiveIntensity = 0.26;
+          mm.emissiveIntensity = (k === 'arena' ? 0.15 : 0.26);
           mm.userData._lift = true;
         }
         /* 单面材质从场内看会被背面剔除，场景一律双面 */
@@ -310,12 +337,12 @@
       if (o.isHemisphereLight) {
         o.color.setHex(isD ? 0x7fb0cc : 0xd6e6f2);
         o.groundColor.setHex(isD ? 0x1b2a33 : 0x7a736a);
-        o.intensity = isD ? 1.35 : 1.15;
+        o.intensity = isD ? 1.35 : 1.05;
       }
       if (o.isDirectionalLight) {
         if (dirs === 0) {
           o.color.setHex(isD ? 0xbfe2f4 : 0xfff4e2);
-          o.intensity = isD ? 1.2 : 1.35;
+          o.intensity = isD ? 1.2 : 1.15;
         } else {
           o.color.setHex(isD ? 0x4a8ce0 : 0xd3dde4);
           o.intensity = isD ? 0.55 : 0.5;
@@ -359,7 +386,7 @@
         floor: deckY,
         size: box2.getSize(new THREE.Vector3())
       };
-      prepMaterials(obj);
+      prepMaterials(obj, k);
       var entry = { root: obj, fit: f, tris: trisOf(obj) };
       cache[k] = entry;
       log('load ok', k, 'tris', entry.tris, 'scale', f.scale.toFixed(2));
@@ -378,6 +405,140 @@
       delete loading[k];
       for (var i = 0; i < list.length; i++) list[i](err || new Error('load failed'));
     });
+  }
+
+  /* ---------- 玩法道具（断柱 / 掩体）：模型不带这些，补低面数代理件 ---------- */
+  var TAU = Math.PI * 2;
+  var stoneTexCache = null;
+
+  /* 程序化砌石贴图：底色 + 斑点 + 石缝，给代理件一点材质层次，别让它们在
+     白色大理石台面上变成一块纯色板 */
+  function stoneTex() {
+    if (stoneTexCache) return stoneTexCache;
+    var c = document.createElement('canvas');
+    c.width = c.height = 512;
+    var g = c.getContext('2d');
+    g.fillStyle = '#8a9198';
+    g.fillRect(0, 0, 512, 512);
+    for (var i = 0; i < 11000; i++) {
+      var x = Math.random() * 512, y = Math.random() * 512;
+      var r = Math.random() * 1.8 + 0.3;
+      var v = Math.random();
+      g.fillStyle = v > 0.5
+        ? 'rgba(226,232,236,' + (0.10 + Math.random() * 0.22).toFixed(2) + ')'
+        : 'rgba(46,52,58,' + (0.10 + Math.random() * 0.24).toFixed(2) + ')';
+      g.beginPath();
+      g.arc(x, y, r, 0, Math.PI * 2);
+      g.fill();
+    }
+    /* 石缝：横缝每 128，竖缝错缝 */
+    g.strokeStyle = 'rgba(38,44,50,0.26)';
+    g.lineWidth = 3;
+    for (var row = 0; row < 4; row++) {
+      var yy = row * 128;
+      g.beginPath(); g.moveTo(0, yy); g.lineTo(512, yy); g.stroke();
+      var off = (row % 2) * 64;
+      for (var col = 0; col < 4; col++) {
+        var xx = off + col * 128;
+        g.beginPath(); g.moveTo(xx, yy); g.lineTo(xx, yy + 128); g.stroke();
+      }
+    }
+    var tex = new THREE.CanvasTexture(c);
+    tex.encoding = THREE.sRGBEncoding;
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(1.6, 1.6);
+    tex.anisotropy = 4;
+    stoneTexCache = tex;
+    return tex;
+  }
+
+  function partMesh(parent, mat, geo, x, y, z, ry, rz) {
+    var m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    if (ry) m.rotation.y = ry;
+    if (rz) m.rotation.z = rz;
+    m.receiveShadow = true;
+    parent.add(m);
+    return m;
+  }
+
+  function addProps(k, scene, obstacles) {
+    if (!group) return;
+    if (q.get('noprops') === '1') return;
+    var out = obstacles || [];
+    var props = new THREE.Group();
+    props.name = 'stageProps';
+
+    var tone = k === 'dungeon' ? 0x4a5258 : 0x5c646b;
+    var toneHi = k === 'dungeon' ? 0x565e65 : 0x687077;
+    var map = stoneTex();
+    var stone = new THREE.MeshStandardMaterial({ color: tone, map: map, roughness: 0.95, metalness: 0.04, side: THREE.DoubleSide });
+    var stoneHi = new THREE.MeshStandardMaterial({ color: toneHi, map: map, roughness: 0.97, metalness: 0.03, side: THREE.DoubleSide });
+
+    var shaftGeo, baseGeo, capGeo, rubGeo, coverGeo, chunkGeo;
+    if (k === 'dungeon') {
+      shaftGeo = new THREE.CylinderGeometry(0.50, 0.62, 6.6, 10);
+      baseGeo = new THREE.BoxGeometry(1.3, 0.3, 1.3);
+      capGeo = new THREE.BoxGeometry(1.0, 0.22, 1.0);
+      rubGeo = new THREE.BoxGeometry(0.62, 0.44, 0.56);
+      coverGeo = new THREE.BoxGeometry(2.6, 1.1, 0.9);
+      chunkGeo = new THREE.BoxGeometry(1.1, 1.0, 0.9);
+    } else {
+      shaftGeo = new THREE.CylinderGeometry(0.52, 0.64, 2.6, 10);
+      baseGeo = new THREE.BoxGeometry(1.5, 0.34, 1.5);
+      capGeo = new THREE.BoxGeometry(1.0, 0.22, 1.0);
+      rubGeo = new THREE.BoxGeometry(0.72, 0.42, 0.60);
+      coverGeo = new THREE.BoxGeometry(2.4, 1.1, 1.1);
+      chunkGeo = new THREE.BoxGeometry(0.9, 0.9, 0.7);
+    }
+    var shaftTop = k === 'dungeon' ? 6.6 : 2.6;
+
+    /* 断柱：副本 5 根 r12.6；竞技场 4 根 r10.5，角度整体偏 22.5° 避开出生轴线 */
+    var pil = k === 'dungeon' ? 5 : 4;
+    for (var i = 0; i < pil; i++) {
+      var a = k === 'dungeon' ? (i / 5) * TAU + 0.45 : Math.PI / 8 + (i / 4) * TAU;
+      var r = k === 'dungeon' ? 12.6 : 10.5;
+      var x = Math.cos(a) * r, z = Math.sin(a) * r;
+      partMesh(props, stone, shaftGeo, x, shaftTop / 2 + 0.15, z);
+      partMesh(props, stoneHi, baseGeo, x, 0.15, z);
+      partMesh(props, stoneHi, capGeo, x, shaftTop + 0.26, z);
+      partMesh(props, stone, rubGeo, x + 0.1, shaftTop + 0.55, z, 0.3);
+      /* 竞技场改成断柱残墩：柱头多堆两块碎石，别让 6m 光柱在台面上一柱擎天 */
+      if (k !== 'dungeon') {
+        partMesh(props, stone, rubGeo, x - 0.32, shaftTop + 0.42, z + 0.18, -0.35, 0.12);
+        partMesh(props, stoneHi, capGeo, x + 0.34, shaftTop + 0.20, z - 0.22, 0.6, 0.08);
+      }
+      out.push({ x: x, z: z, r: k === 'dungeon' ? 0.8 : 0.86 });
+    }
+
+    /* 掩体：副本 8 处 r15.6，竞技场 6 处 r17（偏到出生环内侧之外，不挡住出生视野） */
+    var cov = k === 'dungeon' ? 8 : 6;
+    var covR = k === 'dungeon' ? 15.6 : 17.0;
+    var covPhase = k === 'dungeon' ? 0.18 : Math.PI / 6;
+    for (var c = 0; c < cov; c++) {
+      var ca = (c / cov) * TAU + covPhase;
+      var cx = Math.cos(ca) * covR, cz = Math.sin(ca) * covR;
+      partMesh(props, stone, coverGeo, cx, 0.55, cz, -ca);
+      partMesh(props, stoneHi, chunkGeo,
+        cx + Math.cos(ca + (k === 'dungeon' ? 0.5 : 1.2)) * 1.5, 0.5,
+        cz + Math.sin(ca + (k === 'dungeon' ? 0.5 : 1.2)) * 1.5, -ca + 0.25);
+      out.push({ x: cx, z: cz, r: k === 'dungeon' ? 1.4 : 1.35 });
+    }
+
+    group.add(props);
+    applyEnv(props, k);
+    /* 代理件比模型更暗一档，避免在白色大理石台面上抢眼 */
+    props.traverse(function (o) {
+      if (!o.isMesh || !o.material || !o.material.isMeshStandardMaterial) return;
+      o.material.envMapIntensity = (CFG[k] ? CFG[k].envI : 1) * 0.55;
+      o.material.needsUpdate = true;
+    });
+  }
+
+  /* 圆形边界：竞技场圆台用半径夹止，副本仍走方形 */
+  function boundary() {
+    if (kind === 'arena' && fit && fit.deckRadius) return fit.deckRadius - 1.4;
+    return 0;
   }
 
   /* ---------- 挂模型 ---------- */
@@ -399,6 +560,7 @@
     fit = entry.fit;
     applyEnv(inst, k);
     collectPulses();
+    addProps(k, scene, obstacles);
 
     var cfg = CFG[k];
     glowLight = new THREE.PointLight(cfg.glow, cfg.glowI, cfg.glowD, 1.8);
@@ -483,6 +645,7 @@
     update: update,
     tuneLights: tuneLights,
     stats: stats,
+    boundary: boundary,
     preload: load,
     get kind() { return kind; },
     get info() { return { kind: kind, fit: fit, failed: failed, obstacles: obstaclesRef }; }
@@ -498,5 +661,11 @@
 
   log('ready, enabled=' + window.SceneGlb.enabled + (FORCE_PROC ? ' (?stage=proc)' : ''));
 })();
+
+
+
+
+
+
 
 
