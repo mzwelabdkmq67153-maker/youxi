@@ -1,0 +1,1197 @@
+{
+  "schema_version": "v1",
+  "generated_at": "2026-11-23T06:46:18.953612+00:00",
+  "project": "第七竞技场",
+  "note": "所有数字由脚本直接解析 GLB 得出；decode_vram 按 RGBA8 4B/px × mipmap 系数 1.33 计算。",
+  "loader_note": "GLTFLoader r128：baseColor/emissive 贴图设为 sRGBEncoding，其余贴图线性；显存一律按 RGBA8 计。",
+  "mipmap_coefficient": 1.33,
+  "models": {
+    "swordsman_idle": {
+      "nominal_height_m": 1.84,
+      "level_2k": {
+        "file": "swordsman_idle.glb",
+        "file_bytes": 4127728,
+        "buffer_bytes": 4102404,
+        "bufferView_total_bytes": 4102394,
+        "bin_chunk_bytes": 4102404,
+        "embedded_texture_bytes": 3031080,
+        "geometry_animation_bytes": 1071324,
+        "images": [
+          {
+            "image_index": 0,
+            "role": "normal",
+            "name": "warrior_character_3d_model_normal",
+            "mimeType": "image/png",
+            "width": 2048,
+            "height": 2048,
+            "embedded_bytes": 1981791,
+            "decode_vram": {
+              "bytes": 22313697.28,
+              "mib": 21.28
+            }
+          },
+          {
+            "image_index": 1,
+            "role": "baseColor",
+            "name": "warrior_character_3d_model_basecolor",
+            "mimeType": "image/jpeg",
+            "width": 2048,
+            "height": 2048,
+            "embedded_bytes": 554307,
+            "decode_vram": {
+              "bytes": 22313697.28,
+              "mib": 21.28
+            }
+          },
+          {
+            "image_index": 2,
+            "role": "metallicRoughness",
+            "name": "warrior_character_3d_model_rm",
+            "mimeType": "image/jpeg",
+            "width": 2048,
+            "height": 2048,
+            "embedded_bytes": 494982,
+            "decode_vram": {
+              "bytes": 22313697.28,
+              "mib": 21.28
+            }
+          }
+        ],
+        "materials": [
+          {
+            "index": 0,
+            "name": "MAT_Armor_Plate",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 1,
+            "name": "MAT_Cloth_Navy",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 2,
+            "name": "MAT_Leather_Black",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 3,
+            "name": "MAT_Skin",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 4,
+            "name": "MAT_Hair_Black",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 5,
+            "name": "MAT_Emissive_Cyan",
+            "emissiveFactor": [
+              0.070588,
+              0.882353,
+              1
+            ],
+            "doubleSided": false
+          }
+        ],
+        "primitives": [
+          {
+            "mesh": 0,
+            "primitive": 0,
+            "verts": 1671,
+            "tris": 1259,
+            "material": 0
+          },
+          {
+            "mesh": 0,
+            "primitive": 1,
+            "verts": 4270,
+            "tris": 3015,
+            "material": 1
+          },
+          {
+            "mesh": 0,
+            "primitive": 2,
+            "verts": 7143,
+            "tris": 6200,
+            "material": 2
+          },
+          {
+            "mesh": 0,
+            "primitive": 3,
+            "verts": 707,
+            "tris": 660,
+            "material": 3
+          },
+          {
+            "mesh": 0,
+            "primitive": 4,
+            "verts": 4844,
+            "tris": 3849,
+            "material": 4
+          },
+          {
+            "mesh": 0,
+            "primitive": 5,
+            "verts": 25,
+            "tris": 16,
+            "material": 5
+          }
+        ],
+        "primitive_count": 6,
+        "triangles": 14999,
+        "vertices": 18660,
+        "joints": 21,
+        "animations": [
+          {
+            "index": 0,
+            "name": "Idle_2s",
+            "channels": 63,
+            "frames": 49,
+            "duration_s": 2.041667
+          }
+        ],
+        "bbox_min": [
+          -0.38174,
+          0.001214,
+          -0.270993
+        ],
+        "bbox_max": [
+          0.381521,
+          1.835334,
+          0.27163
+        ],
+        "height_m_measured": 1.83412,
+        "node_count": 23,
+        "extensionsUsed": [
+          "KHR_materials_emissive_strength"
+        ]
+      },
+      "level_1024": {
+        "file": "swordsman_idle_1024.glb",
+        "file_bytes": 2267124,
+        "buffer_bytes": 2241824,
+        "bufferView_total_bytes": 2241815,
+        "bin_chunk_bytes": 2241824,
+        "embedded_texture_bytes": 1170501,
+        "geometry_animation_bytes": 1071323,
+        "images": [
+          {
+            "image_index": 0,
+            "role": "normal",
+            "name": "warrior_character_3d_model_normal",
+            "mimeType": "image/png",
+            "width": 1024,
+            "height": 1024,
+            "embedded_bytes": 610780,
+            "decode_vram": {
+              "bytes": 5578424.32,
+              "mib": 5.32
+            }
+          },
+          {
+            "image_index": 1,
+            "role": "baseColor",
+            "name": "warrior_character_3d_model_basecolor",
+            "mimeType": "image/jpeg",
+            "width": 1024,
+            "height": 1024,
+            "embedded_bytes": 289578,
+            "decode_vram": {
+              "bytes": 5578424.32,
+              "mib": 5.32
+            }
+          },
+          {
+            "image_index": 2,
+            "role": "metallicRoughness",
+            "name": "warrior_character_3d_model_rm",
+            "mimeType": "image/jpeg",
+            "width": 1024,
+            "height": 1024,
+            "embedded_bytes": 270143,
+            "decode_vram": {
+              "bytes": 5578424.32,
+              "mib": 5.32
+            }
+          }
+        ],
+        "materials": [
+          {
+            "index": 0,
+            "name": "MAT_Armor_Plate",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 1,
+            "name": "MAT_Cloth_Navy",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 2,
+            "name": "MAT_Leather_Black",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 3,
+            "name": "MAT_Skin",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 4,
+            "name": "MAT_Hair_Black",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 5,
+            "name": "MAT_Emissive_Cyan",
+            "emissiveFactor": [
+              0.070588,
+              0.882353,
+              1
+            ],
+            "doubleSided": false
+          }
+        ],
+        "primitives": [
+          {
+            "mesh": 0,
+            "primitive": 0,
+            "verts": 1671,
+            "tris": 1259,
+            "material": 0
+          },
+          {
+            "mesh": 0,
+            "primitive": 1,
+            "verts": 4270,
+            "tris": 3015,
+            "material": 1
+          },
+          {
+            "mesh": 0,
+            "primitive": 2,
+            "verts": 7143,
+            "tris": 6200,
+            "material": 2
+          },
+          {
+            "mesh": 0,
+            "primitive": 3,
+            "verts": 707,
+            "tris": 660,
+            "material": 3
+          },
+          {
+            "mesh": 0,
+            "primitive": 4,
+            "verts": 4844,
+            "tris": 3849,
+            "material": 4
+          },
+          {
+            "mesh": 0,
+            "primitive": 5,
+            "verts": 25,
+            "tris": 16,
+            "material": 5
+          }
+        ],
+        "primitive_count": 6,
+        "triangles": 14999,
+        "vertices": 18660,
+        "joints": 21,
+        "animations": [
+          {
+            "index": 0,
+            "name": "Idle_2s",
+            "channels": 63,
+            "frames": 49,
+            "duration_s": 2.041667
+          }
+        ],
+        "bbox_min": [
+          -0.38174,
+          0.001214,
+          -0.270993
+        ],
+        "bbox_max": [
+          0.381521,
+          1.835334,
+          0.27163
+        ],
+        "height_m_measured": 1.83412,
+        "node_count": 23,
+        "extensionsUsed": [
+          "KHR_materials_emissive_strength"
+        ]
+      },
+      "delta": {
+        "file_bytes": 1860604,
+        "embedded_texture_bytes": 1860579,
+        "file_ratio_1024_over_2k": 0.5492
+      }
+    },
+    "gunner_idle": {
+      "nominal_height_m": 1.89,
+      "level_2k": {
+        "file": "gunner_idle.glb",
+        "file_bytes": 4000772,
+        "buffer_bytes": 3975344,
+        "bufferView_total_bytes": 3975335,
+        "bin_chunk_bytes": 3975344,
+        "embedded_texture_bytes": 2996583,
+        "geometry_animation_bytes": 978761,
+        "images": [
+          {
+            "image_index": 0,
+            "role": "normal",
+            "name": "sci-fi_soldier_3d_model_normal",
+            "mimeType": "image/png",
+            "width": 2048,
+            "height": 2048,
+            "embedded_bytes": 2210286,
+            "decode_vram": {
+              "bytes": 22313697.28,
+              "mib": 21.28
+            }
+          },
+          {
+            "image_index": 1,
+            "role": "baseColor",
+            "name": "sci-fi_soldier_3d_model_basecolor",
+            "mimeType": "image/jpeg",
+            "width": 2048,
+            "height": 2048,
+            "embedded_bytes": 486031,
+            "decode_vram": {
+              "bytes": 22313697.28,
+              "mib": 21.28
+            }
+          },
+          {
+            "image_index": 2,
+            "role": "metallicRoughness",
+            "name": "sci-fi_soldier_3d_model_rm",
+            "mimeType": "image/jpeg",
+            "width": 2048,
+            "height": 2048,
+            "embedded_bytes": 300266,
+            "decode_vram": {
+              "bytes": 22313697.28,
+              "mib": 21.28
+            }
+          }
+        ],
+        "materials": [
+          {
+            "index": 0,
+            "name": "MAT_Armor_Plate",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 1,
+            "name": "MAT_Cloth_Navy",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 2,
+            "name": "MAT_Leather_Black",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 3,
+            "name": "MAT_Skin",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 4,
+            "name": "MAT_Hair_Black",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 5,
+            "name": "MAT_Emissive_Cyan",
+            "emissiveFactor": [
+              0.070588,
+              0.882353,
+              1
+            ],
+            "doubleSided": false
+          }
+        ],
+        "primitives": [
+          {
+            "mesh": 0,
+            "primitive": 0,
+            "verts": 833,
+            "tris": 485,
+            "material": 0
+          },
+          {
+            "mesh": 0,
+            "primitive": 1,
+            "verts": 9941,
+            "tris": 10820,
+            "material": 1
+          },
+          {
+            "mesh": 0,
+            "primitive": 2,
+            "verts": 2241,
+            "tris": 1784,
+            "material": 2
+          },
+          {
+            "mesh": 0,
+            "primitive": 3,
+            "verts": 279,
+            "tris": 274,
+            "material": 3
+          },
+          {
+            "mesh": 0,
+            "primitive": 4,
+            "verts": 3055,
+            "tris": 2342,
+            "material": 4
+          },
+          {
+            "mesh": 0,
+            "primitive": 5,
+            "verts": 415,
+            "tris": 295,
+            "material": 5
+          }
+        ],
+        "primitive_count": 6,
+        "triangles": 16000,
+        "vertices": 16764,
+        "joints": 21,
+        "animations": [
+          {
+            "index": 0,
+            "name": "Idle_2s",
+            "channels": 63,
+            "frames": 49,
+            "duration_s": 2.041667
+          }
+        ],
+        "bbox_min": [
+          -0.415385,
+          0.000392,
+          -0.301538
+        ],
+        "bbox_max": [
+          0.413922,
+          1.890244,
+          0.301086
+        ],
+        "height_m_measured": 1.889851,
+        "node_count": 23,
+        "extensionsUsed": [
+          "KHR_materials_emissive_strength"
+        ]
+      },
+      "level_1024": {
+        "file": "gunner_idle_1024.glb",
+        "file_bytes": 2070544,
+        "buffer_bytes": 2045200,
+        "bufferView_total_bytes": 2045193,
+        "bin_chunk_bytes": 2045200,
+        "embedded_texture_bytes": 1066441,
+        "geometry_animation_bytes": 978759,
+        "images": [
+          {
+            "image_index": 0,
+            "role": "normal",
+            "name": "sci-fi_soldier_3d_model_normal",
+            "mimeType": "image/png",
+            "width": 1024,
+            "height": 1024,
+            "embedded_bytes": 647882,
+            "decode_vram": {
+              "bytes": 5578424.32,
+              "mib": 5.32
+            }
+          },
+          {
+            "image_index": 1,
+            "role": "baseColor",
+            "name": "sci-fi_soldier_3d_model_basecolor",
+            "mimeType": "image/jpeg",
+            "width": 1024,
+            "height": 1024,
+            "embedded_bytes": 257303,
+            "decode_vram": {
+              "bytes": 5578424.32,
+              "mib": 5.32
+            }
+          },
+          {
+            "image_index": 2,
+            "role": "metallicRoughness",
+            "name": "sci-fi_soldier_3d_model_rm",
+            "mimeType": "image/jpeg",
+            "width": 1024,
+            "height": 1024,
+            "embedded_bytes": 161256,
+            "decode_vram": {
+              "bytes": 5578424.32,
+              "mib": 5.32
+            }
+          }
+        ],
+        "materials": [
+          {
+            "index": 0,
+            "name": "MAT_Armor_Plate",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 1,
+            "name": "MAT_Cloth_Navy",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 2,
+            "name": "MAT_Leather_Black",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 3,
+            "name": "MAT_Skin",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 4,
+            "name": "MAT_Hair_Black",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 5,
+            "name": "MAT_Emissive_Cyan",
+            "emissiveFactor": [
+              0.070588,
+              0.882353,
+              1
+            ],
+            "doubleSided": false
+          }
+        ],
+        "primitives": [
+          {
+            "mesh": 0,
+            "primitive": 0,
+            "verts": 833,
+            "tris": 485,
+            "material": 0
+          },
+          {
+            "mesh": 0,
+            "primitive": 1,
+            "verts": 9941,
+            "tris": 10820,
+            "material": 1
+          },
+          {
+            "mesh": 0,
+            "primitive": 2,
+            "verts": 2241,
+            "tris": 1784,
+            "material": 2
+          },
+          {
+            "mesh": 0,
+            "primitive": 3,
+            "verts": 279,
+            "tris": 274,
+            "material": 3
+          },
+          {
+            "mesh": 0,
+            "primitive": 4,
+            "verts": 3055,
+            "tris": 2342,
+            "material": 4
+          },
+          {
+            "mesh": 0,
+            "primitive": 5,
+            "verts": 415,
+            "tris": 295,
+            "material": 5
+          }
+        ],
+        "primitive_count": 6,
+        "triangles": 16000,
+        "vertices": 16764,
+        "joints": 21,
+        "animations": [
+          {
+            "index": 0,
+            "name": "Idle_2s",
+            "channels": 63,
+            "frames": 49,
+            "duration_s": 2.041667
+          }
+        ],
+        "bbox_min": [
+          -0.415385,
+          0.000392,
+          -0.301538
+        ],
+        "bbox_max": [
+          0.413922,
+          1.890244,
+          0.301086
+        ],
+        "height_m_measured": 1.889851,
+        "node_count": 23,
+        "extensionsUsed": [
+          "KHR_materials_emissive_strength"
+        ]
+      },
+      "delta": {
+        "file_bytes": 1930228,
+        "embedded_texture_bytes": 1930142,
+        "file_ratio_1024_over_2k": 0.5175
+      }
+    },
+    "mage_idle": {
+      "nominal_height_m": 1.96,
+      "level_2k": {
+        "file": "mage_idle.glb",
+        "file_bytes": 3595808,
+        "buffer_bytes": 3570552,
+        "bufferView_total_bytes": 3570542,
+        "bin_chunk_bytes": 3570552,
+        "embedded_texture_bytes": 2748062,
+        "geometry_animation_bytes": 822490,
+        "images": [
+          {
+            "image_index": 0,
+            "role": "normal",
+            "name": "mage_character_3d_model_normal",
+            "mimeType": "image/png",
+            "width": 2048,
+            "height": 2048,
+            "embedded_bytes": 2017310,
+            "decode_vram": {
+              "bytes": 22313697.28,
+              "mib": 21.28
+            }
+          },
+          {
+            "image_index": 1,
+            "role": "baseColor",
+            "name": "mage_character_3d_model_basecolor",
+            "mimeType": "image/jpeg",
+            "width": 2048,
+            "height": 2048,
+            "embedded_bytes": 378182,
+            "decode_vram": {
+              "bytes": 22313697.28,
+              "mib": 21.28
+            }
+          },
+          {
+            "image_index": 2,
+            "role": "metallicRoughness",
+            "name": "mage_character_3d_model_rm",
+            "mimeType": "image/jpeg",
+            "width": 2048,
+            "height": 2048,
+            "embedded_bytes": 352570,
+            "decode_vram": {
+              "bytes": 22313697.28,
+              "mib": 21.28
+            }
+          }
+        ],
+        "materials": [
+          {
+            "index": 0,
+            "name": "MAT_Armor_Plate",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 1,
+            "name": "MAT_Cloth_Purple",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 2,
+            "name": "MAT_Leather_Black",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 3,
+            "name": "MAT_Skin",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 4,
+            "name": "MAT_Hair_Black",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 5,
+            "name": "MAT_Emissive_Purple",
+            "emissiveFactor": [
+              0.652632,
+              0.231579,
+              1
+            ],
+            "doubleSided": false
+          }
+        ],
+        "primitives": [
+          {
+            "mesh": 0,
+            "primitive": 0,
+            "verts": 1461,
+            "tris": 1160,
+            "material": 0
+          },
+          {
+            "mesh": 0,
+            "primitive": 1,
+            "verts": 9710,
+            "tris": 10829,
+            "material": 1
+          },
+          {
+            "mesh": 0,
+            "primitive": 2,
+            "verts": 1050,
+            "tris": 872,
+            "material": 2
+          },
+          {
+            "mesh": 0,
+            "primitive": 3,
+            "verts": 557,
+            "tris": 394,
+            "material": 3
+          },
+          {
+            "mesh": 0,
+            "primitive": 4,
+            "verts": 941,
+            "tris": 597,
+            "material": 4
+          },
+          {
+            "mesh": 0,
+            "primitive": 5,
+            "verts": 271,
+            "tris": 148,
+            "material": 5
+          }
+        ],
+        "primitive_count": 6,
+        "triangles": 14000,
+        "vertices": 13990,
+        "joints": 21,
+        "animations": [
+          {
+            "index": 0,
+            "name": "Idle_2s",
+            "channels": 63,
+            "frames": 49,
+            "duration_s": 2.041667
+          }
+        ],
+        "bbox_min": [
+          -0.596113,
+          -0.000379,
+          -0.559636
+        ],
+        "bbox_max": [
+          0.595692,
+          1.960025,
+          0.559514
+        ],
+        "height_m_measured": 1.960404,
+        "node_count": 23,
+        "extensionsUsed": [
+          "KHR_materials_emissive_strength"
+        ]
+      },
+      "level_1024": {
+        "file": "mage_idle_1024.glb",
+        "file_bytes": 1821360,
+        "buffer_bytes": 1796188,
+        "bufferView_total_bytes": 1796180,
+        "bin_chunk_bytes": 1796188,
+        "embedded_texture_bytes": 973700,
+        "geometry_animation_bytes": 822488,
+        "images": [
+          {
+            "image_index": 0,
+            "role": "normal",
+            "name": "mage_character_3d_model_normal",
+            "mimeType": "image/png",
+            "width": 1024,
+            "height": 1024,
+            "embedded_bytes": 578067,
+            "decode_vram": {
+              "bytes": 5578424.32,
+              "mib": 5.32
+            }
+          },
+          {
+            "image_index": 1,
+            "role": "baseColor",
+            "name": "mage_character_3d_model_basecolor",
+            "mimeType": "image/jpeg",
+            "width": 1024,
+            "height": 1024,
+            "embedded_bytes": 203484,
+            "decode_vram": {
+              "bytes": 5578424.32,
+              "mib": 5.32
+            }
+          },
+          {
+            "image_index": 2,
+            "role": "metallicRoughness",
+            "name": "mage_character_3d_model_rm",
+            "mimeType": "image/jpeg",
+            "width": 1024,
+            "height": 1024,
+            "embedded_bytes": 192149,
+            "decode_vram": {
+              "bytes": 5578424.32,
+              "mib": 5.32
+            }
+          }
+        ],
+        "materials": [
+          {
+            "index": 0,
+            "name": "MAT_Armor_Plate",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 1,
+            "name": "MAT_Cloth_Purple",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 2,
+            "name": "MAT_Leather_Black",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 3,
+            "name": "MAT_Skin",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 4,
+            "name": "MAT_Hair_Black",
+            "emissiveFactor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "doubleSided": false
+          },
+          {
+            "index": 5,
+            "name": "MAT_Emissive_Purple",
+            "emissiveFactor": [
+              0.652632,
+              0.231579,
+              1
+            ],
+            "doubleSided": false
+          }
+        ],
+        "primitives": [
+          {
+            "mesh": 0,
+            "primitive": 0,
+            "verts": 1461,
+            "tris": 1160,
+            "material": 0
+          },
+          {
+            "mesh": 0,
+            "primitive": 1,
+            "verts": 9710,
+            "tris": 10829,
+            "material": 1
+          },
+          {
+            "mesh": 0,
+            "primitive": 2,
+            "verts": 1050,
+            "tris": 872,
+            "material": 2
+          },
+          {
+            "mesh": 0,
+            "primitive": 3,
+            "verts": 557,
+            "tris": 394,
+            "material": 3
+          },
+          {
+            "mesh": 0,
+            "primitive": 4,
+            "verts": 941,
+            "tris": 597,
+            "material": 4
+          },
+          {
+            "mesh": 0,
+            "primitive": 5,
+            "verts": 271,
+            "tris": 148,
+            "material": 5
+          }
+        ],
+        "primitive_count": 6,
+        "triangles": 14000,
+        "vertices": 13990,
+        "joints": 21,
+        "animations": [
+          {
+            "index": 0,
+            "name": "Idle_2s",
+            "channels": 63,
+            "frames": 49,
+            "duration_s": 2.041667
+          }
+        ],
+        "bbox_min": [
+          -0.596113,
+          -0.000379,
+          -0.559636
+        ],
+        "bbox_max": [
+          0.595692,
+          1.960025,
+          0.559514
+        ],
+        "height_m_measured": 1.960404,
+        "node_count": 23,
+        "extensionsUsed": [
+          "KHR_materials_emissive_strength"
+        ]
+      },
+      "delta": {
+        "file_bytes": 1774448,
+        "embedded_texture_bytes": 1774362,
+        "file_ratio_1024_over_2k": 0.5065
+      }
+    }
+  },
+  "scenario_assumptions": "同屏敌人从 swordsman/gunner/mage 三份 GLB 复用；全 2K 档场上最多 3 份唯一 GLB（主角职业与敌人池重合时同 URL 共享）；敌人 1024 档为 1 份主角 2K 变体 + 最多 3 份敌人 1024 变体。贴图/几何按唯一变体计一次，实例数增加不重复占贴图显存。",
+  "scenarios": [
+    {
+      "label": "主角1 + 敌人3 · 全2K",
+      "hero_instances": 1,
+      "enemy_instances": 3,
+      "unique_variants": 3,
+      "hero_level": "2k",
+      "enemy_level": "2k",
+      "note": "同 URL 同模型多实例共享 texture 与 geometry，不重复占贴图/几何显存；仅各自持有蒙皮姿态与绘制调用。敌人 1024 与主角 2K 是不同 URL/变体，贴图不跨档共享。",
+      "texture_decode_vram_mib": 191.52,
+      "hero_texture_vram_mib": 63.84,
+      "enemy_texture_vram_mib": 127.68,
+      "compressed_file_bytes_unique": 11724308,
+      "compressed_file_mib_unique": 11.181
+    },
+    {
+      "label": "主角1 + 敌人3 · 敌人1024",
+      "hero_instances": 1,
+      "enemy_instances": 3,
+      "unique_variants": 4,
+      "hero_level": "2k",
+      "enemy_level": "1024",
+      "note": "同 URL 同模型多实例共享 texture 与 geometry，不重复占贴图/几何显存；仅各自持有蒙皮姿态与绘制调用。敌人 1024 与主角 2K 是不同 URL/变体，贴图不跨档共享。",
+      "texture_decode_vram_mib": 111.72,
+      "hero_texture_vram_mib": 63.84,
+      "enemy_texture_vram_mib": 47.88,
+      "compressed_file_bytes_unique": 10286756,
+      "compressed_file_mib_unique": 9.81
+    },
+    {
+      "label": "主角1 + 敌人6 · 全2K",
+      "hero_instances": 1,
+      "enemy_instances": 6,
+      "unique_variants": 3,
+      "hero_level": "2k",
+      "enemy_level": "2k",
+      "note": "同 URL 同模型多实例共享 texture 与 geometry，不重复占贴图/几何显存；仅各自持有蒙皮姿态与绘制调用。敌人 1024 与主角 2K 是不同 URL/变体，贴图不跨档共享。",
+      "texture_decode_vram_mib": 191.52,
+      "hero_texture_vram_mib": 63.84,
+      "enemy_texture_vram_mib": 127.68,
+      "compressed_file_bytes_unique": 11724308,
+      "compressed_file_mib_unique": 11.181
+    },
+    {
+      "label": "主角1 + 敌人6 · 敌人1024",
+      "hero_instances": 1,
+      "enemy_instances": 6,
+      "unique_variants": 4,
+      "hero_level": "2k",
+      "enemy_level": "1024",
+      "note": "同 URL 同模型多实例共享 texture 与 geometry，不重复占贴图/几何显存；仅各自持有蒙皮姿态与绘制调用。敌人 1024 与主角 2K 是不同 URL/变体，贴图不跨档共享。",
+      "texture_decode_vram_mib": 111.72,
+      "hero_texture_vram_mib": 63.84,
+      "enemy_texture_vram_mib": 47.88,
+      "compressed_file_bytes_unique": 10286756,
+      "compressed_file_mib_unique": 9.81
+    }
+  ]
+}

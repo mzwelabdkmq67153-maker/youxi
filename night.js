@@ -581,12 +581,15 @@
       var bf = ArenaArt.buildFighter;
       if (bf) ArenaArt.buildFighter = function (type) {
         var o = bf.apply(this, arguments);
+        // GLB 档是异步挂载：此刻组还是空壳，等模型挂上后由 glb3d 调 NightGrade 补做
+        if (o && o.userData && o.userData.glbPending) { o.userData.nightSil = 0.62; return o; }
         try { silhouette(o, 0.62); } catch (e) { }
         return o;
       };
       var bh = ArenaArt.buildHero;
       if (bh) ArenaArt.buildHero = function (key) {
         var o = bh.apply(this, arguments);
+        if (o && o.userData && o.userData.glbPending) { o.userData.nightSil = 0.66; return o; }
         try { silhouette(o, 0.66); } catch (e) { }
         return o;
       };
@@ -641,6 +644,18 @@
     tick: tick,
     stats: function () {
       return { kind: state.kind, braziers: state.braziers.length, embers: state.emberData ? state.emberData.length : 0 };
+    }
+  };
+
+  /* 异步资产（GLB）挂载后补做剪影化：压暗公式与面罩光只保留这一份，外部不要再复制 */
+  window.NightGrade = {
+    active: function () { return hooked; },
+    dim: function (root, k) { dimMaterials(root, k == null ? 0.62 : k); },
+    silhouette: function (root, k) {
+      if (!root) return root;
+      root.userData = root.userData || {};
+      root.userData.__sil = false;           // 允许对同一组重做一次
+      return silhouette(root, k == null ? 0.62 : k);
     }
   };
 })();
