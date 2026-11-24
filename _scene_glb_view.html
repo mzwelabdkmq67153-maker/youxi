@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>场景模型档 · 单页查看</title>
+<style>
+  html,body{margin:0;background:#0b0f12;overflow:hidden}
+  #diag{position:fixed;left:12px;top:10px;color:#7fe6ff;font:13px/1.5 monospace;text-shadow:0 0 6px #000;z-index:9;max-width:60vw}
+</style>
+</head>
+<body>
+<div id="diag">…</div>
+<script src="vendor/three.min.js"></script>
+<script src="vendor/GLTFLoader.js"></script>
+<script src="scene.js"></script>
+<script src="scene_glb.js"></script>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var kind = q.get('k') === 'arena' ? 'arena' : 'dungeon';
+  var view = q.get('v') || 'in';
+
+  var renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(1280, 720);
+  renderer.setPixelRatio(1);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.9;
+  window.__renderer = renderer;
+  document.body.appendChild(renderer.domElement);
+
+  var scene = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera(55, 1280 / 720, 0.1, 400);
+  if (view === 'out') {
+    camera.position.set(0, kind === 'arena' ? 46 : 60, kind === 'arena' ? 62 : 52);
+    camera.lookAt(0, kind === 'arena' ? 2 : 8, 0);
+  } else {
+    camera.position.set(0, 1.7, kind === 'arena' ? 8 : -10);
+    camera.lookAt(0, 2.2, kind === 'arena' ? -10 : 12);
+  }
+
+  scene.add(new THREE.HemisphereLight(0x9fc8e6, 0x243038, 0.75));
+  var key = new THREE.DirectionalLight(0xfff2dc, 1.0);
+  key.position.set(30, 45, 20);
+  scene.add(key);
+  var fill = new THREE.DirectionalLight(0x4a7bd6, 0.35);
+  fill.position.set(-25, 20, -30);
+  scene.add(fill);
+
+  var bright = q.get('bright') === '1';
+  if (bright) {
+    renderer.toneMappingExposure = 1.7;
+    scene.add(new THREE.AmbientLight(0xffffff, 1.4));
+    key.intensity = 2.2;
+    fill.intensity = 0.8;
+  }
+
+  if (q.get('probe') === '1') {
+    var pb = new THREE.Mesh(new THREE.BoxGeometry(6, 6, 6), new THREE.MeshBasicMaterial({ color: 0x00ff88 }));
+    pb.position.set(0, 3, view === 'out' ? 0 : -2);
+    scene.add(pb);
+  }
+
+  if (q.get('dup') === '1') window.__dup = true;
+
+  if (q.get('nofog') === '1') scene.fog = null;
+
+  var obstacles = [];
+  SceneGlb.build(kind, scene, obstacles);
+  SceneGlb.tuneLights(scene);
+
+  if (q.get('test') === 'basic') {
+    /* 诊断：把模型换成纯红 Basic，验证几何与变换是否到位 */
+    var red = new THREE.MeshBasicMaterial({ color: 0xff2222, side: THREE.DoubleSide, wireframe: q.get('wire') === '1' });
+    var D = window.__sceneGlbDebug;
+    if (D && D.root) D.root.traverse(function (o) { if (o.isMesh) o.material = red; });
+  }
+
+  var shown = 0;
+  function frame() {
+    SceneGlb.update(0.016);
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+    if (shown < 3) { shown++; }
+  }
+  frame();
+
+  setTimeout(function () {
+    var s = SceneGlb.stats();
+    var box = new THREE.Box3().setFromObject(scene);
+    var D = window.__sceneGlbDebug;
+    var rb = D && D.root ? new THREE.Box3().setFromObject(D.root) : null;
+    var rp = rb ? ' rb[' + rb.min.x.toFixed(1) + ',' + rb.min.y.toFixed(1) + ',' + rb.min.z.toFixed(1) + ']~[' + rb.max.x.toFixed(1) + ',' + rb.max.y.toFixed(1) + ',' + rb.max.z.toFixed(1) + ']' : '';
+    var parent = D && D.root && D.root.parent ? (D.root.parent.name || D.root.parent.type) : 'none';
+    var meshInfo = [];
+    var nan = 0, chain = '';
+    if (D && D.root) {
+      var an = D.root;
+      while (an) { chain += (an.name || an.type) + '(v' + (an.visible ? 1 : 0) + ')>'; an = an.parent; }
+    }
+    if (D && D.root) D.root.traverse(function (o) {
+      if (!o.isMesh) return;
+      var g = o.geometry;
+      var pa = g.attributes.position ? g.attributes.position.array : [];
+      for (var i = 0; i < pa.length; i++) if (!isFinite(pa[i])) { nan++; }
+      if (window.__dup && !window.__dupDone) {
+        window.__dupDone = 1;
+        var dm = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xff3366, side: THREE.DoubleSide }));
+        dm.position.set(0, 4, 6); dm.scale.setScalar(0.18); scene.add(dm);
+      }
+      var mat = o.material || {};
+      meshInfo.push('chain=' + chain);
+      meshInfo.push([
+        o.name || 'mesh', 'vis=' + (o.visible ? 1 : 0), 'fc=' + (o.frustumCulled ? 1 : 0),
+        'lv=' + o.layers.mask, 'nan=' + nan, 't=' + mat.type,
+        'op=' + (mat.opacity === undefined ? '-' : mat.opacity),
+        'cw=' + (mat.colorWrite === false ? 0 : 1), 'dw=' + (mat.depthWrite === false ? 0 : 1),
+        'tr=' + (mat.transparent ? 1 : 0)
+      ].join(' '));
+    });
+    document.getElementById('diag').textContent =
+      kind + ' / ' + view + ' · tris ' + s.tris + ' · scale ' + (s.scale || 0).toFixed(2) +
+      ' · bboxY ' + box.min.y.toFixed(1) + '~' + box.max.y.toFixed(1) +
+      ' · ' + (s.ready ? 'ready' : 'loading') + rp + ' parent=' + parent +
+      ' · drawnTris ' + renderer.info.render.triangles + ' calls ' + renderer.info.render.calls +
+      '\n' + meshInfo.join('\n');
+    renderer.render(scene, camera);
+    var hi = 'manualRender drawn=' + renderer.info.render.triangles + ' calls=' + renderer.info.render.calls +
+      ' kids=' + scene.children.length + ' progs=' + renderer.info.programs.length;
+    document.title = hi + ' | ' + meshInfo.join(' | ');
+  }, 2500);
+})();
+</script>
+</body>
+</html>

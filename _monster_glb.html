@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>Monster GLB 验收</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0d1116; overflow: hidden; }
+  #hud { position: fixed; left: 12px; top: 10px; color: #cfe3f5; font: 12px/1.6 ui-monospace, monospace; z-index: 5;
+         background: rgba(8,12,18,.72); padding: 8px 10px; border-radius: 8px; white-space: pre; }
+</style>
+</head>
+<body>
+<div id="hud">loading…</div>
+<script src="vendor/three.min.js"></script>
+<script src="vendor/GLTFLoader.js"></script>
+<script src="vendor/SkeletonUtils.js"></script>
+<script src="glb3d.js"></script>
+<script>
+(function () {
+  var qs = new URLSearchParams(location.search);
+  var spin = qs.get('spin') !== '0';
+  var view = qs.get('view') || 'front';
+
+  var renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(1);
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
+  document.body.appendChild(renderer.domElement);
+  window.__renderer = renderer;
+
+  var scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x101820);
+
+  var pm = new THREE.PMREMGenerator(renderer);
+  // 程序化天穹：给 GLB 材质补环境反射，避免发黑
+  var envScene = new THREE.Scene();
+  var sky = new THREE.Mesh(
+    new THREE.SphereGeometry(60, 16, 12),
+    new THREE.MeshBasicMaterial({ color: 0x2a3a4c, side: THREE.BackSide })
+  );
+  envScene.add(sky);
+  var lamp = new THREE.Mesh(new THREE.SphereGeometry(6, 12, 8), new THREE.MeshBasicMaterial({ color: 0xbcd2ea }));
+  lamp.position.set(24, 30, 18);
+  envScene.add(lamp);
+  scene.environment = pm.fromScene(envScene, 0.06).texture;
+
+  scene.add(new THREE.HemisphereLight(0xa9c3dd, 0x2b323b, 0.85));
+  var key = new THREE.DirectionalLight(0xfff2e0, 1.35);
+  key.position.set(6, 12, 8);
+  scene.add(key);
+  var rim = new THREE.DirectionalLight(0x8fb6ff, 0.75);
+  rim.position.set(-8, 6, -10);
+  scene.add(rim);
+
+  var ground = new THREE.Mesh(
+    new THREE.CircleGeometry(16, 40),
+    new THREE.MeshStandardMaterial({ color: 0x39434e, roughness: 0.92, metalness: 0.05 })
+  );
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  var camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 200);
+  camera.position.set(0, 3.2, 13.5);
+  camera.lookAt(0, 1.5, 0);
+
+  var specs = [
+    { kind: 'grunt',  x: -4.6, rot: 0 },
+    { kind: 'golem',  x: 0.0,  rot: 0 },
+    { kind: 'warden', x: 4.8,  rot: 0 },
+    { kind: 'shooter', x: -9.4, rot: 0 },
+    { kind: 'elite', x: 9.4, rot: 0 },
+    { kind: 'hexer', x: -14.2, rot: 0 },
+    { kind: 'boss', x: 14.2, rot: 0 }
+  ];
+
+  var built = [];
+  specs.forEach(function (s) {
+    var root = Glb3D.build(s.kind, {});
+    root.position.set(s.x, 0, 0);
+    var scale = (window.ArenaArt && ArenaArt.scaleOf) ? ArenaArt.scaleOf(s.kind) : 1;
+    root.scale.setScalar(scale || 1);
+    root.rotation.y = s.rot;
+    scene.add(root);
+    built.push({ root: root, kind: s.kind, scale: scale });
+  });
+
+  var t0 = performance.now();
+  var stats = {};
+  var rotDbg = qs.get('rot');
+  if (rotDbg) {
+    setTimeout(function () {
+      built.forEach(function (b) {
+        if (!b.root.userData.glb) return;
+        b.root.userData.glb.inner.rotation.x += parseFloat(rotDbg);
+      });
+    }, 1600);
+  }
+  function frame(now) {
+    var dt = Math.min(0.05, (now - t0) / 1000);
+    t0 = now;
+    built.forEach(function (b) {
+      Glb3D.update(b.root, dt, { speed: 0, aim: false, hitT: 0 });
+    });
+    if (spin) scene.rotation.y += dt * 0.0;
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // 视角切换：正面 / 侧面 / 背面
+  var focus = qs.get('focus');
+  var cams = {
+    front: [[0, 3.2, 13.5], [0, 1.5, 0]],
+    side:  [[13.5, 3.0, 0.6], [0, 1.4, 0.6]],
+    back:  [[0, 3.2, -13.5], [0, 1.5, 0]]
+  };
+  if (focus) {
+    var f = specs.filter(function (s) { return s.kind === focus; })[0];
+    if (f) {
+      cams = {
+        front: [[f.x, 2.2, 6.2], [f.x, 1.2, 0]],
+        side:  [[f.x + 6.2, 2.2, 0.4], [f.x, 1.2, 0.4]],
+        back:  [[f.x, 2.2, -6.2], [f.x, 1.2, 0]]
+      };
+    }
+  }
+  var c = cams[view] || cams.front;
+  camera.position.set(c[0][0], c[0][1], c[0][2]);
+  camera.lookAt(c[1][0], c[1][1], c[1][2]);
+
+  // 诊断：写进 title，供页面外读取
+  setTimeout(function () {
+    var lines = [];
+    built.forEach(function (b) {
+      var st = Glb3D.stats(b.root);
+      var r = b.root.userData.glb;
+      lines.push(b.kind + ' tris=' + st.tris + ' h=' + st.height + ' rootScale=' + b.scale +
+        ' static=' + (r && r.static ? 1 : 0) + ' model=' + (r ? r.model : '?') +
+        ' fb=' + (b.root.userData.glbFallback ? 1 : 0) + ' pend=' + (b.root.userData.glbPending ? 1 : 0));
+    });
+    document.getElementById('hud').textContent = lines.join('\n');
+    document.title = 'DIAG ' + JSON.stringify(lines);
+  }, 2600);
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === '1') { camera.position.set(0, 2.6, 9.2); camera.lookAt(0, 1.5, 0); }
+    if (e.key === '2') { camera.position.set(9.4, 2.4, 0.4); camera.lookAt(0, 1.4, 0.4); }
+    if (e.key === '3') { camera.position.set(0, 2.6, -9.2); camera.lookAt(0, 1.5, 0); }
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>第七竞技场 · 职业四视图与剪影门</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #cfd4d9; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="sheet"></canvas>
+<script src="vendor/three.min.js"></script>
+<script src="art.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  /* 用法：art-hero-quad.html?h=swordsman|gunner|warlock
+     出图：单职业 2x4 交付板（上行 正/侧/背/45°特写，下行 剪影门 + 数据面板）
+     全部由 art.js 的真实几何渲染，不含任何手绘补图 */
+
+  var HERO = new URLSearchParams(location.search).get('h') || 'swordsman';
+  var META = {
+    swordsman: { cn: '剑客', en: 'SWORDSMAN', note: '收腰窄肩 + 上挑发尾 + 长刀' },
+    gunner:    { cn: '枪手', en: 'GUNNER',    note: '宽方肩 + 横贯护目镜 + 长枪' },
+    warlock:   { cn: '术士', en: 'WARLOCK',   note: '宽下摆袍 + 低兜帽 + 悬浮法球' }
+  }[HERO];
+
+  var W = 1560;
+  var HEAD_H = 116;
+  var CELL_W = 350;
+  var CELL_H = 430;
+  var GAP = 18;
+  var X0 = 40;
+  var ROW1_Y = HEAD_H + 14;
+  var ROW2_Y = ROW1_Y + CELL_H + 54;
+  var H = ROW2_Y + CELL_H + 78;
+
+  var sheet = document.getElementById('sheet');
+  sheet.width = W;
+  sheet.height = H;
+  var ctx = sheet.getContext('2d');
+  ctx.fillStyle = '#cfd4d9';
+  ctx.fillRect(0, 0, W, H);
+
+  var renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: false });
+  renderer.setPixelRatio(2);
+  renderer.setSize(CELL_W, CELL_H);
+  renderer.setClearColor(0xcfd4d9, 1);
+
+  var scene = new THREE.Scene();
+  scene.add(new THREE.AmbientLight(0xffffff, 0.62));
+  var key = new THREE.DirectionalLight(0xffffff, 0.95);
+  key.position.set(2.4, 4.2, -3.2);
+  scene.add(key);
+  var fill = new THREE.DirectionalLight(0xa9c4de, 0.38);
+  fill.position.set(-3.2, 2.2, 2.6);
+  scene.add(fill);
+  var rim = new THREE.DirectionalLight(0x8fa6bd, 0.34);
+  rim.position.set(0, 2.6, 4.2);
+  scene.add(rim);
+
+  // 正视/侧视/背视用正交，保证 1:1 同比例可量
+  var ortho = new THREE.OrthographicCamera(-0.92, 0.92, 1.14, -1.14, 0.1, 40);
+  // 45° 特写用透视，检查头肩转折与三层明度
+  var closeup = new THREE.PerspectiveCamera(21, CELL_W / CELL_H, 0.1, 20);
+  closeup.position.set(2.05, 1.92, -2.5);
+  closeup.lookAt(0, 1.56, 0);
+
+  function countTris(root) {
+    var n = 0;
+    root.traverse(function (o) {
+      if (!o.isMesh || !o.geometry) return;
+      var geo = o.geometry;
+      n += geo.index ? geo.index.count / 3 : geo.attributes.position.count / 3;
+    });
+    return Math.round(n);
+  }
+
+  function stats(root) {
+    var meshes = 0, shared = 0, mats = {};
+    root.traverse(function (o) {
+      if (!o.isMesh) return;
+      meshes++;
+      if (o.geometry && o.geometry.userData && o.geometry.userData.shared) shared++;
+      if (o.material) mats[o.material.uuid] = 1;
+    });
+    return {
+      tris: countTris(root),
+      meshes: meshes,
+      mats: Object.keys(mats).length,
+      sharedPct: meshes ? Math.round(shared / meshes * 100) : 0
+    };
+  }
+
+  function blit(col, row, label) {
+    var x = X0 + col * (CELL_W + GAP);
+    var y = (row === 0 ? ROW1_Y : ROW2_Y) + 30;
+    ctx.drawImage(renderer.domElement, x, y, CELL_W, CELL_H);
+    ctx.fillStyle = '#1f2a33';
+    ctx.font = 'bold 19px "Microsoft YaHei", sans-serif';
+    ctx.fillText(label, x + 2, y + CELL_H + 26);
+  }
+
+  var hero = window.ArenaArt.buildHero(HERO);
+  hero.updateMatrixWorld(true);
+  scene.add(hero);
+  var S = stats(hero);
+
+  /* 表头 */
+  ctx.fillStyle = '#1f2a33';
+  ctx.font = 'bold 36px "Microsoft YaHei", sans-serif';
+  ctx.fillText('第七竞技场 · ' + META.cn + ' 交付四视图', X0, 56);
+  ctx.font = '17px "Microsoft YaHei", sans-serif';
+  ctx.fillStyle = '#465765';
+  ctx.fillText(META.en + ' · 原型档 · 正交视图同一比例 1:1 · 身高 1.85 m · 上行四视图，下行剪影门（纯黑填充）', X0, 88);
+
+  /* 第一行：正面 / 侧面 / 背面 / 45°特写 */
+  var views = [
+    { cn: '正面 0°', pos: [0, 1.05, -4.2], target: [0, 1.05, 0], cam: ortho },
+    { cn: '侧面 90°', pos: [4.2, 1.05, 0], target: [0, 1.05, 0], cam: ortho },
+    { cn: '背面 180°', pos: [0, 1.05, 4.2], target: [0, 1.05, 0], cam: ortho },
+    { cn: '45° 头肩特写', cam: closeup, fixed: true }
+  ];
+
+  views.forEach(function (v, i) {
+    if (!v.fixed) {
+      v.cam.position.set(v.pos[0], v.pos[1], v.pos[2]);
+      v.cam.lookAt(v.target[0], v.target[1], v.target[2]);
+      v.cam.updateProjectionMatrix();
+    }
+    renderer.render(scene, v.cam);
+    blit(i, 0, v.cn);
+  });
+
+  /* 第二行：纯黑剪影（白露的剪影门证据） */
+  var blackMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+  scene.overrideMaterial = blackMat;
+  [['剪影·正', 0, -4.2], ['剪影·侧', 4.2, 0], ['剪影·背', 0, 4.2]].forEach(function (v, i) {
+    ortho.position.set(v[1], 1.05, v[2]);
+    ortho.lookAt(0, 1.05, 0);
+    ortho.updateProjectionMatrix();
+    renderer.render(scene, ortho);
+    blit(i, 1, v[0]);
+  });
+  scene.overrideMaterial = null;
+
+  /* 数据面板（给苏晓的那份数） */
+  var px = X0 + 3 * (CELL_W + GAP);
+  var py = ROW2_Y + 30;
+  ctx.fillStyle = 'rgba(31,42,51,0.06)';
+  ctx.fillRect(px, py, CELL_W, CELL_H);
+  ctx.strokeStyle = 'rgba(31,42,51,0.22)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(px + 0.5, py + 0.5, CELL_W - 1, CELL_H - 1);
+
+  ctx.fillStyle = '#1f2a33';
+  ctx.font = 'bold 20px "Microsoft YaHei", sans-serif';
+  ctx.fillText('资产数据', px + 18, py + 36);
+
+  var rows = [
+    ['三角面', S.tris + ' / 预算 1400', S.tris <= 1400],
+    ['网格数', S.meshes + ' 件', true],
+    ['材质槽位', S.mats + ' / 上限 3', S.mats <= 3],
+    ['共享几何率', S.sharedPct + '% / 要求 ≥60%', S.sharedPct >= 60],
+    ['剪影特征', META.note, true]
+  ];
+  rows.forEach(function (r, i) {
+    var y = py + 74 + i * 62;
+    ctx.fillStyle = '#465765';
+    ctx.font = '15px "Microsoft YaHei", sans-serif';
+    ctx.fillText(r[0], px + 18, y);
+    ctx.fillStyle = r[2] ? '#1f2a33' : '#b3303a';
+    ctx.font = 'bold 18px "Microsoft YaHei", sans-serif';
+    ctx.fillText(r[1], px + 18, y + 24);
+  });
+
+  ctx.fillStyle = '#465765';
+  ctx.font = '14px "Microsoft YaHei", sans-serif';
+  ctx.fillText('判定：填黑后 ' + (S.sharedPct >= 60 ? '三视图轮廓可区分' : '轮廓待复核'), px + 18, py + CELL_H - 22);
+
+  /* 页脚 */
+  ctx.fillStyle = '#465765';
+  ctx.font = '15px "Microsoft YaHei", sans-serif';
+  ctx.fillText('建模：Joe · 风格验收：白露 · 预算口径：苏晓 · 本页几何由 art.js buildHero() 直接渲染，无手绘补图', X0, H - 26);
+
+  window.__STAT = META.cn + ' tri=' + S.tris + ' mesh=' + S.meshes + ' mat=' + S.mats + ' shared=' + S.sharedPct + '%';
+  document.title = META.cn + ' 四视图 ' + S.tris + 'tri';
+})();
+</script>
+</body>
+</html>

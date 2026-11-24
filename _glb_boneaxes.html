@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>GLB 骨骼轴诊断 _glb_boneaxes</title>
+<style>
+  html, body { margin: 0; background: #101318; overflow: hidden; }
+  #c { display: block; }
+  #hud { position: fixed; left: 16px; top: 12px; font: 13px/1.6 "Microsoft YaHei", sans-serif; color: #c8d6e2; width: 460px; }
+  #hud h2 { margin: 0 0 6px; font-size: 15px; color: #fff; }
+  #report { background: rgba(0,0,0,.55); border: 1px solid #2c3a48; border-radius: 6px; padding: 8px 10px; white-space: pre-wrap; }
+  #report b { color: #ffe9a8; }
+  .row { margin: 8px 0; }
+  button { font: 12px/1 "Microsoft YaHei", sans-serif; padding: 6px 10px; margin-right: 6px; background: #22303c; color: #dbe7f0; border: 1px solid #3a4d5e; border-radius: 5px; cursor: pointer; }
+  button.on { background: #3d6a8a; border-color: #6fb6dd; }
+  select { font: 12px "Microsoft YaHei", sans-serif; padding: 5px; background: #22303c; color: #dbe7f0; border: 1px solid #3a4d5e; border-radius: 5px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <h2>GLB 骨骼局部轴实测 · swordsman_idle（bind pose，未播 Idle）</h2>
+  <div class="row">
+    <select id="boneSel"></select>
+    <button data-axis="X" id="btnX">绕 X</button>
+    <button data-axis="Y" id="btnY">绕 Y</button>
+    <button data-axis="Z" id="btnZ">绕 Z</button>
+    <button id="btnReset">复位</button>
+  </div>
+  <div id="report">加载中…</div>
+  <pre id="dump" style="position:fixed;right:16px;top:12px;width:420px;font:11px/1.5 monospace;color:#9fb6c8;white-space:pre-wrap;display:none;"></pre>
+  <pre id="results" style="position:fixed;left:16px;bottom:12px;max-height:46vh;font:12px/1.6 monospace;color:#e8f2f8;white-space:pre-wrap;"></pre>
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="vendor/GLTFLoader.js"></script>
+<script src="vendor/SkeletonUtils.js"></script>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var P = {
+    bone: q.get('bone') || 'UpperArm.L',
+    axis: q.get('axis') || 'X',
+    deg: parseFloat(q.get('deg') || '30')
+  };
+
+  var BONES = ['Shoulder.L','UpperArm.L','LowerArm.L','Shoulder.R','UpperArm.R','LowerArm.R',
+               'Chest','UpperLeg.L','LowerLeg.L','UpperLeg.R','LowerLeg.R'];
+  var CHILD = {
+    'Shoulder.L':'UpperArm.L','Shoulder.R':'UpperArm.R',
+    'UpperArm.L':'LowerArm.L','UpperArm.R':'LowerArm.R',
+    'LowerArm.L':'Hand.L','LowerArm.R':'Hand.R',
+    'Chest':'Neck',
+    'UpperLeg.L':'LowerLeg.L','UpperLeg.R':'LowerLeg.R',
+    'LowerLeg.L':'Foot.L','LowerLeg.R':'Foot.R'
+  };
+  function K(n) { return n.replace('.', ''); }
+
+  var W = 1400, H = 900;
+  var canvas = document.getElementById('c');
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+  renderer.setPixelRatio(1); renderer.setSize(W, H, false);
+  if (THREE.sRGBEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+
+  var scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x101318);
+  scene.add(new THREE.HemisphereLight(0xbccfe0, 0x1b1712, 0.9));
+  var key = new THREE.DirectionalLight(0xfff0dc, 1.8); key.position.set(3, 5.5, 4); scene.add(key);
+  var rim = new THREE.DirectionalLight(0xcfe0ff, 1.0); rim.position.set(-2, 3, -5); scene.add(rim);
+
+  var floor = new THREE.Mesh(new THREE.PlaneGeometry(12, 12),
+    new THREE.MeshStandardMaterial({ color: 0x1a1e23, roughness: 0.95 }));
+  floor.rotation.x = -Math.PI / 2; scene.add(floor);
+
+  var camera = new THREE.PerspectiveCamera(26, W / H, 0.1, 60);
+  camera.position.set(1.6, 1.35, 3.4);
+  camera.lookAt(0, 0.95, 0);
+
+  var root = new THREE.Group(); scene.add(root);
+  window.__scene = scene; window.__root = root;
+  var bones = {};
+  var rest = {};   // rest quaternion / world pos per bone
+  var reportEl = document.getElementById('report');
+
+  var loader = new THREE.GLTFLoader();
+  var url = encodeURI('art/模型/glb/swordsman_idle.glb');
+
+  function classify(dx, dy, dz, rollDeg) {
+    var ax = Math.abs(dx), ay = Math.abs(dy), az = Math.abs(dz);
+    if (Math.max(ax, ay, az) < 0.012) return '扭转（绕骨长轴 Y，端点不动）';
+    if (az >= ax && az >= ay) return '前后摆（沿身体前后 Z）';
+    if (ax >= ay && ax >= az) return '内外展（沿身体左右 X）';
+    return '屈伸/上下（沿 Y）';
+  }
+
+  function collect() {
+    var all = [];
+    root.traverse(function (o) {
+      all.push((o.type || '?') + ':' + (o.name || '(noname)') + (o.isBone ? ' [BONE]' : ''));
+      if (o.isBone || o.type === 'Bone') bones[o.name] = o;
+    });
+    window.__all = all;
+    if (q.get('auto') === '1') document.getElementById('dump').textContent = all.slice(0, 45).join('\n');
+    console.log('GLB scene dump:\n' + all.join('\n'));
+    Object.keys(bones).forEach(function (n) {
+      var b = bones[n];
+      b.updateMatrixWorld(true);
+      rest[n] = { quat: b.quaternion.clone(), pos: b.getWorldPosition(new THREE.Vector3()) };
+    });
+  }
+
+  function measure() {
+    var bk = K(P.bone), ck = K(CHILD[P.bone]);
+    var b = bones[bk], c = bones[ck];
+    if (!b) { if (Object.keys(bones).length) reportEl.textContent = '未找到骨骼 ' + P.bone; return; }
+    b.updateMatrixWorld(true);
+    var qRest = rest[bk].quat;
+    var axisVec = new THREE.Vector3(P.axis === 'X' ? 1 : 0, P.axis === 'Y' ? 1 : 0, P.axis === 'Z' ? 1 : 0);
+    var qAxis = new THREE.Quaternion().setFromAxisAngle(axisVec, THREE.MathUtils.degToRad(P.deg));
+    b.quaternion.copy(qRest).multiply(qAxis);
+    root.updateMatrixWorld(true);
+
+    var line = '骨骼 <b>' + P.bone + '</b>  子骨 <b>' + CHILD[P.bone] + '</b>  绕 <b>' + P.axis + '</b>  ' + P.deg + '°\n';
+    if (c) {
+      var pRest = rest[ck].pos, pNow = c.getWorldPosition(new THREE.Vector3());
+      var d = pNow.clone().sub(pRest);
+      line += '子骨位移  dx=' + d.x.toFixed(4) + '  dy=' + d.y.toFixed(4) + '  dz=' + d.z.toFixed(4) + ' m\n';
+      // 子骨绕自身长轴(local Y)的扭转角
+      var qC = c.quaternion.clone();
+      var rel = qC.clone().multiply(rest[ck].quat.clone().invert());
+      var w = Math.min(1, Math.abs(rel.w));
+      var relAngle = 2 * Math.acos(w);
+      var s = Math.sqrt(Math.max(0, 1 - w * w));
+      var ax = s < 1e-6 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(rel.x / s, rel.y / s, rel.z / s);
+      if (rel.w < 0) ax.negate();
+      var longAxis = new THREE.Vector3(0, 1, 0).applyQuaternion(c.quaternion);
+      var roll = THREE.MathUtils.radToDeg(Math.abs(relAngle) * Math.abs(ax.dot(longAxis)));
+      line += '子骨自扭转 ≈ ' + roll.toFixed(1) + '°\n';
+      line += '判定：<b>' + classify(d.x, d.y, d.z, roll) + '</b>';
+      window.__DIAG = { bone: P.bone, child: CHILD[P.bone], axis: P.axis, deg: P.deg,
+        dx: +d.x.toFixed(4), dy: +d.y.toFixed(4), dz: +d.z.toFixed(4), roll: +roll.toFixed(1),
+        label: classify(d.x, d.y, d.z, roll) };
+    } else {
+      line += '（无子骨可测）';
+    }
+    reportEl.innerHTML = line;
+  }
+
+  function resetPose() {
+    Object.keys(bones).forEach(function (n) { bones[n].quaternion.copy(rest[n].quat); });
+    root.updateMatrixWorld(true);
+  }
+
+  function refresh() {
+    resetPose();
+    if (P.bone !== '__none') measure();
+  }
+
+  loader.load(url, function (gltf) {
+    root.add(gltf.scene);
+    collect();
+    // 下拉框
+    var sel = document.getElementById('boneSel');
+    BONES.forEach(function (n) {
+      var op = document.createElement('option'); op.value = n; op.textContent = n; sel.appendChild(op);
+    });
+    sel.value = P.bone;
+    sel.onchange = function () { P.bone = sel.value; refresh(); };
+    document.getElementById('btnX').onclick = function () { P.axis = 'X'; refresh(); };
+    document.getElementById('btnY').onclick = function () { P.axis = 'Y'; refresh(); };
+    document.getElementById('btnZ').onclick = function () { P.axis = 'Z'; refresh(); };
+    document.getElementById('btnReset').onclick = function () { resetPose(); reportEl.textContent = '已复位 bind pose'; };
+    window.__probe = function (bone, axis, deg) { P.bone = bone; P.axis = axis; P.deg = deg || 30; refresh(); return window.__DIAG; };
+    refresh();
+    if (q.get('auto') === '1') {
+      var rows = [];
+      var BONES_ALL = ['Shoulder.L','UpperArm.L','LowerArm.L','Shoulder.R','UpperArm.R','LowerArm.R',
+                       'Chest','UpperLeg.L','LowerLeg.L','UpperLeg.R','LowerLeg.R'];
+      BONES_ALL.forEach(function (bn) {
+        ['X', 'Y', 'Z'].forEach(function (ax) {
+          window.__probe(bn, ax, 30);
+          var d = window.__DIAG;
+          if (d) rows.push([d.bone, d.axis, d.dx.toFixed(3), d.dy.toFixed(3), d.dz.toFixed(3), d.roll.toFixed(1), d.label].join('\t'));
+        });
+      });
+      document.getElementById('results').textContent = 'bone\taxis\tdx\tdy\tdz\troll°\t判定\n' + rows.join('\n');
+    }
+  }, undefined, function (err) {
+    reportEl.textContent = 'GLB 加载失败: ' + (err && err.message ? err.message : err);
+  });
+
+  function loop() { requestAnimationFrame(loop); renderer.render(scene, camera); }
+  loop();
+})();
+</script>
+</body>
+</html>

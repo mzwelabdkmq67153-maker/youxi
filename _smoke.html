@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#05070d" />
+<title>第七竞技场 · 冒烟测试</title>
+<link rel="stylesheet" href="style.css" />
+<style>
+  #diag {
+    position: fixed; left: 12px; top: 12px; z-index: 9999;
+    font: 13px/1.7 Consolas, monospace; color: #d8f3ff;
+    background: rgba(4, 8, 14, 0.82); padding: 10px 14px;
+    border: 1px solid rgba(120, 210, 255, 0.35); border-radius: 6px;
+    max-width: 52vw; white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+
+<div id="hud" class="hidden">
+  <div id="topbar">
+    <div class="chip" id="modeLabel">PVE 副本</div>
+    <div class="chip" id="objective">WAVE 1</div>
+    <div class="chip" id="timer">00:00</div>
+  </div>
+  <div id="crosshair"><i class="t"></i><i class="r"></i><i class="b"></i><i class="l"></i></div>
+  <div id="hitmarker"></div>
+  <div id="vitals">
+    <div class="bar"><div class="fill hp" id="hpFill"></div><span id="hpText">120 / 120</span></div>
+    <div class="bar"><div class="fill en" id="enFill"></div><span id="enText">100</span></div>
+    <div class="bar slim"><div class="fill st" id="stFill"></div><span id="stText">100</span></div>
+  </div>
+  <div id="skills"></div>
+  <div id="toast"></div>
+  <div id="dmgLayer"></div>
+  <div id="flash"></div>
+</div>
+
+<div id="overlay">
+  <div class="panel" id="menuPanel">
+    <h1>第七竞技场</h1>
+    <p class="sub">SEVENTH ARENA · 第一人称 PVP / PVE 原型</p>
+    <div class="row">
+      <label>模式</label>
+      <div class="toggle" id="modeToggle">
+        <button data-mode="pve" class="on">PVE 副本</button>
+        <button data-mode="pvp">PVP 对决</button>
+      </div>
+    </div>
+    <div class="row">
+      <label>职业</label>
+      <div class="toggle" id="classToggle">
+        <button data-cls="blade" class="on">剑客</button>
+        <button data-cls="gunner">枪手</button>
+        <button data-cls="mage">术士</button>
+      </div>
+    </div>
+    <p class="hint">WASD 移动 · Shift 疾跑 · 空格跳跃 · 鼠标转向 · 左键攻击 · Q / E / R 技能 · Esc 暂停</p>
+    <button id="startBtn" class="primary">进入竞技场</button>
+  </div>
+  <div class="panel hidden" id="pausePanel"><h2>已暂停</h2></div>
+  <div class="panel hidden" id="resultPanel"><h2 id="resultTitle">行动结束</h2><p class="sub" id="resultSub"></p><div id="resultStats"></div><button id="againBtn" class="primary">再来一局</button><button id="backBtn" class="ghost">返回主菜单</button></div>
+</div>
+
+<div id="diag">boot…</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="art.js"></script>
+<script src="fx.js"></script>
+<script src="scene.js"></script>
+<script src="game.js"></script>
+<script>
+(function () {
+  const diag = document.getElementById('diag');
+  const lines = [];
+  const say = (t) => { lines.push(t); diag.textContent = lines.join('\n'); };
+  window.addEventListener('error', function (e) {
+    say('ERR ' + e.message + ' @line ' + (e.lineno || ''));
+  });
+
+  const F = 1 / 60;
+
+  setTimeout(function () {
+    document.querySelector('#classToggle button[data-cls="gunner"]').click();
+    document.getElementById('startBtn').click();
+    const g = window.__arenaDebug;
+    say('start: phase = ' + g.state.phase);
+
+    // A 疾跑 40 帧：查 FOV、runT、耐力
+    g.input().keys['w'] = true;
+    g.input().keys['shift'] = true;
+    for (let i = 0; i < 40; i++) g.step(F);
+    say('A sprint fov = ' + g.camera().fov.toFixed(1) + ' (base 72)');
+    say('  runT = ' + g.player.runT.toFixed(2) + '  stamina = ' + g.player.stamina.toFixed(0));
+
+    // B 松开 60 帧：FOV 回落
+    g.input().keys['w'] = false;
+    g.input().keys['shift'] = false;
+    for (let i = 0; i < 60; i++) g.step(F);
+    say('B idle   fov = ' + g.camera().fov.toFixed(1) + '  runT = ' + g.player.runT.toFixed(2));
+
+    // C 跳跃 80 帧：看顶点高度、落地、扬尘
+    g.jump();
+    let maxY = 0;
+    let maxBrush = 0;
+    let landFrame = -1;
+    for (let i = 0; i < 80; i++) {
+      g.step(F);
+      if (g.player.y > maxY) maxY = g.player.y;
+      const b = g.effects().filter(f => f.kind === 'brush').length;
+      if (b > maxBrush) maxBrush = b;
+      if (landFrame < 0 && g.player.grounded && i > 5) landFrame = i;
+    }
+    say('C jump   maxY = ' + maxY.toFixed(2) + ' (期望 ~3.1)  nowY = ' + g.player.y.toFixed(2));
+    say('  grounded = ' + g.player.grounded + '  landFrame = ' + landFrame);
+    say('  maxBrush = ' + maxBrush + '（落地扬尘 3 笔 + 环）');
+
+    // D 命中：顿帧 + 笔触
+    try {
+      g.spawn('grunt', new THREE.Vector3(0, 0, -6));
+      const e = g.enemies[g.enemies.length - 1];
+      g.damage(e, 26, true);
+      const brush = g.effects().filter(f => f.kind === 'brush').length;
+      say('D hit    hitStop = ' + g.hitStop().toFixed(3) + '  brush = ' + brush + '  enemies = ' + g.enemies.length);
+    } catch (err) { say('D ERR ' + err.message); }
+
+    // E 视觉取证：前方 6m 放一只怪，打一发，再渲一帧
+    for (let i = 0; i < 40; i++) g.step(F);   // 先让上一批特效自然过期
+    try {
+      g.spawn('grunt', new THREE.Vector3(0, 0, -4.5));
+      const t = g.enemies[g.enemies.length - 1];
+      g.damage(t, 26, true);
+      g.muzzle();
+      g.step(F);
+      diag.style.display = 'none';
+      g.render();
+      say('E visual rendered: effects = ' + g.effects().length);
+    } catch (err) { say('E ERR ' + err.message); }
+
+    // F 特效上限：连插 60 笔，看是否被压回 48
+    try {
+      for (let i = 0; i < 60; i++) g.brush(0, 1, -4 + i * 0.05, 0x6fe3ff, i * 0.1, 1, false);
+      g.step(F);
+      say('F cap     effects = ' + g.effects().length + ' (上限 48)');
+    } catch (err) { say('F ERR ' + err.message); }
+
+    // G fx.js 六组：墨斩 / 法爆 / 击发 / 受击，活跃组是否压到 4
+    try {
+      const p = g.player;
+      g.slash();
+      g.orb(0, 0, -3.4);
+      g.muzzle();
+      for (let i = 0; i < 6; i++) g.step(F);
+      say('G fx      ' + JSON.stringify(g.fx()));
+      for (let i = 0; i < 4; i++) g.step(F);   // 推到 0.167s：墨斩命中 / 击发中段 / 法爆全开
+      say('G2 fx     ' + JSON.stringify(g.fx()));
+      diag.style.display = 'none';
+      g.render();
+    } catch (err) { say('G ERR ' + err.message); }
+
+    say('--- done ---');
+  }, 400);
+})();
+</script>
+</body>
+</html>

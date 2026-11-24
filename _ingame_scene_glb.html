@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#05070d" />
+<title>第七竞技场 · 场景模型实机验收</title>
+<link rel="stylesheet" href="style.css" />
+<style>
+/* 验收页：自动化环境拿不到指针锁，游戏会反复弹暂停/结算面板，这里永久压掉，保证截图干净 */
+#pausePanel, #resultPanel, #overlay { display: none !important; }
+</style>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+
+<div id="hud" class="hidden">
+  <div id="topbar">
+    <div class="chip" id="modeLabel">PVE 副本</div>
+    <div class="chip" id="objective">WAVE 1</div>
+    <div class="chip" id="timer">00:00</div>
+  </div>
+  <div id="crosshair"><i class="t"></i><i class="r"></i><i class="b"></i><i class="l"></i></div>
+  <div id="hitmarker"></div>
+  <div id="vitals">
+    <div class="bar"><div class="fill hp" id="hpFill"></div><span id="hpText">120 / 120</span></div>
+    <div class="bar"><div class="fill en" id="enFill"></div><span id="enText">100</span></div>
+    <div class="bar slim"><div class="fill st" id="stFill"></div><span id="stText">100</span></div>
+  </div>
+  <div id="skills"></div>
+  <div id="toast"></div>
+  <div id="dmgLayer"></div>
+  <div id="killBanner"></div>
+  <div id="flash"></div>
+</div>
+
+<div id="overlay">
+  <div class="panel" id="menuPanel">
+    <h1>第七竞技场</h1>
+    <p class="sub">SEVENTH ARENA · 场景模型实机验收</p>
+    <div class="row"><label>模式</label>
+      <div class="toggle" id="modeToggle">
+        <button data-mode="pve" class="on">PVE 副本</button>
+        <button data-mode="pvp">PVP 对决</button>
+      </div>
+    </div>
+    <div class="row"><label>职业</label>
+      <div class="toggle" id="classToggle">
+        <button data-cls="blade" class="on">剑客</button>
+        <button data-cls="gunner">枪手</button>
+        <button data-cls="mage">术士</button>
+      </div>
+    </div>
+    <button id="startBtn" class="primary">进入竞技场</button>
+  </div>
+  <div class="panel hidden" id="onlinePanel"></div>
+  <div class="panel hidden" id="pausePanel">
+    <h2>已暂停</h2><p class="sub">鼠标已释放</p>
+    <button id="resumeBtn" class="primary">继续战斗</button>
+    <button id="quitBtn" class="ghost">返回主菜单</button>
+  </div>
+  <div class="panel hidden" id="resultPanel">
+    <h2 id="resultTitle">行动结束</h2><p class="sub" id="resultSub"></p>
+    <div id="resultStats"></div>
+    <button id="againBtn" class="primary">再来一局</button>
+    <button id="backBtn" class="ghost">返回主菜单</button>
+  </div>
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="vendor/GLTFLoader.js"></script>
+<script src="vendor/SkeletonUtils.js"></script>
+<script src="art.js"></script>
+<script src="hero3d.js"></script>
+<script src="real3d.js"></script>
+<script src="glb3d.js"></script>
+<script src="paint.js"></script>
+<script src="fx.js"></script>
+<script src="ink.js"></script>
+<script src="hitfeel.js"></script>
+<script src="scene.js"></script>
+<script src="scene_glb.js"></script>
+<script src="core.js"></script>
+<script src="loot.js"></script>
+<script src="net.js"></script>
+<script src="night.js"></script>
+<script>
+/* 与 index.html 的写实档一致：默认走 GLB（window.Hero3D = Glb3D） */
+if (window.Glb3D) {
+  window.Hero3D = window.Glb3D;
+  if (typeof window.Glb3D.setTierPolicy === 'function') {
+    try { window.Glb3D.setTierPolicy({ hero: '2k', enemy: '2k' }); } catch (e) {}
+  }
+} else if (window.Real3D) {
+  window.Hero3D = window.Real3D;
+}
+</script>
+<script src="game.js"></script>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var mode = q.get('mode') || 'pve';
+  /* 场景模型验收页：自动选模式 → 开局 → 收起 UI，方便截图 */
+  var t0 = setTimeout(function () {
+    var mb = document.querySelector('#modeToggle button[data-mode="' + mode + '"]');
+    if (mb) mb.click();
+    var b = document.getElementById('startBtn');
+    if (b) b.click();
+  }, 600);
+  setTimeout(function () {
+    var o = document.getElementById('overlay');
+    if (o) o.classList.add('hidden');
+    var h = document.getElementById('hud');
+    if (h) h.classList.remove('hidden');
+    window.__sceneShotReady = true;
+  }, 2200);
+  /* 指针锁在自动化环境拿不到时会弹暂停面板，这里直接压掉 */
+  setTimeout(function () {
+    var p = document.getElementById('pausePanel');
+    if (p) p.classList.add('hidden');
+  }, 2600);
+  /* 调光试验：?exp=曝光 &fogN=&fogF=雾距 &envI=环境强度 &amb=补环境光 */
+  setTimeout(function () {
+    var r = window.__renderer;
+    var S = window.__sceneGlbDebug && window.__sceneGlbDebug.scene;
+    var D = window.__sceneGlbDebug;
+    var e = parseFloat(q.get('exp'));
+    if (r && e > 0) r.toneMappingExposure = e;
+    var fn = parseFloat(q.get('fogN')), ff = parseFloat(q.get('fogF'));
+    if (S && S.fog) { if (fn > 0) S.fog.near = fn; if (ff > 0) S.fog.far = ff; }
+    var am = parseFloat(q.get('amb'));
+    if (S && am > 0) S.add(new THREE.AmbientLight(0x9fc2d6, am));
+    var ei = parseFloat(q.get('envI'));
+    if (D && D.root && ei > 0) D.root.traverse(function (o) {
+      if (!o.isMesh) return;
+      var ms = Array.isArray(o.material) ? o.material : [o.material];
+      ms.forEach(function (m) {
+        if (m && m.isMeshStandardMaterial) { m.envMap = m.envMap || null; m.envMapIntensity = ei; m.needsUpdate = true; }
+      });
+    });
+    var bg = q.get('bg');
+    if (S && bg) S.background = new THREE.Color('#' + bg);
+    if (q.get('probe') === '1' && S) {
+      var pb = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 4), new THREE.MeshBasicMaterial({ color: 0xff00ff }));
+      pb.position.set(0, 2, 8);
+      S.add(pb);
+      document.title = 'PROBE added, kids=' + S.children.length;
+    }
+  }, 2400);
+
+  /* 可选刷怪：?spawn=grunt,golem,warden —— 在玩家正前方扇形放几只，验证 Tripo 怪模型 */
+  var spawnList = q.get('spawn');
+  if (spawnList) {
+    setTimeout(function () {
+      var D = window.__arenaDebug;
+      if (!D) return;
+      var H = D.hero;
+      var cam = D.camera();
+      var dir = new THREE.Vector3();
+      cam.getWorldDirection(dir);
+      dir.y = 0;
+      if (dir.lengthSq() < 0.001) dir.set(0, 0, 1);
+      dir.normalize();
+      var base = H ? H.position.clone() : new THREE.Vector3(0, 0, 0);
+      /* ?yaw=90 把刷新方向绕 Y 轴转 90°，竞技场里就能把怪放在环形台面上而不是中间深坑 */
+      var yawDeg = parseFloat(q.get('yaw') || '0');
+      if (yawDeg) {
+        var a = yawDeg * Math.PI / 180, cx = dir.x, cz = dir.z;
+        dir.set(cx * Math.cos(a) - cz * Math.sin(a), 0, cx * Math.sin(a) + cz * Math.cos(a)).normalize();
+      }
+      var types = spawnList.split(',');
+      var pose = q.get('pose') === '1';
+      var dist0 = parseFloat(q.get('dist') || '6.5');
+      var gap = parseFloat(q.get('gap') || '1.1');
+      var made = [];
+      var row = q.get('row') === '1';
+      types.forEach(function (t, i) {
+        var spread = (i - (types.length - 1) / 2) * (row ? parseFloat(q.get('rowGap') || '4.4') : 2.4);
+        var side = new THREE.Vector3(-dir.z, 0, dir.x);
+        var ahead = row ? dist0 : (dist0 + i * gap);
+        var p = base.clone().add(dir.clone().multiplyScalar(ahead)).add(side.clone().multiplyScalar(spread));
+        p.y = 0;
+        var e = D.spawn(t, p);
+        if (e) made.push(e);
+      });
+      /* pose=1：定住怪并让它们正面朝向玩家，方便摆拍对比体型 */
+      if (pose) {
+        made.forEach(function (e) {
+          e.speed = 0;
+          e.attackCd = 999;
+          var dx = base.x - e.pos.x, dz = base.z - e.pos.z;
+          e.mesh.rotation.y = Math.atan2(dx, dz);
+          e.mesh.scale.setScalar(e.baseScale);
+        });
+        /* 波次会自动刷怪凑到镜头前，摆拍时把非摆拍怪清掉 */
+        window.__poseKeep = made;
+        setInterval(function () {
+          var ES = D.enemies || [];
+          for (var i = ES.length - 1; i >= 0; i--) {
+            if (window.__poseKeep.indexOf(ES[i]) < 0) ES[i].dead = true;
+          }
+        }, 400);
+      }
+      for (var k = 0; k < 10; k++) D.step(0.05);
+      D.render();
+    }, 3400);
+  }
+
+  var tick = setInterval(function () {
+    var p = document.getElementById('pausePanel');
+    if (p && !p.classList.contains('hidden')) p.classList.add('hidden');
+    var o = document.getElementById('overlay');
+    if (o && !o.classList.contains('hidden')) o.classList.add('hidden');
+  }, 300);
+
+  /* 帧计数：确认渲染循环真的在跑（自动化环境可能被节流） */
+  var FR = 0;
+  (function tick() { FR++; requestAnimationFrame(tick); })();
+
+  /* 后台标签页里 rAF 会被暂停，截图就只能拿到开局那一帧的老画面；
+     这里用定时器手动推帧，并把指针锁失败弹出来的暂停面板一直压掉 */
+  setInterval(function () {
+    var st = window.__arenaDebug && window.__arenaDebug.state;
+    if (st && st.phase !== 'playing') st.phase = 'playing';
+    ['pausePanel', 'resultPanel', 'overlay'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.classList.add('hidden');
+    });
+    if (!document.hidden || !window.__arenaDebug) return;
+    try {
+      window.__arenaDebug.step(0.4);
+      if (q.get('cam') === 'top') {
+        var cam = window.__arenaDebug.camera();
+        cam.position.set(0.01, 60, 0.01);
+        cam.lookAt(0, 0, 0);
+        cam.rotation.z = 0;
+      }
+      window.__arenaDebug.render();
+      FR++;
+    } catch (e) { /* ignore */ }
+  }, 400);
+
+  /* 可选的“走位”参数：?walk=s 表示按住后退键走十几步，方便截到更全的场景 */
+  var walkKey = q.get('walk');
+  if (walkKey) {
+    setTimeout(function () {
+      var D = window.__arenaDebug;
+      if (!D) return;
+      try {
+        for (var i = 0; i < 12; i++) { D.input().keys[walkKey] = true; D.step(0.35); }
+        D.input().keys[walkKey] = false;
+        D.render();
+      } catch (e) { /* ignore */ }
+    }, 3000);
+  }
+
+  /* 验收诊断：把场景状态写进 title（自动化只能读 DOM/title，看不到页面全局） */
+  setInterval(function () {
+    try {
+      var D = window.__sceneGlbDebug;
+      if (!D || !D.group) return;
+      var g = D.group;
+      var bb = new THREE.Box3().setFromObject(g);
+      var meshes = 0, vis = 0, mats = 0;
+      g.traverse(function (o) {
+        if (o.isMesh) { meshes++; if (o.visible) vis++; mats += (o.material ? 1 : 0); }
+      });
+      var f = window.SceneGlb && SceneGlb.stats ? SceneGlb.stats() : {};
+      var rb = D.root ? new THREE.Box3().setFromObject(D.root) : null;
+      var mat = '';
+      var m0 = null, big = 0;
+      D.root && D.root.traverse(function (o) {
+        if (o.isMesh && o.geometry) {
+          var n = o.geometry.attributes.position ? o.geometry.attributes.position.count : 0;
+          if (n > big) { big = n; m0 = Array.isArray(o.material) ? o.material[0] : o.material; }
+        }
+      });
+      if (m0) {
+        mat = [m0.type, 'side' + m0.side,
+          'met' + m0.metalness.toFixed(2), 'rou' + m0.roughness.toFixed(2),
+          'col' + (m0.color ? m0.color.getHexString() : '-'),
+          'map' + (m0.map && m0.map.image ? (m0.map.image.width + 'x' + m0.map.image.height) : 'none'),
+          'norm' + (m0.normalMap ? 'y' : 'n'),
+          'mr' + (m0.metalnessMap ? 'y' : 'n'),
+          'env' + (m0.envMap ? 'y' : 'n')].join('|');
+      }
+      var H = window.__arenaDebug && window.__arenaDebug.hero;
+      var EN = (window.__arenaDebug && window.__arenaDebug.enemies) || [];
+      var en = EN.map(function (e) {
+        var s = (window.Hero3D && e.mesh) ? Hero3D.stats(e.mesh) : null;
+        var r = e.mesh && e.mesh.userData ? e.mesh.userData.glb : null;
+        var bb = e.mesh ? new THREE.Box3().setFromObject(e.mesh) : null;
+        var rig = e.mesh ? e.mesh.userData.glb : null;
+        var ib = (rig && rig.inner) ? new THREE.Box3().setFromObject(rig.inner) : null;
+        return [e.type, r ? r.model : '-', s ? +s.height.toFixed(2) : -1, s ? s.tris : -1,
+          e.mesh ? +e.mesh.scale.x.toFixed(3) : -1,
+          bb ? [+bb.min.y.toFixed(2), +bb.max.y.toFixed(2)] : null,
+          rig ? +rig.fit.toFixed(3) : null,
+          ib ? [+ib.min.y.toFixed(2), +ib.max.y.toFixed(2)] : null];
+      });
+      var PGRP = g.getObjectByName('stageProps');
+      var pbox = PGRP ? new THREE.Box3().setFromObject(PGRP) : null;
+      document.title = 'DIAG ' + JSON.stringify({
+        k: f.kind, tris: f.tris, sc: +(f.scale || 0).toFixed(2), mesh: meshes, vis: vis,
+        rb: rb ? [[+rb.min.x.toFixed(1), +rb.min.y.toFixed(1), +rb.min.z.toFixed(1)], [+rb.max.x.toFixed(1), +rb.max.y.toFixed(1), +rb.max.z.toFixed(1)]] : null,
+        px: H ? +H.position.x.toFixed(2) : -999, pz: H ? +H.position.z.toFixed(2) : -999,
+        pr: H ? +Math.hypot(H.position.x, H.position.z).toFixed(2) : -999,
+        br: window.SceneGlb && SceneGlb.boundary ? +SceneGlb.boundary().toFixed(2) : 0,
+        obs: window.SceneGlb && SceneGlb.info ? SceneGlb.info.obstacles.length : -1,
+        pn: PGRP ? PGRP.children.length : 0,
+        pm: (function () {
+          if (!PGRP || !PGRP.children[0]) return null;
+          var m = PGRP.children[0].material;
+          return [m.type, 'col' + m.color.getHexString(), 'map' + (m.map ? (m.map.image ? m.map.image.width : 'img') : 'none'),
+            'env' + (m.envMap ? 'y' : 'n'), 'envI' + (m.envMapIntensity || 0).toFixed(2),
+            'emi' + (m.emissive ? m.emissive.getHexString() : '-') + '@' + (m.emissiveIntensity || 0).toFixed(2),
+            'lit' + (m.lightMap ? 'y' : 'n'), 'ao' + (m.aoMap ? 'y' : 'n')].join('|');
+        })(),
+        pb: pbox ? [[+pbox.min.x.toFixed(1), +pbox.min.y.toFixed(1), +pbox.min.z.toFixed(1)], [+pbox.max.x.toFixed(1), +pbox.max.y.toFixed(1), +pbox.max.z.toFixed(1)]] : null,
+        fog: D.scene && D.scene.fog ? [D.scene.fog.near, D.scene.fog.far] : null,
+        env: D.scene && D.scene.environment ? 'y' : 'n',
+        exp: window.__renderer ? +window.__renderer.toneMappingExposure.toFixed(2) : -1,
+        en: en,
+        fr: FR,
+        vis: document.visibilityState,
+        drawn: window.__renderer ? window.__renderer.info.render.triangles : -1,
+        calls: window.__renderer ? window.__renderer.info.render.calls : -1,
+        kids: D.scene ? D.scene.children.length : -1,
+        mat: mat
+      });
+    } catch (e) { document.title = 'DIAG-ERR ' + e.message; }
+  }, 1500);
+})();
+</script>
+</body>
+</html>

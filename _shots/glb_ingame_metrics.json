@@ -1,0 +1,2407 @@
+[
+  {
+    "spec": "1主角+3敌人(2K)",
+    "query": "",
+    "ready": true,
+    "metrics": {
+      "hud": "档位 art=glb  tex=policy  1024回退={}\n场景遍历口径: draw calls=85  triangles=70125  textures=61\nFPS(近10s): 平均=80.8  P99帧时间=238.20 ms  样本=158\n实例: 敌人存活=3 / 布置=3\n· grunt → swordsman_idle 身高=1.794m 三角=14999 骨骼=21 材质=6 挂载=560ms\n· shooter → gunner_idle 身高=1.836m 三角=16000 骨骼=21 材质=6 挂载=276ms\n· boss → mage_idle 身高=3.331m 三角=14000 骨骼=21 材质=6 挂载=289ms\n已加载模型: 3 份, 合计=5.87 MiB (6159028 B)\n挂载毫秒(info): {\"duelist\":331,\"shooter\":276,\"boss\":289,\"grunt\":560}",
+      "info": {
+        "tier": "policy",
+        "override": null,
+        "policy": {
+          "hero": "2k",
+          "enemy": "1024"
+        },
+        "armPolicy": {
+          "mage_idle": "arm=off（资产限制：袖/下摆权重未绑 Hips，待 Blender 重绑）"
+        },
+        "entries": {
+          "duelist": {
+            "kind": "duelist",
+            "tier": "1024",
+            "url": "art/%E6%A8%A1%E5%9E%8B/glb/gunner_idle_1024.glb",
+            "model": "gunner_idle",
+            "arm": "on",
+            "mats": [
+              {
+                "name": "MAT_Armor_Plate",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Cloth_Navy",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Leather_Black",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Skin",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Hair_Black",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Emissive_Cyan",
+                "emissive": "#11e0ff",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              }
+            ],
+            "textures": [
+              {
+                "role": "map",
+                "w": 1024,
+                "h": 1024
+              },
+              {
+                "role": "normalMap",
+                "w": 1024,
+                "h": 1024
+              },
+              {
+                "role": "rmMap",
+                "w": 1024,
+                "h": 1024
+              }
+            ],
+            "bones": 21,
+            "height": 1.89
+          },
+          "shooter": {
+            "kind": "shooter",
+            "tier": "1024",
+            "url": "art/%E6%A8%A1%E5%9E%8B/glb/gunner_idle_1024.glb",
+            "model": "gunner_idle",
+            "arm": "on",
+            "mats": [
+              {
+                "name": "MAT_Armor_Plate",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Cloth_Navy",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Leather_Black",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Skin",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Hair_Black",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Emissive_Cyan",
+                "emissive": "#11e0ff",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              }
+            ],
+            "textures": [
+              {
+                "role": "map",
+                "w": 1024,
+                "h": 1024
+              },
+              {
+                "role": "normalMap",
+                "w": 1024,
+                "h": 1024
+              },
+              {
+                "role": "rmMap",
+                "w": 1024,
+                "h": 1024
+              }
+            ],
+            "bones": 21,
+            "height": 1.89
+          },
+          "boss": {
+            "kind": "boss",
+            "tier": "1024",
+            "url": "art/%E6%A8%A1%E5%9E%8B/glb/mage_idle_1024.glb",
+            "model": "mage_idle",
+            "arm": "off",
+            "mats": [
+              {
+                "name": "MAT_Armor_Plate",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Cloth_Purple",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Leather_Black",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Skin",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Hair_Black",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Emissive_Purple",
+                "emissive": "#a63bff",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              }
+            ],
+            "textures": [
+              {
+                "role": "map",
+                "w": 1024,
+                "h": 1024
+              },
+              {
+                "role": "normalMap",
+                "w": 1024,
+                "h": 1024
+              },
+              {
+                "role": "rmMap",
+                "w": 1024,
+                "h": 1024
+              }
+            ],
+            "bones": 21,
+            "height": 1.96
+          },
+          "grunt": {
+            "kind": "grunt",
+            "tier": "1024",
+            "url": "art/%E6%A8%A1%E5%9E%8B/glb/swordsman_idle_1024.glb",
+            "model": "swordsman_idle",
+            "arm": "on",
+            "mats": [
+              {
+                "name": "MAT_Armor_Plate",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Cloth_Navy",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Leather_Black",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Skin",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Hair_Black",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Emissive_Cyan",
+                "emissive": "#11e0ff",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              }
+            ],
+            "textures": [
+              {
+                "role": "map",
+                "w": 1024,
+                "h": 1024
+              },
+              {
+                "role": "normalMap",
+                "w": 1024,
+                "h": 1024
+              },
+              {
+                "role": "rmMap",
+                "w": 1024,
+                "h": 1024
+              }
+            ],
+            "bones": 21,
+            "height": 1.84
+          }
+        },
+        "fallbacks": {},
+        "mountMs": {
+          "duelist": 331,
+          "shooter": 276,
+          "boss": 289,
+          "grunt": 560
+        },
+        "cacheUrls": [
+          "art/%E6%A8%A1%E5%9E%8B/glb/gunner_idle_1024.glb",
+          "art/%E6%A8%A1%E5%9E%8B/glb/swordsman_idle_1024.glb",
+          "art/%E6%A8%A1%E5%9E%8B/glb/mage_idle_1024.glb"
+        ]
+      },
+      "bytes": {
+        "art/%E6%A8%A1%E5%9E%8B/glb/gunner_idle_1024.glb": 2070544,
+        "art/%E6%A8%A1%E5%9E%8B/glb/swordsman_idle_1024.glb": 2267124,
+        "art/%E6%A8%A1%E5%9E%8B/glb/mage_idle_1024.glb": 1821360
+      },
+      "stats": {
+        "calls": 85,
+        "tris": 70125,
+        "textures": 61
+      },
+      "alive": 3,
+      "planted": 3
+    }
+  },
+  {
+    "spec": "1主角+6敌人(2K)",
+    "query": "extra=3",
+    "ready": true,
+    "metrics": {
+      "hud": "档位 art=glb  tex=policy  1024回退={}\n场景遍历口径: draw calls=104  triangles=115184  textures=61\nFPS(近10s): 平均=88.1  P99帧时间=99.40 ms  样本=161\n实例: 敌人存活=6 / 布置=6\n· grunt → swordsman_idle 身高=1.794m 三角=14999 骨骼=21 材质=6 挂载=679ms\n· shooter → gunner_idle 身高=1.836m 三角=16000 骨骼=21 材质=6 挂载=366ms\n· boss → mage_idle 身高=3.331m 三角=14000 骨骼=21 材质=6 挂载=373ms\n· grunt → swordsman_idle 身高=1.794m 三角=14999 骨骼=21 材质=6 挂载=681ms\n· shooter → gunner_idle 身高=1.836m 三角=16000 骨骼=21 材质=6 挂载=367ms\n· boss → mage_idle 身高=3.331m 三角=14000 骨骼=21 材质=6 挂载=374ms\n已加载模型: 3 份, 合计=5.87 MiB (6159028 B)\n挂载毫秒(info): {\"duelist\":368,\"shooter\":367,\"boss\":374,\"grunt\":681}",
+      "info": {
+        "tier": "policy",
+        "override": null,
+        "policy": {
+          "hero": "2k",
+          "enemy": "1024"
+        },
+        "armPolicy": {
+          "mage_idle": "arm=off（资产限制：袖/下摆权重未绑 Hips，待 Blender 重绑）"
+        },
+        "entries": {
+          "duelist": {
+            "kind": "duelist",
+            "tier": "1024",
+            "url": "art/%E6%A8%A1%E5%9E%8B/glb/gunner_idle_1024.glb",
+            "model": "gunner_idle",
+            "arm": "on",
+            "mats": [
+              {
+                "name": "MAT_Armor_Plate",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Cloth_Navy",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Leather_Black",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Skin",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Hair_Black",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Emissive_Cyan",
+                "emissive": "#11e0ff",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              }
+            ],
+            "textures": [
+              {
+                "role": "map",
+                "w": 1024,
+                "h": 1024
+              },
+              {
+                "role": "normalMap",
+                "w": 1024,
+                "h": 1024
+              },
+              {
+                "role": "rmMap",
+                "w": 1024,
+                "h": 1024
+              }
+            ],
+            "bones": 21,
+            "height": 1.89
+          },
+          "shooter": {
+            "kind": "shooter",
+            "tier": "1024",
+            "url": "art/%E6%A8%A1%E5%9E%8B/glb/gunner_idle_1024.glb",
+            "model": "gunner_idle",
+            "arm": "on",
+            "mats": [
+              {
+                "name": "MAT_Armor_Plate",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Cloth_Navy",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Leather_Black",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Skin",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Hair_Black",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Emissive_Cyan",
+                "emissive": "#11e0ff",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              }
+            ],
+            "textures": [
+              {
+                "role": "map",
+                "w": 1024,
+                "h": 1024
+              },
+              {
+                "role": "normalMap",
+                "w": 1024,
+                "h": 1024
+              },
+              {
+                "role": "rmMap",
+                "w": 1024,
+                "h": 1024
+              }
+            ],
+            "bones": 21,
+            "height": 1.89
+          },
+          "boss": {
+            "kind": "boss",
+            "tier": "1024",
+            "url": "art/%E6%A8%A1%E5%9E%8B/glb/mage_idle_1024.glb",
+            "model": "mage_idle",
+            "arm": "off",
+            "mats": [
+              {
+                "name": "MAT_Armor_Plate",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Cloth_Purple",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Leather_Black",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Skin",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Hair_Black",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Emissive_Purple",
+                "emissive": "#a63bff",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              }
+            ],
+            "textures": [
+              {
+                "role": "map",
+                "w": 1024,
+                "h": 1024
+              },
+              {
+                "role": "normalMap",
+                "w": 1024,
+                "h": 1024
+              },
+              {
+                "role": "rmMap",
+                "w": 1024,
+                "h": 1024
+              }
+            ],
+            "bones": 21,
+            "height": 1.96
+          },
+          "grunt": {
+            "kind": "grunt",
+            "tier": "1024",
+            "url": "art/%E6%A8%A1%E5%9E%8B/glb/swordsman_idle_1024.glb",
+            "model": "swordsman_idle",
+            "arm": "on",
+            "mats": [
+              {
+                "name": "MAT_Armor_Plate",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Cloth_Navy",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Leather_Black",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Skin",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Hair_Black",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Emissive_Cyan",
+                "emissive": "#11e0ff",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              }
+            ],
+            "textures": [
+              {
+                "role": "map",
+                "w": 1024,
+                "h": 1024
+              },
+              {
+                "role": "normalMap",
+                "w": 1024,
+                "h": 1024
+              },
+              {
+                "role": "rmMap",
+                "w": 1024,
+                "h": 1024
+              }
+            ],
+            "bones": 21,
+            "height": 1.84
+          }
+        },
+        "fallbacks": {},
+        "mountMs": {
+          "duelist": 368,
+          "shooter": 367,
+          "boss": 374,
+          "grunt": 681
+        },
+        "cacheUrls": [
+          "art/%E6%A8%A1%E5%9E%8B/glb/gunner_idle_1024.glb",
+          "art/%E6%A8%A1%E5%9E%8B/glb/swordsman_idle_1024.glb",
+          "art/%E6%A8%A1%E5%9E%8B/glb/mage_idle_1024.glb"
+        ]
+      },
+      "bytes": {
+        "art/%E6%A8%A1%E5%9E%8B/glb/gunner_idle_1024.glb": 2070544,
+        "art/%E6%A8%A1%E5%9E%8B/glb/swordsman_idle_1024.glb": 2267124,
+        "art/%E6%A8%A1%E5%9E%8B/glb/mage_idle_1024.glb": 1821360
+      },
+      "stats": {
+        "calls": 104,
+        "tris": 115184,
+        "textures": 61
+      },
+      "alive": 6,
+      "planted": 6
+    }
+  },
+  {
+    "spec": "1主角+3敌人(敌人1024)",
+    "query": "tex=1024",
+    "ready": true,
+    "metrics": {
+      "hud": "档位 art=glb  tex=1024  1024回退={}\n场景遍历口径: draw calls=87  triangles=70245  textures=61\nFPS(近10s): 平均=89.8  P99帧时间=111.40 ms  样本=161\n实例: 敌人存活=3 / 布置=3\n· grunt → swordsman_idle 身高=1.794m 三角=14999 骨骼=21 材质=6 挂载=620ms\n· shooter → gunner_idle 身高=1.836m 三角=16000 骨骼=21 材质=6 挂载=343ms\n· boss → mage_idle 身高=3.331m 三角=14000 骨骼=21 材质=6 挂载=346ms\n已加载模型: 3 份, 合计=5.87 MiB (6159028 B)\n挂载毫秒(info): {\"duelist\":344,\"shooter\":343,\"boss\":346,\"grunt\":620}",
+      "info": {
+        "tier": "1024",
+        "override": "1024",
+        "policy": {
+          "hero": "2k",
+          "enemy": "1024"
+        },
+        "armPolicy": {
+          "mage_idle": "arm=off（资产限制：袖/下摆权重未绑 Hips，待 Blender 重绑）"
+        },
+        "entries": {
+          "duelist": {
+            "kind": "duelist",
+            "tier": "1024",
+            "url": "art/%E6%A8%A1%E5%9E%8B/glb/gunner_idle_1024.glb",
+            "model": "gunner_idle",
+            "arm": "on",
+            "mats": [
+              {
+                "name": "MAT_Armor_Plate",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Cloth_Navy",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Leather_Black",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Skin",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Hair_Black",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Emissive_Cyan",
+                "emissive": "#11e0ff",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              }
+            ],
+            "textures": [
+              {
+                "role": "map",
+                "w": 1024,
+                "h": 1024
+              },
+              {
+                "role": "normalMap",
+                "w": 1024,
+                "h": 1024
+              },
+              {
+                "role": "rmMap",
+                "w": 1024,
+                "h": 1024
+              }
+            ],
+            "bones": 21,
+            "height": 1.89
+          },
+          "shooter": {
+            "kind": "shooter",
+            "tier": "1024",
+            "url": "art/%E6%A8%A1%E5%9E%8B/glb/gunner_idle_1024.glb",
+            "model": "gunner_idle",
+            "arm": "on",
+            "mats": [
+              {
+                "name": "MAT_Armor_Plate",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Cloth_Navy",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Leather_Black",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Skin",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Hair_Black",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Emissive_Cyan",
+                "emissive": "#11e0ff",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              }
+            ],
+            "textures": [
+              {
+                "role": "map",
+                "w": 1024,
+                "h": 1024
+              },
+              {
+                "role": "normalMap",
+                "w": 1024,
+                "h": 1024
+              },
+              {
+                "role": "rmMap",
+                "w": 1024,
+                "h": 1024
+              }
+            ],
+            "bones": 21,
+            "height": 1.89
+          },
+          "boss": {
+            "kind": "boss",
+            "tier": "1024",
+            "url": "art/%E6%A8%A1%E5%9E%8B/glb/mage_idle_1024.glb",
+            "model": "mage_idle",
+            "arm": "off",
+            "mats": [
+              {
+                "name": "MAT_Armor_Plate",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Cloth_Purple",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Leather_Black",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Skin",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Hair_Black",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Emissive_Purple",
+                "emissive": "#a63bff",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              }
+            ],
+            "textures": [
+              {
+                "role": "map",
+                "w": 1024,
+                "h": 1024
+              },
+              {
+                "role": "normalMap",
+                "w": 1024,
+                "h": 1024
+              },
+              {
+                "role": "rmMap",
+                "w": 1024,
+                "h": 1024
+              }
+            ],
+            "bones": 21,
+            "height": 1.96
+          },
+          "grunt": {
+            "kind": "grunt",
+            "tier": "1024",
+            "url": "art/%E6%A8%A1%E5%9E%8B/glb/swordsman_idle_1024.glb",
+            "model": "swordsman_idle",
+            "arm": "on",
+            "mats": [
+              {
+                "name": "MAT_Armor_Plate",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Cloth_Navy",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Leather_Black",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Skin",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Hair_Black",
+                "emissive": "#000000",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              },
+              {
+                "name": "MAT_Emissive_Cyan",
+                "emissive": "#11e0ff",
+                "maps": [
+                  {
+                    "role": "map",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "normalMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  },
+                  {
+                    "role": "rmMap",
+                    "w": 1024,
+                    "h": 1024
+                  }
+                ]
+              }
+            ],
+            "textures": [
+              {
+                "role": "map",
+                "w": 1024,
+                "h": 1024
+              },
+              {
+                "role": "normalMap",
+                "w": 1024,
+                "h": 1024
+              },
+              {
+                "role": "rmMap",
+                "w": 1024,
+                "h": 1024
+              }
+            ],
+            "bones": 21,
+            "height": 1.84
+          }
+        },
+        "fallbacks": {},
+        "mountMs": {
+          "duelist": 344,
+          "shooter": 343,
+          "boss": 346,
+          "grunt": 620
+        },
+        "cacheUrls": [
+          "art/%E6%A8%A1%E5%9E%8B/glb/gunner_idle_1024.glb",
+          "art/%E6%A8%A1%E5%9E%8B/glb/swordsman_idle_1024.glb",
+          "art/%E6%A8%A1%E5%9E%8B/glb/mage_idle_1024.glb"
+        ]
+      },
+      "bytes": {
+        "art/%E6%A8%A1%E5%9E%8B/glb/gunner_idle_1024.glb": 2070544,
+        "art/%E6%A8%A1%E5%9E%8B/glb/swordsman_idle_1024.glb": 2267124,
+        "art/%E6%A8%A1%E5%9E%8B/glb/mage_idle_1024.glb": 1821360
+      },
+      "stats": {
+        "calls": 87,
+        "tris": 70245,
+        "textures": 61
+      },
+      "alive": 3,
+      "planted": 3
+    }
+  },
+  {
+    "spec": "回归-real档",
+    "query": "art=real",
+    "ready": true,
+    "metrics": {
+      "hud": "档位 art=real  tex=policy  1024回退={}\n场景遍历口径: draw calls=370  triangles=75186  textures=32\nFPS(近10s): 平均=137.1  P99帧时间=10.30 ms  样本=125\n实例: 敌人存活=3 / 布置=3\n· grunt → - 身高=0.449m 三角=16254 骨骼=0 材质=1\n· shooter → - 身高=0.457m 三角=16250 骨骼=0 材质=1\n· boss → - 身高=0.831m 三角=17842 骨骼=0 材质=1\n已加载模型: 0 份, 合计=0.00 MiB (0 B)",
+      "info": {
+        "tier": "policy",
+        "override": null,
+        "policy": {
+          "hero": "2k",
+          "enemy": "1024"
+        },
+        "armPolicy": {
+          "mage_idle": "arm=off（资产限制：袖/下摆权重未绑 Hips，待 Blender 重绑）"
+        },
+        "entries": {},
+        "fallbacks": {},
+        "mountMs": {},
+        "cacheUrls": []
+      },
+      "bytes": {},
+      "stats": {
+        "calls": 370,
+        "tris": 75186,
+        "textures": 32
+      },
+      "alive": 3,
+      "planted": 3
+    }
+  },
+  {
+    "spec": "回归-ink档",
+    "query": "art=ink",
+    "ready": true,
+    "metrics": {
+      "hud": "档位 art=ink  tex=policy  1024回退={}\n场景遍历口径: draw calls=354  triangles=39078  textures=28\nFPS(近10s): 平均=94.5  P99帧时间=78.30 ms  样本=125\n实例: 敌人存活=3 / 布置=3\n· grunt → - 身高=0.458m 三角=8906 骨骼=0 材质=1\n· shooter → - 身高=0.468m 三角=8914 骨骼=0 材质=1\n· boss → - 身高=0.848m 三角=9054 骨骼=0 材质=1\n已加载模型: 0 份, 合计=0.00 MiB (0 B)",
+      "info": {
+        "tier": "policy",
+        "override": null,
+        "policy": {
+          "hero": "2k",
+          "enemy": "1024"
+        },
+        "armPolicy": {
+          "mage_idle": "arm=off（资产限制：袖/下摆权重未绑 Hips，待 Blender 重绑）"
+        },
+        "entries": {},
+        "fallbacks": {},
+        "mountMs": {},
+        "cacheUrls": []
+      },
+      "bytes": {},
+      "stats": {
+        "calls": 354,
+        "tris": 39078,
+        "textures": 28
+      },
+      "alive": 3,
+      "planted": 3
+    }
+  }
+]

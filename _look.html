@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="style.css" />
+<style>
+  #diag { position: fixed; left: 12px; top: 12px; z-index: 9999; font: 13px/1.7 Consolas, monospace;
+    color: #d8f3ff; background: rgba(4,8,14,.82); padding: 10px 14px;
+    border: 1px solid rgba(120,210,255,.35); border-radius: 6px; max-width: 52vw; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="hud" class="hidden">
+  <div id="topbar">
+    <div class="chip" id="modeLabel">PVE 副本</div>
+    <div class="chip" id="objective">WAVE 1</div>
+    <div class="chip" id="timer">00:00</div>
+  </div>
+  <div id="crosshair"><i class="t"></i><i class="r"></i><i class="b"></i><i class="l"></i></div>
+  <div id="hitmarker"></div>
+  <div id="vitals">
+    <div class="bar"><div class="fill hp" id="hpFill"></div><span id="hpText">120 / 120</span></div>
+    <div class="bar"><div class="fill en" id="enFill"></div><span id="enText">100</span></div>
+    <div class="bar slim"><div class="fill st" id="stFill"></div><span id="stText">100</span></div>
+  </div>
+  <div id="skills"></div>
+  <div id="toast"></div>
+  <div id="dmgLayer"></div>
+  <div id="flash"></div>
+</div>
+<div id="overlay">
+  <div class="panel" id="menuPanel">
+    <h1>第七竞技场</h1>
+    <p class="sub">SEVENTH ARENA</p>
+    <div class="row">
+      <label>模式</label>
+      <div class="toggle" id="modeToggle"><button data-mode="pve" class="on">PVE 副本</button><button data-mode="pvp">PVP 对决</button></div>
+    </div>
+    <div class="row">
+      <label>职业</label>
+      <div class="toggle" id="classToggle"><button data-cls="blade" class="on">剑客</button><button data-cls="gunner">枪手</button><button data-cls="mage">术士</button></div>
+    </div>
+    <button id="startBtn" class="primary">进入竞技场</button>
+  </div>
+  <div class="panel hidden" id="pausePanel"><h2>已暂停</h2></div>
+  <div class="panel hidden" id="resultPanel"><h2 id="resultTitle">行动结束</h2><p class="sub" id="resultSub"></p><div id="resultStats"></div><button id="againBtn" class="primary">再来一局</button><button id="backBtn" class="ghost">返回主菜单</button></div>
+</div>
+<div id="diag">boot…</div>
+<script src="vendor/three.min.js"></script>
+<script src="art.js"></script>
+<script src="fx.js"></script>
+<script src="scene.js"></script>
+<script src="game.js"></script>
+<script>
+(function () {
+  const F = 1 / 60;
+  const diag = document.getElementById('diag');
+  window.addEventListener('error', e => { diag.textContent = 'ERR ' + e.message + ' @' + e.lineno; });
+
+  setTimeout(function () {
+    // 默认走 PVP（竞技场日场）；?m=pve 切到副本首领厅
+    var pve = location.search.indexOf('pve') >= 0;
+    document.querySelector('#modeToggle button[data-mode="' + (pve ? 'pve' : 'pvp') + '"]').click();
+    document.querySelector('#classToggle button[data-cls="gunner"]').click();
+    document.getElementById('startBtn').click();
+    const g = window.__arenaDebug;
+
+    if (pve) {
+      document.getElementById('hud').classList.add('hidden');
+      document.getElementById('overlay').classList.add('hidden');
+      const s = window.ArenaScene ? ArenaScene.stats() : { kind: 'none', meshes: 0, tris: 0 };
+      diag.textContent = 'PVE scene ' + s.kind + ' mesh ' + s.meshes + ' tris ' + s.tris;
+      g.render();
+      return;
+    }
+
+    // 摆一排五型敌人，正对镜头 4.6m
+    const order = ['grunt', 'shooter', 'elite', 'duelist', 'boss'];
+    const xs = [-2.9, -1.45, 0, 1.45, 2.9];
+    for (let i = 0; i < order.length; i++) {
+      const e = g.spawn(order[i], new THREE.Vector3(xs[i], 0, -4.6));
+      e.mesh.rotation.y = 0;
+      e.speed = 0;
+      e.attackCd = 99;
+    }
+    // __arenaDebug.step 只跑玩家与特效，不走 updateEnemies；
+    // 出现动画是 updateEnemies 里做的，这里直接把 spawn 收尾并给到基准缩放
+    g.enemies.forEach(function (e) {
+      e.spawn = 0;
+      e.mesh.scale.setScalar(e.baseScale);
+      e.pos.copy(e.mesh.position);
+      e.speed = 0;
+    });
+
+    // 报面数 / mesh 数
+    const stat = [];
+    g.enemies.forEach(function (e) {
+      let tris = 0, meshes = 0;
+      e.mesh.traverse(function (o) {
+        if (!o.isMesh) return;
+        meshes++;
+        tris += o.geometry.attributes.position.count / 3;
+      });
+      stat.push(e.type + ' ' + Math.round(tris) + 't/' + meshes + 'm x' + e.mesh.scale.x.toFixed(2));
+    });
+    stat.push('scene ' + (window.ArenaScene ? ArenaScene.stats().kind + ' m' + ArenaScene.stats().meshes : 'none'));
+
+    document.getElementById('hud').classList.add('hidden');
+    document.getElementById('overlay').classList.add('hidden');
+    diag.textContent = stat.join('  ');
+    g.render();
+    window.__lookStat = stat.join('  ');
+  }, 500);
+})();
+</script>
+</body>
+</html>

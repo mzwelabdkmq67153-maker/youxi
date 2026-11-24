@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>GLB 接缝验证 _glb_seam</title>
+<style>
+  html, body { margin: 0; background: #0b0d10; overflow: hidden; }
+  #c { display: block; }
+  #hud { position: fixed; left: 16px; bottom: 12px; font: 12px/1.6 "Microsoft YaHei", sans-serif; color: #9fb6c8; width: 560px; }
+  #hud h2 { margin: 0 0 6px; font-size: 15px; color: #fff; }
+  #hud .panel { background: rgba(0,0,0,.55); border: 1px solid #2c3a48; border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; }
+  #hud b { color: #ffe9a8; }
+  #models { white-space: pre-wrap; }
+  #bar { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); }
+  #bar button { font: 13px "Microsoft YaHei", sans-serif; padding: 8px 14px; margin: 0 6px; background: #22303c; color: #dbe7f0; border: 1px solid #3a4d5e; border-radius: 6px; cursor: pointer; }
+  #bar button:hover { background: #3d6a8a; }
+  #tag { position: fixed; right: 18px; top: 12px; text-align: right; font: 12px/1.6 "Microsoft YaHei", sans-serif; color: #7e93a9; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <h2>GLB 写实档接缝验证 · 入口 ArenaArt.buildHero / buildFighter</h2>
+  <div class="panel" id="stat"></div>
+  <div class="panel" id="models"></div>
+</div>
+<div id="bar">
+  <button id="btnSlash">slash 横斩</button>
+  <button id="btnShoot">shoot 射击</button>
+  <button id="btnCast">cast 施法</button>
+</div>
+<div id="tag"><b id="lookTag">day</b> · tex=<b id="texTag">2k</b></div>
+
+<script src="vendor/three.min.js"></script>
+<script src="vendor/GLTFLoader.js"></script>
+<script src="vendor/SkeletonUtils.js"></script>
+<script src="art.js"></script>
+<script src="hero3d.js"></script>
+<script src="real3d.js"></script>
+<script src="glb3d.js"></script>
+<!-- night 档：加载 night.js 走 NightGrade 补剪影；日场不加载 -->
+<script>
+  (function () {
+    var q = new URLSearchParams(location.search);
+    if (q.get('look') === 'night') {
+      var s = document.createElement('script');
+      s.src = 'night.js'; document.body.appendChild(s);
+    }
+    /* 与 index.html 同一接线逻辑：写实档把 Hero3D 指向 Glb3D */
+    if (window.Glb3D) window.Hero3D = window.Glb3D;
+  })();
+</script>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var LOOK = q.get('look') === 'night' ? 'night' : 'day';
+  var W = 1400, H = 900;
+  var canvas = document.getElementById('c');
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+  renderer.setPixelRatio(1); renderer.setSize(W, H, false);
+  if (THREE.sRGBEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.80;
+  renderer.shadowMap.enabled = true;
+
+  var scene = new THREE.Scene();
+  if (LOOK === 'night') {
+    scene.background = new THREE.Color(0x070a10);
+    scene.add(new THREE.HemisphereLight(0x2a3d52, 0x0a0c10, 0.35));
+    var moon = new THREE.DirectionalLight(0x9fc6e8, 0.55); moon.position.set(-3, 5, -4); scene.add(moon);
+    var fill = new THREE.DirectionalLight(0x35506a, 0.25); fill.position.set(4, 2, 3); scene.add(fill);
+  } else {
+    scene.background = new THREE.Color(0x0b0d10);
+    scene.add(new THREE.HemisphereLight(0x9fb4c8, 0x1b1712, 0.85));
+    var key = new THREE.DirectionalLight(0xfff0dc, 2.0); key.position.set(3, 5.5, 4); scene.add(key);
+    var rim = new THREE.DirectionalLight(0xcfe0ff, 1.1); rim.position.set(-2, 3, -5); scene.add(rim);
+    var fill2 = new THREE.DirectionalLight(0x9dbcd8, 0.6); fill2.position.set(-4, 2, 3); scene.add(fill2);
+  }
+
+  var floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 24),
+    new THREE.MeshStandardMaterial({ color: LOOK === 'night' ? 0x10141a : 0x15181c, roughness: 0.95 }));
+  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+
+  /* ---------- 身高标尺 1.60 / 1.80 / 2.00 ---------- */
+  function makeRuler() {
+    var g = new THREE.Group();
+    var mat = new THREE.MeshBasicMaterial({ color: 0x6fb6dd, fog: false });
+    var rod = new THREE.Mesh(new THREE.BoxGeometry(0.012, 2.0, 0.012), mat);
+    rod.position.y = 1.0; g.add(rod);
+    [1.60, 1.80, 2.00].forEach(function (h) {
+      var tick = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.008, 0.008), mat);
+      tick.position.set(0.05, h, 0); g.add(tick);
+      var cv = document.createElement('canvas'); cv.width = 128; cv.height = 48;
+      var ctx = cv.getContext('2d');
+      ctx.fillStyle = '#9fd8ef'; ctx.font = '28px monospace'; ctx.fillText(h.toFixed(2), 4, 34);
+      var tex = new THREE.CanvasTexture(cv);
+      var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, fog: false, depthWrite: false }));
+      sp.position.set(0.22, h, 0); sp.scale.set(0.28, 0.105, 1); g.add(sp);
+    });
+    g.position.x = 2.12;
+    return g;
+  }
+  scene.add(makeRuler());
+
+  /* ---------- 走局内真实入口 ----------
+     ?demo=tier：hero(2K) 与 enemy(1024) 同屏对照；同模型 swordsman 同时走两个 URL */
+  var DEMO = q.get('demo') === 'tier';
+  var SIZEDEMO = q.get('demo') === 'size';
+  var KITS = DEMO ? [
+    { kind: 'swordsman', label: '剑客 swordsman(hero)',  x: -1.8 },
+    { kind: 'grunt',     label: '小兵 grunt(enemy)',     x: -0.6 },
+    { kind: 'gunner',    label: '枪手 gunner(hero)',     x: 0.6 },
+    { kind: 'shooter',   label: '远程 shooter(enemy)',   x: 1.8 }
+  ] : SIZEDEMO ? [
+    { kind: 'swordsman', label: '主角 swordsman', x: -2.4 },
+    { kind: 'grunt',     label: 'grunt',          x: -1.2 },
+    { kind: 'shooter',   label: 'shooter',        x: 0.0 },
+    { kind: 'elite',     label: 'elite',          x: 1.2 },
+    { kind: 'boss',      label: 'boss',           x: 2.4 }
+  ] : [
+    { kind: 'swordsman', label: '剑客 swordsman', x: -1.5 },
+    { kind: 'gunner',    label: '枪手 gunner',    x: 0.0 },
+    { kind: 'warlock',   label: '术士 warlock',   x: 1.5 }
+  ];
+  var models = [];
+  KITS.forEach(function (k) {
+    var m = ArenaArt.buildHero(k.kind);
+    m.position.x = k.x; m.rotation.y = 0;
+    /* 与 game.js 一致：敌人根 scale = scaleOf(type)；主角根 scale=1（差异只在 FIT 归一） */
+    var HERO_K = { swordsman: 1, gunner: 1, warlock: 1, mage: 1, blade: 1 };
+    var rootScale = HERO_K[k.kind] ? 1 : (ArenaArt.scaleOf ? ArenaArt.scaleOf(k.kind) : 1);
+    m.scale.setScalar(rootScale);
+    scene.add(m);
+    models.push({ kit: k, mesh: m });
+  });
+
+  var FOCUS = q.get('focus');
+  var focusKit = KITS.filter(function (k) { return k.kind === FOCUS; })[0] || KITS[0];
+  var camera = new THREE.PerspectiveCamera(26, W / H, 0.1, 60);
+  if (q.get('cam') === 'near') {
+    camera.position.set(focusKit.x, 1.40, 3.6);
+    camera.lookAt(focusKit.x, 1.05, 0);
+  } else {
+    camera.position.set(0, SIZEDEMO ? 1.70 : 1.45, SIZEDEMO ? 10.2 : (DEMO ? 7.6 : 6.8));
+    camera.lookAt(0, SIZEDEMO ? 1.35 : 1.0, 0);
+  }
+
+  document.getElementById('lookTag').textContent = LOOK;
+  document.getElementById('texTag').textContent = (window.Glb3D && Glb3D.getTexTier()) || '2k';
+
+  /* ---------- 动作按钮 ---------- */
+  function trigger(name) {
+    models.forEach(function (o) {
+      if (window.Glb3D) Glb3D.swing(o.mesh, name, name === 'cast' ? 0.7 : 0.42);
+    });
+  }
+  document.getElementById('btnSlash').onclick = function () { trigger('slash'); };
+  document.getElementById('btnShoot').onclick = function () { trigger('shoot'); };
+  document.getElementById('btnCast').onclick = function () { trigger('cast'); };
+
+  /* 截图留证用：?act=slash|shoot|cast，rAF 帧内轮询，三模型挂载完成后触发一次；
+     ?actDur=秒 时长（拉长便于无头截图落在动作中段） */
+  var ACT = q.get('act');
+  var actDur = parseFloat(q.get('actDur') || '0');
+  var actQ = parseFloat(q.get('actQ') || '0.45');
+  var actFired = false;
+  function fireAct() {
+    models.forEach(function (o) {
+      if (window.Glb3D) Glb3D.swing(o.mesh, ACT, actDur > 0 ? actDur : (ACT === 'cast' ? 0.7 : 0.42));
+      var r = o.mesh.userData.glb;
+      if (r && r.attack) r.attack.t = actQ * r.attack.dur;
+    });
+  }
+
+  /* ---------- HUD ---------- */
+  var statEl = document.getElementById('stat');
+  var modEl = document.getElementById('models');
+
+  function fmtMat(m) {
+    return m.name + (m.emissive && m.emissive !== '#000000' ? ' e=' + m.emissive : '');
+  }
+
+  function refreshHud() {
+    var info = window.Glb3D ? Glb3D.info() : null;
+    var lines = [];
+    models.forEach(function (o) {
+      var m = o.mesh, ud = m.userData;
+      var rig = ud.glb;
+      var line = '【' + o.kit.label + '】 ';
+      if (ud.glbPending) { line += '⏳ 挂载中…'; }
+      else if (ud.glbFallback) { line += '⚠ 已回退 Real3D'; }
+      else if (rig) {
+        var st = Glb3D.stats(m);
+        line += 'glb=' + rig.model + ' 档=' + rig.tier + ' fit=' + rig.fit.toFixed(3) +
+          ' 身高=' + st.height.toFixed(3) + 'm 头数=' + st.heads +
+          ' 骨骼=' + st.bones + ' 三角面=' + st.tris + ' 顶点=' + st.verts;
+        if (ud.mountMs != null) line += ' 挂载=' + ud.mountMs + 'ms';
+        if (rig.groundMinY != null) line += ' 贴地minY=' + (rig.groundMinY * 1000).toFixed(1) + 'mm';
+        if (rig.attack) {
+          line += ' 攻击中=' + rig.attack.name + ' q=' + (rig.attack.t / rig.attack.dur).toFixed(2);
+          var ua = rig.bones['UpperArmR'];
+          if (ua) line += ' [uaR x=' + ua.rotation.x.toFixed(2) + ' z=' + ua.rotation.z.toFixed(2) + ']';
+        }
+        line += '\n  材质槽(' + rig.mats.length + '): ' + rig.mats.map(fmtMat).join(' | ');
+        var tx = rig.textures || [];
+        line += '\n  贴图(' + tx.length + '): ' + tx.map(function (t) { return t.role + '=' + t.w + '×' + t.h; }).join(' | ');
+      }
+      lines.push(line);
+    });
+    modEl.textContent = lines.join('\n');
+
+    var ri = renderer.info;
+    var tail = 'renderer.info → draw calls=' + ri.render.calls + '  triangles=' + ri.render.triangles +
+      '  textures=' + ri.memory.textures + '  geometries=' + ri.memory.geometries;
+    if (info) tail += '\n档位 policy=hero:' + (info.policy && info.policy.hero) + '/enemy:' + (info.policy && info.policy.enemy) +
+      (info.override ? ' 覆盖=' + info.override : '') + '  回退=' + JSON.stringify(info.fallbacks);
+    statEl.textContent = tail;
+  }
+
+  var clock = new THREE.Clock();
+  function loop() {
+    requestAnimationFrame(loop);
+    var dt = Math.min(clock.getDelta(), 0.05);
+    models.forEach(function (o) {
+      if (window.Glb3D) Glb3D.update(o.mesh, dt, { speed: 0, onGround: true, aim: false, hitT: 0 });
+    });
+    if (ACT && !actFired && models.every(function (o) { return !o.mesh.userData.glbPending; })) {
+      actFired = true; fireAct();
+    }
+    renderer.render(scene, camera);
+    refreshHud();
+  }
+  loop();
+  refreshHud();
+})();
+</script>
+</body>
+</html>

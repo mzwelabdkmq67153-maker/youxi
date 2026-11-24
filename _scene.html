@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>场景截图</title>
+<style>
+  html,body{margin:0;background:#0b0f12;overflow:hidden}
+  #diag{position:fixed;left:12px;top:10px;color:#7fe6ff;font:13px/1.5 monospace;text-shadow:0 0 6px #000;z-index:9}
+</style>
+</head>
+<body>
+<div id="diag">…</div>
+<script src="vendor/three.min.js"></script>
+<script src="scene.js"></script>
+<script>
+(function () {
+  var q = location.search.replace('?', '');
+  var kind = q.indexOf('dungeon') >= 0 ? 'dungeon' : 'arena';
+
+  var renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(1280, 720);
+  renderer.setPixelRatio(1);
+  document.body.appendChild(renderer.domElement);
+
+  var scene = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera(58, 1280 / 720, 0.1, 260);
+
+  if (kind === 'arena') {
+    camera.position.set(0, 4.2, 18.2);
+    camera.lookAt(0, 2.6, 0);
+  } else {
+    camera.position.set(0, 2.1, 9.4);
+    camera.lookAt(0, 2.2, 0);
+  }
+
+  scene.add(new THREE.HemisphereLight(0x7fb4ff, 0x0a1018, kind === 'arena' ? 0.95 : 0.72));
+  var key = new THREE.DirectionalLight(0xbfe4ff, kind === 'arena' ? 1.05 : 0.95);
+  key.position.set(20, 30, 14);
+  scene.add(key);
+  var fill = new THREE.DirectionalLight(0x2a6cff, 0.35);
+  fill.position.set(-20, 12, -18);
+  scene.add(fill);
+
+  if (kind === 'arena') {
+    var warm = new THREE.PointLight(0xffd9a0, 0.9, 40);
+    warm.position.set(0, 12, 0);
+    scene.add(warm);
+  }
+  if (kind === 'dungeon') {
+    [[14, 0], [-14, 0], [0, 14], [0, -14]].forEach(function (p) {
+      var pl = new THREE.PointLight(0x4fd8e0, 0.8, 26);
+      pl.position.set(p[0], 3.2, p[1]);
+      scene.add(pl);
+    });
+    [[13.6, 9.5], [-13.6, -9.5]].forEach(function (p) {
+      var fw = new THREE.PointLight(0xffb066, 1.4, 22);
+      fw.position.set(p[0], 1.6, p[1]);
+      scene.add(fw);
+    });
+  }
+
+  var obstacles = [];
+  var st = window.ArenaScene.build(kind, scene, obstacles);
+  ArenaScene.update(0.016);
+  renderer.render(scene, camera);
+
+  var box = new THREE.Box3().setFromObject(scene);
+  document.getElementById('diag').textContent =
+    kind + ' · meshes ' + st.meshes + ' · tris ' + st.tris +
+    ' · obstacles ' + obstacles.length +
+    ' · bboxY ' + box.min.y.toFixed(1) + '~' + box.max.y.toFixed(1);
+})();
+</script>
+</body>
+</html>

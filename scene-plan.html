@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>第七竞技场 · 场景平面</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #f2efe6; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="plan"></canvas>
+<script>
+(function () {
+  'use strict';
+
+  var PLAN = new URLSearchParams(location.search).get('p') || 'arena';
+  var W = 2000, H = 1500;
+  var canvas = document.getElementById('plan');
+  canvas.width = W; canvas.height = H;
+  var ctx = canvas.getContext('2d');
+
+  var INK = '#1f2a33', MUTED = '#6b7a86', GRID = '#ded9cd', PAPER = '#f2efe6';
+  var CYAN = '#2b6f77', CYAN_L = 'rgba(43,111,119,0.14)', WARM = '#a4462f', WARM_L = 'rgba(164,70,47,0.13)';
+
+  function bg() {
+    ctx.fillStyle = PAPER; ctx.fillRect(0, 0, W, H);
+  }
+  function title(t, sub) {
+    ctx.fillStyle = INK;
+    ctx.font = 'bold 40px "Microsoft YaHei", sans-serif';
+    ctx.fillText(t, 80, 88);
+    ctx.fillStyle = MUTED;
+    ctx.font = '18px "Microsoft YaHei", sans-serif';
+    ctx.fillText(sub, 80, 124);
+  }
+  function grid(step, x0, y0, x1, y1) {
+    ctx.strokeStyle = GRID; ctx.lineWidth = 1;
+    for (var x = x0; x <= x1; x += step) { ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1); ctx.stroke(); }
+    for (var y = y0; y <= y1; y += step) { ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke(); }
+  }
+  function label(t, x, y, size, color, align) {
+    ctx.fillStyle = color || INK;
+    ctx.font = (size || 16) + 'px "Microsoft YaHei", sans-serif';
+    ctx.textAlign = align || 'left';
+    ctx.fillText(t, x, y);
+    ctx.textAlign = 'left';
+  }
+  function dimH(x1, x2, y, t) {
+    ctx.strokeStyle = MUTED; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x1, y - 7); ctx.lineTo(x1, y + 7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x2, y - 7); ctx.lineTo(x2, y + 7); ctx.stroke();
+    label(t, (x1 + x2) / 2, y - 12, 15, MUTED, 'center');
+  }
+  function dimV(y1, y2, x, t) {
+    ctx.strokeStyle = MUTED; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(x, y1); ctx.lineTo(x, y2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x - 7, y1); ctx.lineTo(x + 7, y1); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x - 7, y2); ctx.lineTo(x + 7, y2); ctx.stroke();
+    ctx.save(); ctx.translate(x - 12, (y1 + y2) / 2); ctx.rotate(-Math.PI / 2);
+    label(t, 0, 0, 15, MUTED, 'center'); ctx.restore();
+  }
+  function north(x, y) {
+    ctx.strokeStyle = INK; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x, y + 40); ctx.lineTo(x, y - 26); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, y - 34); ctx.lineTo(x - 11, y - 14); ctx.lineTo(x + 11, y - 14); ctx.closePath();
+    ctx.fillStyle = INK; ctx.fill();
+    label('N', x, y - 46, 16, INK, 'center');
+  }
+  function legend(x, y, items) {
+    ctx.strokeStyle = 'rgba(31,42,51,0.25)'; ctx.lineWidth = 1;
+    var h = 16 + items.length * 26;
+    ctx.strokeRect(x, y, 330, h);
+    label('图例', x + 14, y + 24, 16, INK);
+    items.forEach(function (it, i) {
+      var yy = y + 46 + i * 26;
+      ctx.fillStyle = it[1];
+      ctx.fillRect(x + 14, yy - 10, 18, 12);
+      ctx.strokeStyle = 'rgba(31,42,51,0.35)';
+      ctx.strokeRect(x + 14, yy - 10, 18, 12);
+      label(it[0], x + 42, yy, 14, MUTED);
+    });
+  }
+
+  function sectionRail(x, y, s) {
+    var w = 2.8 * s, h = 5.4 * s;
+    ctx.strokeStyle = INK; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x - 60, y); ctx.lineTo(x + w + 60, y); ctx.stroke();
+    ctx.fillStyle = 'rgba(31,42,51,0.10)';
+    ctx.fillRect(x - 18, y - h, 18, h);
+    ctx.fillRect(x + w, y - h, 18, h);
+    ctx.strokeStyle = 'rgba(31,42,51,0.45)'; ctx.lineWidth = 1;
+    ctx.strokeRect(x - 18, y - h, 18, h);
+    ctx.strokeRect(x + w, y - h, 18, h);
+    ctx.fillStyle = 'rgba(43,111,119,0.12)';
+    ctx.fillRect(x - 18, y - h - 22, w + 36, 22);
+    ctx.strokeRect(x - 18, y - h - 22, w + 36, 22);
+    ctx.fillStyle = 'rgba(164,70,47,0.20)';
+    ctx.fillRect(x + w * 0.18, y - h, w * 0.64, h - 1.9 * s);
+    ctx.strokeStyle = WARM; ctx.lineWidth = 1.6;
+    ctx.strokeRect(x + w * 0.18, y - h, w * 0.64, h - 1.9 * s);
+    ctx.beginPath(); ctx.arc(x + 6, y - 1.2 * s, 6, 0, Math.PI * 2);
+    ctx.fillStyle = WARM; ctx.fill();
+    ctx.fillStyle = 'rgba(43,111,119,0.35)';
+    ctx.fillRect(x + w * 0.35, y - 7, w * 0.3, 7);
+    dimV(y, y - h, x - 38, '5.4 m');
+    dimH(x, x + w, y + 44, '2.8 m 净宽');
+    dimV(y, y - 1.9 * s, x + w + 56, '1.9 m');
+    label('回廊剖面 1:1 · 半降石闸', x, y - h - 52, 16, INK);
+  }
+
+
+  function arena() {
+    bg(); title('第七竞技场 · 主擂台平面', '顶视 blockout · 比例 1 : 1 · 单位 m · 网格 4m');
+    var cx = 1000, cy = 760, s = 20;
+    grid(4 * s, 60, 160, W - 60, H - 40);
+
+    // 环看台三段
+    var rings = [
+      [14, 18, CYAN_L, '内圈看台  R14–18  +1.2m'],
+      [18, 23, 'rgba(43,111,119,0.10)', '中圈看台  R18–23  +2.4m'],
+      [23, 29, 'rgba(43,111,119,0.06)', '外圈看台  R23–29  +3.6m']
+    ];
+    rings.forEach(function (r) {
+      ctx.beginPath(); ctx.arc(cx, cy, r[1] * s, 0, Math.PI * 2);
+      ctx.arc(cx, cy, r[0] * s, 0, Math.PI * 2, true);
+      ctx.fillStyle = r[2]; ctx.fill();
+      ctx.beginPath(); ctx.arc(cx, cy, r[1] * s, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(43,111,119,0.5)'; ctx.lineWidth = 1.4; ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, r[0] * s, 0, Math.PI * 2); ctx.stroke();
+    });
+
+    // 看台分段（8 段，两道通道切开）
+    for (var a = 0; a < 8; a++) {
+      if (a === 2 || a === 6) continue; // 南北通道
+      var a0 = a * Math.PI / 4 + 0.04, a1 = (a + 1) * Math.PI / 4 - 0.04;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 29 * s, a0, a1);
+      ctx.arc(cx, cy, 14 * s, a1, a0, true);
+      ctx.strokeStyle = 'rgba(31,42,51,0.28)'; ctx.lineWidth = 1; ctx.stroke();
+    }
+
+    // 擂台
+    ctx.beginPath(); ctx.arc(cx, cy, 12 * s, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(242,239,230,0.9)'; ctx.fill();
+    ctx.strokeStyle = CYAN; ctx.lineWidth = 2.4; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, 10.6 * s, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(43,111,119,0.4)'; ctx.lineWidth = 1; ctx.stroke();
+
+    // 四断柱
+    [45, 135, 225, 315].forEach(function (deg) {
+      var rad = deg * Math.PI / 180;
+      var x = cx + Math.cos(rad) * 10.2 * s, y = cy + Math.sin(rad) * 10.2 * s;
+      ctx.beginPath(); ctx.arc(x, y, 0.7 * s, 0, Math.PI * 2);
+      ctx.fillStyle = WARM_L; ctx.fill();
+      ctx.strokeStyle = WARM; ctx.lineWidth = 1.6; ctx.stroke();
+      label('断柱', x + 0.9 * s, y - 0.4 * s, 12, WARM);
+    });
+
+    // 掩体 6 处
+    [0, 60, 120, 180, 240, 300].forEach(function (deg) {
+      var rad = deg * Math.PI / 180;
+      var x = cx + Math.cos(rad) * 6.2 * s, y = cy + Math.sin(rad) * 6.2 * s;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(rad);
+      ctx.fillStyle = 'rgba(31,42,51,0.10)';
+      ctx.fillRect(-0.9 * s, -0.45 * s, 1.8 * s, 0.9 * s);
+      ctx.strokeStyle = 'rgba(31,42,51,0.45)'; ctx.lineWidth = 1; ctx.strokeRect(-0.9 * s, -0.45 * s, 1.8 * s, 0.9 * s);
+      ctx.restore();
+    });
+
+    // 南北候场通道 4.5m 宽
+    [[90, 'A 队通道'], [270, 'B 队通道']].forEach(function (c) {
+      var rad = c[0] * Math.PI / 180;
+      var w = 4.5 * s;
+      var x0 = cx + Math.cos(rad) * 14 * s, y0 = cy + Math.sin(rad) * 14 * s;
+      var x1 = cx + Math.cos(rad) * 30 * s, y1 = cy + Math.sin(rad) * 30 * s;
+      var len = Math.hypot(x1 - x0, y1 - y0);
+      ctx.save(); ctx.translate((x0 + x1) / 2, (y0 + y1) / 2); ctx.rotate(rad + Math.PI / 2);
+      ctx.fillStyle = 'rgba(43,111,119,0.20)';
+      ctx.fillRect(-w / 2, -len / 2, w, len);
+      ctx.strokeStyle = CYAN; ctx.lineWidth = 1.4;
+      ctx.strokeRect(-w / 2, -len / 2, w, len);
+      ctx.restore();
+      label(c[1], cx + Math.cos(rad) * (30 * s - 12), cy + Math.sin(rad) * (30 * s - 12), 14, CYAN, 'center');
+    });
+
+    // 出生点与复活点
+    ctx.beginPath(); ctx.arc(cx, cy, 0.9 * s, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(31,42,51,0.75)'; ctx.fill();
+    label('中央复活 / 开赛点', cx, cy + 2.0 * s, 14, INK, 'center');
+
+    // 尺寸标注
+    dimH(cx - 12 * s, cx + 12 * s, cy + 15.4 * s, 'Ø 24 m  擂台');
+    dimV(cy - 29 * s, cy + 29 * s, cx + 29 * s + 40, 'Ø 58 m  看台外缘');
+    label('台北', cx, cy - 12 * s - 10, 14, MUTED, 'center');
+    north(W - 190, 230);
+    legend(80, H - 240, [
+      ['擂台 / 可站立区', 'rgba(242,239,230,0.9)'],
+      ['看台（三段阶梯）', CYAN_L],
+      ['断柱（不可穿越）', WARM_L],
+      ['掩体 1.8×0.9', 'rgba(31,42,51,0.10)'],
+      ['候场通道 4.5 宽', 'rgba(43,111,119,0.20)']
+    ]);
+    label('搭建口径：台面 24m，看台三圈各抬 1.2m，四断柱在 45° 位、半径 10.2m；掩体 6 处对称布置，供第一人称走位与遮挡测试。', 460, H - 100, 15, MUTED);
+    window.__PLAN = 'arena';
+    document.title = '竞技场平面';
+  }
+
+  /* ===================== 副本 ===================== */
+  function dungeon() {
+    bg(); title('副本 · 山门—回廊—首领厅 平面', '顶视 blockout · 比例 1 : 1 · 单位 m · 网格 4m');
+    var s = 15, y = 620;
+    grid(4 * s, 60, 160, W - 60, H - 40);
+    var x = 120;
+
+    // 门楼 8×6
+    ctx.fillStyle = 'rgba(31,42,51,0.12)';
+    ctx.fillRect(x, y - 3 * s, 6 * s, 6 * s);
+    ctx.strokeStyle = 'rgba(31,42,51,0.5)'; ctx.lineWidth = 1.4;
+    ctx.strokeRect(x, y - 3 * s, 6 * s, 6 * s);
+    label('门楼 6×6', x + 3 * s, y - 3 * s - 10, 13, MUTED, 'center');
+    var gateX = x + 3 * s;
+
+    // 断桥 22×5，中段断开
+    var bx = gateX + 3 * s;
+    ctx.fillStyle = 'rgba(31,42,51,0.08)';
+    ctx.fillRect(bx, y - 2.5 * s, 22 * s, 5 * s);
+    ctx.strokeStyle = 'rgba(31,42,51,0.45)'; ctx.lineWidth = 1.2;
+    ctx.strokeRect(bx, y - 2.5 * s, 22 * s, 5 * s);
+    // 断口
+    ctx.fillStyle = PAPER;
+    ctx.fillRect(bx + 9 * s, y - 2.5 * s, 3 * s, 5 * s);
+    ctx.strokeStyle = WARM; ctx.lineWidth = 1.4;
+    ctx.strokeRect(bx + 9 * s, y - 2.5 * s, 3 * s, 5 * s);
+    label('断口 3m', bx + 10.5 * s, y - 2.5 * s - 10, 13, WARM, 'center');
+    label('断桥 22×5', bx + s, y + 3.1 * s, 13, MUTED);
+    dimH(bx, bx + 22 * s, y + 6 * s, '22 m');
+
+    // 回廊 4 段 × 12m，宽 2.8
+    var rx = bx + 22 * s, rw = 2.8 * s;
+    var segL = 12 * s;
+    for (var i = 0; i < 4; i++) {
+      ctx.fillStyle = 'rgba(43,111,119,0.10)';
+      ctx.fillRect(rx + i * segL, y - rw / 2, segL, rw);
+      ctx.strokeStyle = 'rgba(43,111,119,0.55)'; ctx.lineWidth = 1;
+      ctx.strokeRect(rx + i * segL, y - rw / 2, segL, rw);
+      if (i > 0) {
+        ctx.strokeStyle = 'rgba(31,42,51,0.55)'; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(rx + i * segL, y - rw / 2 - 6);
+        ctx.lineTo(rx + i * segL, y + rw / 2 + 6);
+        ctx.stroke();
+      }
+    }
+    label('回廊 4 段 × 12m，净宽 2.8m', rx + 2 * segL, y - rw / 2 - 18, 14, CYAN, 'center');
+
+    // 石闸
+    var gate2 = rx + 4 * segL;
+    ctx.fillStyle = 'rgba(164,70,47,0.16)';
+    ctx.fillRect(gate2 - 6, y - rw / 2, 12, rw);
+    ctx.strokeStyle = WARM; ctx.lineWidth = 1.6;
+    ctx.strokeRect(gate2 - 6, y - rw / 2, 12, rw);
+    label('石闸（下沿留 1.9m）', gate2 + 10, y - rw / 2 - 22, 13, WARM, 'right');
+
+    // 火盆 6
+    for (var f = 0; f < 6; f++) {
+      var fx = rx + (f + 0.5) * segL;
+      var side = f % 2 === 0 ? -1 : 1;
+      ctx.beginPath(); ctx.arc(fx, y + side * (rw / 2 + 9), 5, 0, Math.PI * 2);
+      ctx.fillStyle = WARM; ctx.fill();
+    }
+    label('火盆 ×6（每段一左一右，间距约 4 步）', rx + 3 * segL, y + 3 * s + 46, 13, WARM, 'center');
+
+    // 首领厅 30m
+    var hx = gate2 + 30 / 2 * s + 20, hy = y;
+    ctx.beginPath(); ctx.arc(hx, hy, 15 * s, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(43,111,119,0.08)'; ctx.fill();
+    ctx.strokeStyle = CYAN; ctx.lineWidth = 2; ctx.stroke();
+
+    // 祭台
+    ctx.beginPath(); ctx.arc(hx, hy, 3 * s, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(43,111,119,0.25)'; ctx.fill();
+    ctx.strokeStyle = CYAN; ctx.lineWidth = 1.6; ctx.stroke();
+    label('祭石台 Ø6', hx, hy + 3 * s + 20, 13, CYAN, 'center');
+
+    // 5 断柱
+    for (var p = 0; p < 5; p++) {
+      var ang = -Math.PI / 2 + p * Math.PI * 2 / 5;
+      var px = hx + Math.cos(ang) * 11 * s, py = hy + Math.sin(ang) * 11 * s;
+      ctx.beginPath(); ctx.arc(px, py, 0.8 * s, 0, Math.PI * 2);
+      ctx.fillStyle = WARM_L; ctx.fill();
+      ctx.strokeStyle = WARM; ctx.lineWidth = 1.4; ctx.stroke();
+    }
+    // 8 矮掩体
+    for (var c = 0; c < 8; c++) {
+      var ang2 = c * Math.PI * 2 / 8 + Math.PI / 8;
+      var qx = hx + Math.cos(ang2) * 8.5 * s, qy = hy + Math.sin(ang2) * 8.5 * s;
+      ctx.save(); ctx.translate(qx, qy); ctx.rotate(ang2);
+      ctx.fillStyle = 'rgba(31,42,51,0.10)';
+      ctx.fillRect(-1.2 * s, -0.5 * s, 2.4 * s, 1 * s);
+      ctx.strokeStyle = 'rgba(31,42,51,0.4)'; ctx.lineWidth = 1;
+      ctx.strokeRect(-1.2 * s, -0.5 * s, 2.4 * s, 1 * s);
+      ctx.restore();
+    }
+    label('厅径 Ø30 · 断柱 ×5 · 矮掩体 ×8（1.1m 高）', hx, hy - 15 * s - 14, 14, MUTED, 'center');
+
+    // 总长标注
+    dimH(gateX, hx - 15 * s, 320, '门楼 → 厅口约 96 m');
+    north(W - 190, 230);
+    sectionRail(640, 1170, 34);
+    legend(80, H - 260, [
+      ['可通行 / 战斗区', 'rgba(43,111,119,0.10)'],
+      ['断桥与断口', 'rgba(31,42,51,0.08)'],
+      ['石闸 / 断柱', WARM_L],
+      ['火盆（暖光）', WARM],
+      ['掩体', 'rgba(31,42,51,0.10)']
+    ]);
+    label('搭建口径：桥宽 5m、回廊净宽 2.8m、墙高 5.4m；回廊四段等长、接缝处留门框；首领厅 Ø30，中心祭台 Ø6，矮掩体 1.1m 高，供 BOSS 战走位与遮挡。', 460, H - 96, 15, MUTED);
+    window.__PLAN = 'dungeon';
+    document.title = '副本平面';
+  }
+
+  if (PLAN === 'dungeon') dungeon(); else arena();
+})();
+</script>
+</body>
+</html>

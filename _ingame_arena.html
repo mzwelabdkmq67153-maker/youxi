@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#05070d" />
+<title>第七竞技场 · 第一人称 PVP / PVE 原型</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+
+<div id="hud" class="hidden">
+  <div id="topbar">
+    <div class="chip" id="modeLabel">PVE 副本</div>
+    <div class="chip" id="objective">WAVE 1</div>
+    <div class="chip" id="timer">00:00</div>
+  </div>
+
+  <div id="crosshair">
+    <i class="t"></i><i class="r"></i><i class="b"></i><i class="l"></i>
+  </div>
+  <div id="hitmarker"></div>
+
+  <div id="vitals">
+    <div class="bar">
+      <div class="fill hp" id="hpFill"></div>
+      <span id="hpText">120 / 120</span>
+    </div>
+    <div class="bar">
+      <div class="fill en" id="enFill"></div>
+      <span id="enText">100</span>
+    </div>
+    <div class="bar slim">
+      <div class="fill st" id="stFill"></div>
+      <span id="stText">100</span>
+    </div>
+  </div>
+
+  <div id="skills"></div>
+
+  <div id="toast"></div>
+  <div id="dmgLayer"></div>
+<div id="killBanner"></div>
+  <div id="flash"></div>
+</div>
+
+<div id="overlay">
+  <div class="panel" id="menuPanel">
+    <h1>第七竞技场</h1>
+    <p class="sub">SEVENTH ARENA · 第一人称 PVP / PVE 原型</p>
+
+    <div class="row">
+      <label>模式</label>
+      <div class="toggle" id="modeToggle">
+        <button data-mode="pve" class="on">PVE 副本</button>
+        <button data-mode="pvp">PVP 对决</button>
+        <button data-mode="online">局域网对战</button>
+      </div>
+    </div>
+
+    <div class="row hidden" id="onlineRow">
+      <label>房间</label>
+      <div class="fields">
+        <input id="roomInput" maxlength="6" placeholder="房间号，如 A1B2" autocomplete="off" spellcheck="false" />
+        <input id="nameInput" maxlength="10" placeholder="你的昵称" autocomplete="off" spellcheck="false" />
+      </div>
+    </div>
+
+    <div class="row">
+      <label>职业</label>
+      <div class="toggle" id="classToggle">
+        <button data-cls="blade" class="on">剑客</button>
+        <button data-cls="gunner">枪手</button>
+        <button data-cls="mage">术士</button>
+      </div>
+    </div>
+
+    <p class="hint">WASD 移动 · Shift 疾跑 · 空格跳跃 · 鼠标转向 · 左键攻击 · Q / E / R 技能 · Esc 暂停</p>
+    <button id="startBtn" class="primary">进入竞技场</button>
+    <p class="tiny">建议使用 Chrome / Edge，进入后鼠标会被锁定，按 Esc 退出</p>
+  </div>
+
+  <div class="panel hidden" id="onlinePanel">
+    <h2>房间 <span id="roomCode" class="code">—</span></h2>
+    <p class="sub" id="onlineStatus">正在连接服务器…</p>
+    <div id="onlinePlayers" class="players"></div>
+    <p class="tiny" id="onlineTip">把房间号发给对手，让他在同一 WiFi 下输入同一个号码</p>
+    <button id="onlineQuit" class="ghost">退出房间</button>
+  </div>
+
+  <div class="panel hidden" id="pausePanel">
+    <h2>已暂停</h2>
+    <p class="sub">鼠标已释放</p>
+    <button id="resumeBtn" class="primary">继续战斗</button>
+    <button id="quitBtn" class="ghost">返回主菜单</button>
+  </div>
+
+  <div class="panel hidden" id="resultPanel">
+    <h2 id="resultTitle">行动结束</h2>
+    <p class="sub" id="resultSub"></p>
+    <div id="resultStats"></div>
+    <button id="againBtn" class="primary">再来一局</button>
+    <button id="backBtn" class="ghost">返回主菜单</button>
+  </div>
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="art.js"></script>
+<script src="paint.js"></script>
+<script src="fx.js"></script>
+<script src="ink.js"></script>
+<script src="hitfeel.js"></script>
+<script src="scene.js"></script>
+<script src="net.js"></script>
+<script src="night.js"></script>
+<script src="game.js"></script>
+<script>
+setTimeout(function(){ var bs=document.querySelectorAll('#modeToggle button'); if(bs.length>1) bs[1].click(); }, 300);
+setTimeout(function(){ var b=document.getElementById('startBtn'); if(b) b.click(); }, 900);
+setTimeout(function(){ var o=document.getElementById("overlay"); if(o) o.classList.add("hidden"); }, 1500);
+</script>
+</body>
+</html>

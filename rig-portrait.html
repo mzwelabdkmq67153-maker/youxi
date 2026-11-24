@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head><meta charset="utf-8">
+<style>html,body{margin:0;background:#efebe2}#c{display:block}</style></head>
+<body>
+<canvas id="c" width="2040" height="900"></canvas>
+<script src="vendor/three.min.js"></script>
+<script src="rig.js"></script>
+<script>
+var cv = document.getElementById('c'), ctx = cv.getContext('2d');
+var R3 = new THREE.WebGLRenderer({antialias: true});
+R3.setSize(340, 900); R3.setPixelRatio(1); R3.setClearColor(0xdedad1, 1);
+var scene = new THREE.Scene();
+scene.add(new THREE.AmbientLight(0xffffff, 0.62));
+var d1 = new THREE.DirectionalLight(0xffffff, 0.85); d1.position.set(2.2, 3.0, -3.2); scene.add(d1);
+var d2 = new THREE.DirectionalLight(0xbcd0e0, 0.35); d2.position.set(-2.4, 1.2, 2.6); scene.add(d2);
+
+function persp(x, y, z, ty, fov) {
+  var cam = new THREE.PerspectiveCamera(fov, 340 / 900, 0.05, 20);
+  cam.position.set(x, y, z); cam.lookAt(0, ty, 0); cam.updateProjectionMatrix();
+  return cam;
+}
+
+var HEROES = ['swordsman', 'gunner', 'warlock'];
+HEROES.forEach(function (kind, i) {
+  var rig = window.ArenaRig.buildRig(kind);
+  window.ArenaRig.applyPose(rig, window.ArenaRig.RESTPOSE);
+  scene.add(rig);
+  R3.render(scene, persp(0.30, 1.44, -1.30, 1.34, 30));           // 半身：头/颈/肩/胸
+  ctx.drawImage(R3.domElement, i * 680, 0, 340, 900);
+  R3.render(scene, persp(0, 0.95, -3.30, 0.80, 30));               // 全身正视
+  ctx.drawImage(R3.domElement, i * 680 + 340, 0, 340, 900);
+  scene.remove(rig);
+});
+</script>
+</body></html>

@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>第七竞技场 · 骨骼与动作工作台</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #f2efe6; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="sheet"></canvas>
+<script src="vendor/three.min.js"></script>
+<script src="rig.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var q = new URLSearchParams(location.search);
+  var MODE = q.get('p') || 'bones';
+  var HERO = q.get('h') || 'swordsman';
+  var ACT = q.get('a') || 'attack';
+
+  var INK = '#1f2a33', MUTED = '#6b7a86', PAPER = '#f2efe6', CYAN = '#2b6f77', WARM = '#a4462f';
+  var BG3D = 0xcfd4d9;
+
+  var W = 2000, H = 1250, CELL_W = 460, CELL_H = 470;
+  var canvas = document.getElementById('sheet');
+  var ctx;
+
+  var renderer3 = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: false });
+  renderer3.setPixelRatio(2);
+  renderer3.setClearColor(BG3D, 1);
+
+  var scene = new THREE.Scene();
+  scene.add(new THREE.AmbientLight(0xffffff, 0.60));
+  var key = new THREE.DirectionalLight(0xffffff, 0.95); key.position.set(2.4, 4.2, -3.2); scene.add(key);
+  var fill = new THREE.DirectionalLight(0xa9c4de, 0.40); fill.position.set(-3.2, 2.2, 2.6); scene.add(fill);
+  var rim = new THREE.DirectionalLight(0x8fa6bd, 0.36); rim.position.set(0, 2.6, 4.2); scene.add(rim);
+
+  function ortho() { return new THREE.OrthographicCamera(-0.78, 0.78, 1.12, -1.02, 0.1, 40); }
+  function persp(liftArg, front) {
+    var c = new THREE.PerspectiveCamera(30, CELL_W / CELL_H, 0.1, 30);
+    if (front) { c.position.set(-3.3, 1.78, -1.15); c.lookAt(0, 1.02, 0); return c; }
+    var lift = liftArg || 0;
+    var k = lift > 0 ? 1.22 : 1;
+    c.position.set(2.9 * k, 1.75 + lift * 0.55, -2.7 * k);
+    c.lookAt(0, 0.98 + lift * 0.55, 0);
+    return c;
+  }
+
+  function setup(w, h, cw, ch) {
+    W = w; H = h; CELL_W = cw; CELL_H = ch;
+    canvas.width = W; canvas.height = H;
+    ctx = canvas.getContext('2d');
+    ctx.fillStyle = PAPER; ctx.fillRect(0, 0, W, H);
+    renderer3.setSize(CELL_W, CELL_H);
+  }
+  function text(t, x, y, size, color, align, bold) {
+    ctx.fillStyle = color || INK;
+    ctx.font = (bold ? 'bold ' : '') + (size || 16) + 'px "Microsoft YaHei", sans-serif';
+    ctx.textAlign = align || 'left';
+    ctx.fillText(t, x, y);
+    ctx.textAlign = 'left';
+  }
+  function head(t, sub) {
+    text(t, 70, 78, 36, INK, 'left', true);
+    text(sub, 70, 112, 17, MUTED);
+  }
+  function frame(x, y, w, h) {
+    ctx.strokeStyle = 'rgba(31,42,51,0.18)'; ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w, h);
+  }
+  function countTris(root) {
+    var n = 0;
+    root.traverse(function (o) { if (o.isMesh && o.geometry) n += o.geometry.index ? o.geometry.index.count / 3 : o.geometry.attributes.position.count / 3; });
+    return Math.round(n);
+  }
+
+  /* ============ 骨架图 ============ */
+  function modeBones() {
+    setup(2000, 1250, 620, 860);
+    head('角色骨架 · 层级与命名', '19 骨骼 · 刚性分段 · 武器挂 hand_R · 单位 m');
+    var rig = window.ArenaRig.buildRig(HERO);
+    window.ArenaRig.applyPose(rig, window.ArenaRig.RESTPOSE);
+    scene.add(rig);
+
+    // 骨架投影叠加（2D 绘制，保证在任何尺寸下可读）
+    var segs = window.ArenaRig.skeletonLines(rig);
+    var cam = ortho();
+    cam.position.set(0.55, 1.02, -3.4);
+    cam.lookAt(0, 1.0, 0);
+    cam.updateProjectionMatrix();
+    rig.updateMatrixWorld(true);
+    renderer3.render(scene, cam);
+    ctx.drawImage(renderer3.domElement, 60, 175, CELL_W, CELL_H);
+    frame(60, 175, CELL_W, CELL_H);
+
+    function toPx(v) {
+      var p = v.clone().project(cam);
+      return [(p.x + 1) / 2 * CELL_W + 60, (-p.y + 1) / 2 * CELL_H + 175];
+    }
+    ctx.strokeStyle = 'rgba(214,74,61,0.92)';
+    ctx.lineWidth = 2.4;
+    ctx.lineCap = 'round';
+    segs.forEach(function (s) {
+      var a = toPx(s[0]), b = toPx(s[1]);
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+    });
+    ctx.fillStyle = 'rgba(214,74,61,1)';
+    var seen = {};
+    segs.forEach(function (s) {
+      [s[0], s[1]].forEach(function (v) {
+        var a = toPx(v), kx = a[0].toFixed(0) + '_' + a[1].toFixed(0);
+        if (seen[kx]) return; seen[kx] = 1;
+        ctx.beginPath(); ctx.arc(a[0], a[1], 4.2, 0, Math.PI * 2); ctx.fill();
+      });
+    });
+    text('骨架与模型重合视图（红线为骨骼，圆点为关节）', 60, 175 + CELL_H + 28, 15, MUTED);
+
+    var tris = countTris(rig);
+    var stats = [
+      ['骨骼数', '19（含 root）'],
+      ['部件数', String(countMeshes(rig))],
+      ['三角面', tris + ' / 人形体块档上限 5800'],
+      ['武器挂点', 'hand_R（含 0.035 下沉偏移）'],
+      ['动作集', 'idle / run / sprint / jump / attack / skill']
+    ];
+    var bx = 740;
+    stats.forEach(function (s, i) {
+      text(s[0], bx, 190 + i * 36, 15, MUTED);
+      text(s[1], bx + 96, 190 + i * 36, 16, INK, 'left', true);
+    });
+
+    // 骨骼树
+    var tree = [
+      [0, 'root', '世界原点'],
+      [1, 'hips', '胯 / 腰根，长袍挂这里'],
+      [2, 'spine01', '腰'],
+      [2, 'spine02', '胸 / 肩甲与背带'],
+      [3, 'neck', '颈'],
+      [3, 'head', '头 / 束发·护目镜·兜帽'],
+      [2, 'clav_L / clav_R', '锁骨'],
+      [3, 'upperarm_L / R', '上臂'],
+      [4, 'forearm_L / R', '前臂 / 护腕'],
+      [5, 'hand_L / R', '手 / 武器 socket'],
+      [1, 'thigh_L / R', '大腿 / 裙甲'],
+      [2, 'calf_L / R', '小腿'],
+      [3, 'foot_L / R', '脚 / 靴']
+    ];
+    text('骨骼层级', 1240, 210, 20, INK, 'left', true);
+    tree.forEach(function (r, i) {
+      var y = 254 + i * 34;
+      text('｜ '.repeat(r[0]) + r[1], 1240, y, 16, INK);
+      text(r[2], 1520, y, 14, MUTED);
+    });
+    text('命名规则：bone_部位_侧 → 例 hips / upperarm_L / foot_R；右侧为 -X，左侧为 +X。', 70, H - 60, 15, MUTED);
+    text('关节旋转顺序 YZX；形变区（肩/胯/膝）已保留两圈环线，跳跃与疾跑时肘膝不穿插。', 70, H - 32, 15, MUTED);
+  }
+
+  function countMeshes(root) {
+    var n = 0;
+    root.traverse(function (o) { if (o.isMesh) n++; });
+    return n;
+  }
+
+  /* ============ 四方位 ============ */
+  function modeViews() {
+    setup(2000, 1760, 430, 400);
+    head('角色模型 · 四方位', '骨骼绑定状态 · 三个职业 · 同一比例 1 : 1');
+    var heroes = [['swordsman', '剑客'], ['gunner', '枪手'], ['warlock', '术士']];
+    var views = [['正面', 0, -3.4], ['侧面', 3.4, 0], ['背面', 0, 3.4]];
+    var CW = 455, CH = 430, X0 = 70, Y0 = 160;
+    heroes.forEach(function (h, row) {
+      var rig = window.ArenaRig.buildRig(h[0]);
+      window.ArenaRig.applyPose(rig, window.ArenaRig.RESTPOSE);
+      scene.add(rig);
+      var tris = countTris(rig);
+      text(h[1] + '  ·  ' + tris + ' tri  ·  ' + countMeshes(rig) + ' 件', X0, Y0 + row * (CH + 86) + 26, 18, INK, 'left', true);
+      views.forEach(function (v, col) {
+        var cam = ortho();
+        cam.position.set(v[1], 1.0, v[2]);
+        cam.lookAt(0, 1.0, 0);
+        cam.updateProjectionMatrix();
+        renderer3.render(scene, cam);
+        ctx.drawImage(renderer3.domElement, X0 + col * CW, Y0 + row * (CH + 86) + 40, CELL_W, CELL_H);
+        frame(X0 + col * CW, Y0 + row * (CH + 86) + 40, CELL_W, CELL_H);
+        text(v[0], X0 + col * CW + 4, Y0 + row * (CH + 86) + 40 + CELL_H + 22, 15, MUTED);
+      });
+      // 45 度
+      var cam2 = new THREE.PerspectiveCamera(26, CELL_W / CELL_H, 0.1, 30);
+      cam2.position.set(2.6, 1.9, -2.4); cam2.lookAt(0, 1.05, 0);
+      renderer3.render(scene, cam2);
+      ctx.drawImage(renderer3.domElement, X0 + 3 * CW, Y0 + row * (CH + 86) + 40, CELL_W, CELL_H);
+      frame(X0 + 3 * CW, Y0 + row * (CH + 86) + 40, CELL_W, CELL_H);
+      text('45° 透视', X0 + 3 * CW + 4, Y0 + row * (CH + 86) + 40 + CELL_H + 22, 15, MUTED);
+      scene.remove(rig);
+    });
+    text('说明：模型为骨骼绑定的低模人形，四视图与 45° 用于剪影验收；手部已挂武器，换装替换武器不影响骨架。', 70, H - 40, 15, MUTED);
+  }
+
+  /* ============ 武器 ============ */
+  function modeWeapons() {
+    setup(1800, 1460, 420, 500);
+    head('武器模型 · 三职业主手', '独立资产 · 挂点 hand_R · 单位 m');
+    var mats = window.ArenaRig.materials(HERO);
+    var items = [
+      ['长刀 swordsman·wp_katana', 'swordsman', 1.17],
+      ['长枪 gunner·wp_lance', 'gunner', 1.45],
+      ['法杖 warlock·wp_staff', 'warlock', 1.60]
+    ];
+    var X0 = 80, Y0 = 200, CW = 560, CH = 500;
+    items.forEach(function (it, i) {
+      var w = window.ArenaRig.buildWeapon(it[1], mats);
+      scene.add(w);
+      text(it[0], X0 + i * CW, Y0 - 26, 17, INK, 'left', true);
+      // 侧视（刃口朝向镜头一侧）
+      var camA = new THREE.OrthographicCamera(-0.55, 0.55, 1.0, -1.0, 0.1, 30);
+      camA.position.set(-2.4, 0.2, 0); camA.lookAt(0, 0.2, 0); camA.updateProjectionMatrix();
+      renderer3.render(scene, camA);
+      ctx.drawImage(renderer3.domElement, X0 + i * CW, Y0, CELL_W, CELL_H);
+      frame(X0 + i * CW, Y0, CELL_W, CELL_H);
+      text('侧视 · 全长远 ' + it[2] + ' m', X0 + i * CW + 4, Y0 + CELL_H + 22, 14, MUTED);
+
+      // 45° 特写：刃口 / 枪口 / 法球
+      var tg = [[0, 1.02, 0], [0, 0.02, -0.78], [0, 0.84, 0]][i];
+      var camB = new THREE.OrthographicCamera(-0.30, 0.30, 0.30, -0.30, 0.1, 40);
+      camB.position.set(tg[0] - 1.6, tg[1] + 1.0, tg[2] - 1.6); camB.lookAt(tg[0], tg[1], tg[2]); camB.updateProjectionMatrix();
+      renderer3.render(scene, camB);
+      ctx.drawImage(renderer3.domElement, X0 + i * CW, Y0 + CH + 46, CELL_W, CELL_H);
+      frame(X0 + i * CW, Y0 + CH + 46, CELL_W, CELL_H);
+      text('45° 特写 · ' + ['刃口与护手', '枪口与护罩', '法球与光环'][i], X0 + i * CW + 4, Y0 + CH + 46 + CELL_H + 22, 14, MUTED);
+      scene.remove(w);
+    });
+
+    // 参数表
+    var bx = 80, by = Y0 + 2 * CH + 170;
+    text('挂点与朝向', bx, by, 18, INK, 'left', true);
+    text('长刀：刃沿 +Y 向上，刃口朝 -X（右手握刃口朝内）；长枪：枪管沿 -Z 向前；法杖：法球在杖头 +Y。', bx, by + 30, 15, MUTED);
+    text('三件武器均以原点为握点，挂 hand_R 时不额外旋转，只在 hand_R 的本地空间做 0.035 下沉。', bx, by + 56, 15, MUTED);
+    text('材质槽位：刃=steel（金属 0.90 / 粗糙 0.24），护手与枪身=armor，握柄=cloth，刃口与枪口=accent 自发光。', bx, by + 82, 15, MUTED);
+  }
+
+  /* ============ 动作连贯帧 ============ */
+  function modeAnim() {
+    var keys = (q.get('rows') || ACT).split(',');
+    var CW = 246, CH = 500, X0 = 70, Y0 = 175;
+    var maxF = 0;
+    keys.forEach(function (k) { maxF = Math.max(maxF, window.ArenaRig.ACTIONS[k].frames); });
+    var rowH = CH + 96;
+    setup(CW * maxF + 150, Y0 + keys.length * rowH + 90, CW, CH);
+    head('动作连贯帧 · ' + keys.map(function (k) { return window.ArenaRig.ACTIONS[k].cn; }).join(' / '),
+      '关键帧插值采样 · 3/4 视角 · 第 1 帧即循环起点 · 每行左侧为帧号、右侧为毫秒刻度');
+
+    var rig = window.ArenaRig.buildRig(HERO);
+    scene.add(rig);
+    var lastNotes = [];
+    keys.forEach(function (k, ri) {
+      var A = window.ArenaRig.ACTIONS[k];
+      var ry = Y0 + ri * rowH;
+      text(A.cn + '  ' + A.frames + ' 帧 / ' + A.fps + ' fps = ' + (A.frames / A.fps * 1000).toFixed(0) + ' ms',
+        X0, ry - 16, 16, INK, 'left', true);
+      for (var f = 0; f < A.frames; f++) {
+        var pose = window.ArenaRig.sampleAction(k, f);
+        window.ArenaRig.applyPose(rig, pose);
+        var cam = persp(k === 'jump' ? 0.42 : 0, k === 'attack');
+        renderer3.render(scene, cam);
+        ctx.drawImage(renderer3.domElement, X0 + f * CW, ry, CELL_W, CELL_H);
+        frame(X0 + f * CW, ry, CELL_W, CELL_H);
+        text('f' + (f + 1), X0 + f * CW + 6, ry + 16, 13, INK, 'left', true);
+        text((f / A.fps * 1000).toFixed(0), X0 + f * CW + 6, ry + CELL_H - 8, 12, MUTED);
+      }
+    });
+    var pose = window.ArenaRig.sampleAction(keys[0], 0);
+    window.ArenaRig.applyPose(rig, pose);
+    text('所有帧都在同一骨架上摆姿后渲染，没有手工补帧；肩 / 胯 / 膝为形变检查点，肘膝在前摆与后摆极值处不穿插。', 70, H - 46, 15, MUTED);
+    text('动作命名与参数对齐引擎：跳跃顶点 1.6 m、疾跑 ×1.6 速、冲刺 0.3 s / 4 m、受击 0.35 s。', 70, H - 20, 15, MUTED);
+  }
+
+  /* ============ 部位材质 ============ */
+  function modeMats() {
+    setup(2000, 1000, 1, 1);
+    head('部位材质 · 分区与参数', '5 个材质槽 · 三职业共用参数、只换主色');
+    var MD = window.ArenaRig.MATDEF;
+    var PA = window.ArenaRig.PALETTES;
+    var slots = ['armor', 'cloth', 'skin', 'accent', 'steel'];
+    var owners = {
+      armor: '胸甲、肩甲、护腕、腰甲、裙甲、头盔、枪身、护手',
+      cloth: '内衬、上/前臂布、腿布、靴、束发、兜帽、长袍、握柄',
+      skin: '颈、头、双手',
+      accent: '胸前色块、面罩/护目镜、刃口、枪口、法球与光环、袍摆纹路',
+      steel: '刀身、枪管'
+    };
+    var X0 = 70, Y0 = 180, SW = 360, SH = 104;
+    slots.forEach(function (s, i) {
+      var y = Y0 + i * (SH + 34);
+      text(MD[s].name + '  ' + s, X0, y - 8, 17, INK, 'left', true);
+      // 三职业色块
+      ['swordsman', 'gunner', 'warlock'].forEach(function (k, j) {
+        var col = PA[k][s] || 0xc6d4e2;
+        var hex = '#' + ('000000' + col.toString(16)).slice(-6);
+        ctx.fillStyle = hex;
+        ctx.fillRect(X0 + j * 72, y + 6, 62, 46);
+        ctx.strokeStyle = 'rgba(31,42,51,0.25)'; ctx.strokeRect(X0 + j * 72 + 0.5, y + 6.5, 62, 46);
+      });
+      text('粗糙度 ' + MD[s].rough.toFixed(2) + '   金属度 ' + MD[s].metal.toFixed(2) + '   ' + MD[s].tex,
+        X0 + 236, y + 22, 15, MUTED);
+      text('用在：' + owners[s], X0 + 236, y + 44, 14, MUTED);
+    });
+
+    // 右侧：身体分区示意（文字清单）
+    var rx = 900;
+    text('分区规则', rx, 200, 20, INK, 'left', true);
+    var rules = [
+      [1, '一具身体最多 3 个主材质槽（甲 / 衣 / 肤），缀色与刃面各算 1 个附加槽。'],
+      [2, '金属只出现在视觉焦点：刃口、护腕扣、枪口，不做满身反射。'],
+      [3, '点缀色只出现在识别位：胸前色块、面罩/护目镜、法球与袍摆纹路。'],
+      [4, '肤质仅用于颈、头、手；戴兜帽时头部只露下半张脸，肤质面积随之缩小。'],
+      [5, '贴图：甲 1024 图集（AO 只做低频），衣 1024（布纹），肤 512，刃 512。'],
+      [6, '三职业参数一致，只用调色板换主色；换职业不改 UV 布局，换装只换部件。']
+    ];
+    rules.forEach(function (r, i) {
+      var y = 250 + i * 66;
+      text('0' + r[0], rx, y, 22, CYAN, 'left', true);
+      wrap(r[1], rx + 48, y, 900, 15, INK);
+    });
+
+    // 右下：槽位说明
+    text('槽位现状', rx, 720, 20, INK, 'left', true);
+    wrap('当前 5 槽（甲 / 衣 / 肤 / 缀 / 刃），比定案的 3 槽多 2 槽。合并路径：肤并入甲吃顶点色，刃并入甲靠刃口自发光贴图，即可回到 3 槽；代价是面部与刃口细节变少。这一版按 5 槽出图，需要 3 槽版就说一声，我按上面两条合并路径重出。', rx, 754, 900, 15, MUTED);
+  }
+
+  function wrap(t, x, y, maxW, size, color) {
+    ctx.font = size + 'px "Microsoft YaHei", sans-serif';
+    var line = '', ly = y;
+    for (var i = 0; i < t.length; i++) {
+      var test = line + t[i];
+      if (ctx.measureText(test).width > maxW) { text(line, x, ly, size, color); line = t[i]; ly += size * 1.7; }
+      else line = test;
+    }
+    text(line, x, ly, size, color);
+    return ly;
+  }
+
+  if (MODE === 'views') modeViews();
+  else if (MODE === 'weapons') modeWeapons();
+  else if (MODE === 'anim') modeAnim();
+  else if (MODE === 'mats') modeMats();
+  else modeBones();
+
+  window.__MODE = MODE;
+})();
+</script>
+</body>
+</html>

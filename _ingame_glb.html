@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#05070d" />
+<title>第七竞技场 · GLB 局内验收页（调试专用）</title>
+<link rel="stylesheet" href="style.css" />
+<style>
+  /* 验收页调试 HUD：只在本页内，不写进 style.css / index.html */
+  #glbHud {
+    position: fixed; left: 12px; top: 12px; z-index: 50;
+    max-width: 620px; padding: 10px 12px; border-radius: 8px;
+    background: rgba(4, 10, 16, 0.72); border: 1px solid #2c3a48;
+    color: #cfe0ec; font: 12px/1.6 "Microsoft YaHei", Consolas, monospace;
+    white-space: pre-wrap; pointer-events: none;
+  }
+  #glbHud b { color: #ffe9a8; }
+</style>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+
+<div id="hud" class="hidden">
+  <div id="topbar">
+    <div class="chip" id="modeLabel">PVE 副本</div>
+    <div class="chip" id="objective">WAVE 1</div>
+    <div class="chip" id="timer">00:00</div>
+  </div>
+
+  <div id="crosshair">
+    <i class="t"></i><i class="r"></i><i class="b"></i><i class="l"></i>
+  </div>
+  <div id="hitmarker"></div>
+
+  <div id="vitals">
+    <div class="bar">
+      <div class="fill hp" id="hpFill"></div>
+      <span id="hpText">120 / 120</span>
+    </div>
+    <div class="bar">
+      <div class="fill en" id="enFill"></div>
+      <span id="enText">100</span>
+    </div>
+    <div class="bar slim">
+      <div class="fill st" id="stFill"></div>
+      <span id="stText">100</span>
+    </div>
+  </div>
+
+  <div id="skills"></div>
+
+  <div id="toast"></div>
+  <div id="dmgLayer"></div>
+<div id="killBanner"></div>
+  <div id="flash"></div>
+</div>
+
+<div id="overlay">
+  <div class="panel" id="menuPanel">
+    <h1>第七竞技场</h1>
+    <p class="sub">SEVENTH ARENA · 第一人称 PVP / PVE 原型</p>
+
+    <div class="row">
+      <label>模式</label>
+      <div class="toggle" id="modeToggle">
+        <button data-mode="pve" class="on">PVE 副本</button>
+        <button data-mode="pvp">PVP 对决</button>
+        <button data-mode="online">局域网对战</button>
+      </div>
+    </div>
+
+    <div class="row hidden" id="onlineRow">
+      <label>房间</label>
+      <div class="fields">
+        <input id="roomInput" maxlength="6" placeholder="房间号，如 A1B2" autocomplete="off" spellcheck="false" />
+        <input id="nameInput" maxlength="10" placeholder="你的昵称" autocomplete="off" spellcheck="false" />
+      </div>
+    </div>
+
+    <div class="row">
+      <label>职业</label>
+      <div class="toggle" id="classToggle">
+        <button data-cls="blade" class="on">剑客</button>
+        <button data-cls="gunner">枪手</button>
+        <button data-cls="mage">术士</button>
+      </div>
+    </div>
+
+    <p class="hint">WASD 移动 · Shift 疾跑 · 空格跳跃 · 鼠标转向 · 左键攻击 · Q / E / R 技能 · Esc 暂停</p>
+    <button id="startBtn" class="primary">进入竞技场</button>
+    <p class="tiny">建议使用 Chrome / Edge，进入后鼠标会被锁定，按 Esc 退出</p>
+  </div>
+
+  <div class="panel hidden" id="onlinePanel">
+    <h2>房间 <span id="roomCode" class="code">—</span></h2>
+    <p class="sub" id="onlineStatus">正在连接服务器…</p>
+    <div id="onlinePlayers" class="players"></div>
+    <p class="tiny" id="onlineTip">把房间号发给对手，让他在同一 WiFi 下输入同一个号码</p>
+    <button id="onlineQuit" class="ghost">退出房间</button>
+  </div>
+
+  <div class="panel hidden" id="pausePanel">
+    <h2>已暂停</h2>
+    <p class="sub">鼠标已释放</p>
+    <button id="resumeBtn" class="primary">继续战斗</button>
+    <button id="quitBtn" class="ghost">返回主菜单</button>
+  </div>
+
+  <div class="panel hidden" id="resultPanel">
+    <h2 id="resultTitle">行动结束</h2>
+    <p class="sub" id="resultSub"></p>
+    <div id="resultStats"></div>
+    <button id="againBtn" class="primary">再来一局</button>
+    <button id="backBtn" class="ghost">返回主菜单</button>
+  </div>
+</div>
+
+<div id="glbHud">GLB 局内验收页（调试专用）…</div>
+
+<script src="vendor/three.min.js"></script>
+<!-- GLB 写实档加载器依赖：与 index.html 同一套加载顺序（three 之后、业务脚本之前） -->
+<script src="vendor/GLTFLoader.js"></script>
+<script src="vendor/SkeletonUtils.js"></script>
+<script src="art.js"></script>
+<script src="hero3d.js"></script>
+<script src="real3d.js"></script>
+<script src="glb3d.js"></script>
+<script src="paint.js"></script>
+<script src="fx.js"></script>
+<script src="ink.js"></script>
+<script src="hitfeel.js"></script>
+<script src="scene.js"></script>
+<script src="net.js"></script>
+<script src="night.js"></script>
+<script src="game.js"></script>
+<script>
+/* ============================================================
+   本页调试脚本：所有验收逻辑只放在这里，不污染 index.html / game.js。
+   三档开关与 index.html 同一套语义：
+     无参 / ?art=glb → Glb3D（默认优先）；?art=real → Real3D；?art=ink → hero3d 原样。
+   回退：Glb3D 不可用 → Real3D → hero3d，不白屏。
+   ============================================================ */
+(function () {
+  var q = new URLSearchParams(location.search);
+  var ART = q.get('art') || 'glb';
+
+  if (ART === 'ink') {
+    /* 水墨低模：保留 hero3d.js 自带 Hero3D，不覆盖 */
+  } else if (ART === 'real') {
+    if (window.Real3D) window.Hero3D = window.Real3D;
+  } else {
+    if (window.Glb3D) {
+      window.Hero3D = window.Glb3D;
+      /* 贴图档位策略：主角 2K / 敌人 1024；接口未落地则跳过（不改 glb3d.js） */
+      if (typeof window.Glb3D.setTierPolicy === 'function') {
+        try { window.Glb3D.setTierPolicy({ hero: '2k', enemy: '1024' }); } catch (e) {}
+      }
+    } else if (window.Real3D) {
+      window.Hero3D = window.Real3D;
+    }
+  }
+
+  /* ---- 自动开局：选 PVP 竞技场 → 点开始 → 隐藏遮罩（沿用 _ingame_arena.html 写法） ---- */
+  setTimeout(function () {
+    var bs = document.querySelectorAll('#modeToggle button');
+    if (bs.length > 1) bs[1].click();
+  }, 300);
+  setTimeout(function () { var b = document.getElementById('startBtn'); if (b) b.click(); }, 900);
+  setTimeout(function () { var o = document.getElementById('overlay'); if (o) o.classList.add('hidden'); }, 1500);
+
+  var dbg = null;
+  var planted = [];              // { e, type, lateral, dist }
+  var frameSamples = [];         // { t, ms }
+  var bytesByUrl = {};
+  var actFired = { hit: false, kill: false };
+
+  /* 布置方案：grunt→剑客模型 / shooter→枪手模型 / boss→术士模型，镜头前排开 */
+  var PLAN = [
+    { type: 'grunt',   lateral: -1.9, dist: 6.2 },
+    { type: 'shooter', lateral:  0.0, dist: 6.6 },
+    { type: 'boss',    lateral:  2.1, dist: 7.0 }
+  ];
+  var near = q.get('near');                       // near=shooter 只放一只近景
+  var extra = parseInt(q.get('extra') || '0', 10) || 0;  // 额外同型敌人，测 1+6 档
+
+  function sceneOf(cam) {
+    var o = cam;
+    while (o && o.type !== 'Scene') o = o.parent;
+    return o;
+  }
+
+  function basis() {
+    var cam = dbg.camera();
+    var pos = cam.getWorldPosition(new THREE.Vector3());
+    var dir = cam.getWorldDirection(new THREE.Vector3());
+    var fwd = new THREE.Vector3(dir.x, 0, dir.z).normalize();
+    var right = new THREE.Vector3(-fwd.z, 0, fwd.x);
+    return { cam: cam, pos: pos, fwd: fwd, right: right };
+  }
+
+  function plantOne(type, lateral, dist) {
+    var b = basis();
+    var target = b.pos.clone().addScaledVector(b.fwd, dist).addScaledVector(b.right, lateral);
+    var e = dbg.spawn(type, new THREE.Vector3(target.x, 0, target.z));
+    if (!e) return null;
+    e.speed = 0;          // 验收站位：不走动
+    e.summonT = 9999;     // boss 不召援军，避免额外模型入镜
+    planted.push({ e: e, type: type, lateral: lateral, dist: dist });
+    return e;
+  }
+
+  function plant() {
+    if (planted.length) return;
+    var plan = PLAN.slice();
+    if (near) {
+      plan = PLAN.filter(function (p) { return p.type === near; });
+      if (!plan.length) plan = [PLAN[1]];
+      plan[0].dist = 1.8; plan[0].lateral = 0;
+    }
+    plan.forEach(function (p) { plantOne(p.type, p.lateral, p.dist); });
+    for (var i = 0; i < extra; i++) {
+      var t = PLAN[i % PLAN.length];
+      plantOne(t.type, t.lateral + 1.2, t.dist + 0.6);
+    }
+  }
+
+  /* 站位锁定：每帧把布置的敌人钉在镜头前方固定相对位置（覆盖 AI 位移），朝向玩家 */
+  function lockLineup() {
+    var b = basis();
+    planted.forEach(function (p) {
+      var e = p.e;
+      if (e.dead) return;
+      var target = b.pos.clone().addScaledVector(b.fwd, p.dist).addScaledVector(b.right, p.lateral);
+      e.pos.set(target.x, 0, target.z);
+      e.mesh.position.copy(e.pos);
+      var nx = b.pos.x - e.pos.x, nz = b.pos.z - e.pos.z;
+      e.mesh.rotation.y = Math.atan2(nx, nz);
+    });
+  }
+
+  /* 场景遍历口径统计（renderer 实例为 game.js 闭包私有，不可达；按场景树等价计数） */
+  function collectStats() {
+    if (!dbg) return { calls: 0, tris: 0, textures: 0 };
+    var scene = sceneOf(dbg.camera());
+    var calls = 0, tris = 0, texSeen = {}, texCount = 0;
+    scene.traverse(function (o) {
+      if (!o.visible) return;
+      if (o.isMesh || o.isLine) {
+        calls++;
+        if (o.geometry) {
+          var c = o.geometry.index ? o.geometry.index.count
+            : (o.geometry.attributes.position ? o.geometry.attributes.position.count : 0);
+          tris += Math.floor(c / 3);
+        }
+      }
+      if (o.isMesh && o.material) {
+        var ms = Array.isArray(o.material) ? o.material : [o.material];
+        ms.forEach(function (m) {
+          ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap'].forEach(function (k) {
+            var tx = m[k];
+            if (tx && !texSeen[tx.uuid]) { texSeen[tx.uuid] = 1; texCount++; }
+          });
+        });
+      }
+    });
+    return { calls: calls, tris: tris, textures: texCount };
+  }
+
+  function fetchBytes() {
+    if (!window.Glb3D) return;
+    var info = Glb3D.info();
+    (info.cacheUrls || []).forEach(function (url) {
+      if (bytesByUrl[url] != null) return;
+      fetch(url, { method: 'HEAD' }).then(function (r) {
+        var cl = r.headers.get('Content-Length');
+        if (cl) bytesByUrl[url] = parseInt(cl, 10);
+      }).catch(function () {});
+    });
+  }
+
+  function allMounted() {
+    return planted.length > 0 && planted.every(function (p) {
+      return !p.e.dead && !p.e.mesh.userData.glbPending;
+    });
+  }
+
+  /* 受击闪光（与 game.js setEmissiveFlash 同一写法，仅作用于指定目标，验证同伴不一起变红） */
+  function flashOn(mesh, on) {
+    mesh.traverse(function (o) {
+      if (o.isMesh && o.material && o.material.emissive) {
+        if (on) {
+          if (o.userData.baseEmissive === undefined) o.userData.baseEmissive = o.material.emissive.getHex();
+          o.material.emissive.setHex(0xff2244);
+        } else if (o.userData.baseEmissive !== undefined) {
+          o.material.emissive.setHex(o.userData.baseEmissive);
+          o.userData.baseEmissive = undefined;
+        }
+      }
+    });
+  }
+
+  var flashTarget = null;
+  function doHit() {
+    if (!planted.length) return;
+    /* 选血量最高的目标（boss 900hp），保证受击闪光留在存活单位上；只闪这一只，
+       同模型其余敌人的材质是独立 clone，不应一起变红。 */
+    var target = planted[2] || planted[0];
+    dbg.damage(target.e, 30);            // 走真实伤害链路：flash=0.12 + 受击后仰
+    flashTarget = target;
+    flashOn(target.e.mesh, true);         // 验收留证：闪光保持到截图帧
+  }
+
+  /* 每帧钉住目标闪光：游戏侧 flash 衰减后会恢复基础 emissive，
+     这里把 flash 顶住并重新写红，保证截图帧只有被击中的那一只发红。 */
+  function holdFlash() {
+    if (!flashTarget) return;
+    if (flashTarget.e.dead) { flashTarget = null; return; }
+    flashTarget.e.flash = Math.max(flashTarget.e.flash, 0.15);
+    flashOn(flashTarget.e.mesh, true);
+  }
+
+  function doKill() {
+    planted.slice(0, 2).forEach(function (p) { dbg.damage(p.e, 99999); });
+  }
+
+  function tickActions() {
+    if (!planted.length || !allMounted()) return;
+    if (q.get('act') === 'hit' && !actFired.hit) { actFired.hit = true; doHit(); }
+    if (q.get('act') === 'kill' && !actFired.kill) { actFired.kill = true; doKill(); }
+  }
+
+  /* ---- HUD 刷新 ---- */
+  var hudEl = document.getElementById('glbHud');
+  function fmtBytes(n) { return n == null ? '-' : (n / 1024 / 1024).toFixed(2) + ' MiB (' + n + ' B)'; }
+
+  function refresh() {
+    if (!dbg) return;
+    var info = window.Glb3D ? Glb3D.info() : null;
+    var st = collectStats();
+
+    var now = performance.now();
+    frameSamples = frameSamples.filter(function (s) { return now - s.t < 10000; });
+    var avgMs = frameSamples.length
+      ? frameSamples.reduce(function (a, s) { return a + s.ms; }, 0) / frameSamples.length : 0;
+    var fps = avgMs > 0 ? 1000 / avgMs : 0;
+    var sorted = frameSamples.map(function (s) { return s.ms; }).sort(function (a, b) { return a - b; });
+    var p99 = sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.99))] : 0;
+
+    var alive = planted.filter(function (p) { return !p.e.dead; });
+    var lines = [];
+    lines.push('档位 art=' + ART + (info ? '  tex=' + info.tier + '  1024回退=' + JSON.stringify(info.fallbacks || {}) : ''));
+    lines.push('场景遍历口径: draw calls=' + st.calls + '  triangles=' + st.tris + '  textures=' + st.textures);
+    lines.push('FPS(近10s): 平均=' + fps.toFixed(1) + '  P99帧时间=' + p99.toFixed(2) + ' ms  样本=' + frameSamples.length);
+    lines.push('实例: 敌人存活=' + alive.length + ' / 布置=' + planted.length);
+
+    alive.forEach(function (p) {
+      var e = p.e, ud = e.mesh.userData;
+      var line = '· ' + p.type + ' → ' + (ud.glbKind || '-');
+      if (ud.glbPending) line += ' ⏳挂载中';
+      else if (ud.glbFallback) line += ' ⚠回退Real3D';
+      else if (window.Glb3D) {
+        var s = Glb3D.stats(e.mesh);
+        line += ' 身高=' + s.height.toFixed(3) + 'm 三角=' + s.tris + ' 骨骼=' + s.bones + ' 材质=' + s.mats;
+        if (ud.mountMs != null) line += ' 挂载=' + ud.mountMs + 'ms';
+      }
+      lines.push(line);
+    });
+
+    var totalBytes = Object.keys(bytesByUrl).reduce(function (a, k) { return a + bytesByUrl[k]; }, 0);
+    lines.push('已加载模型: ' + Object.keys(bytesByUrl).length + ' 份, 合计=' + fmtBytes(totalBytes));
+    if (info && info.mountMs && Object.keys(info.mountMs).length) {
+      lines.push('挂载毫秒(info): ' + JSON.stringify(info.mountMs));
+    }
+    hudEl.textContent = lines.join('\n');
+  }
+
+  /* ---- 启动轮询：等局内 playing 后布置站位 ---- */
+  var bootTries = 0;
+  var bootIv = setInterval(function () {
+    bootTries++;
+    dbg = window.__arenaDebug || null;
+    if (dbg && dbg.state && dbg.state.phase === 'playing') {
+      plant();
+      fetchBytes();
+      clearInterval(bootIv);
+    } else if (bootTries > 150) {
+      clearInterval(bootIv);
+    }
+  }, 100);
+
+  /* ---- 帧循环：采样帧时间 + 锁站位 + 刷新 HUD ---- */
+  var lastT = performance.now();
+  function loop() {
+    requestAnimationFrame(loop);
+    var now = performance.now();
+    var ms = now - lastT; lastT = now;
+    if (ms > 0 && ms < 500) frameSamples.push({ t: now, ms: ms });
+    if (dbg) { lockLineup(); tickActions(); holdFlash(); }
+    refresh();
+  }
+  loop();
+
+  /* 暴露给外部截图/实测脚本调用 */
+  window.__glbDbg = {
+    ready: function () { return !!(dbg && planted.length && allMounted()); },
+    hit: doHit,
+    kill: doKill,
+    planted: function () { return planted; },
+    debug: function () { return dbg; },
+    stats: collectStats,
+    info: function () { return window.Glb3D ? Glb3D.info() : null; },
+    bytes: function () { return bytesByUrl; }
+  };
+})();
+</script>
+</body>
+</html>

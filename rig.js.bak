@@ -1,0 +1,352 @@
+/* ============================================================
+   第七竞技场 · 角色骨骼与动作（Joe）
+   与 art.js 分离，避免与并发写入冲突
+   - 骨骼：19 根，命名 bone_部位_侧
+   - 部件挂在骨上（刚性分段，低模标准做法），关节旋转即动画
+   - 武器通过 socket 挂在 hand_R 上，可单独替换
+   ============================================================ */
+(function () {
+'use strict';
+
+var GEO = {};
+
+function g(key, make) {
+  if (!GEO[key]) GEO[key] = make();
+  return GEO[key];
+}
+
+var PALETTES = {
+  swordsman: { armor: 0x8698a6, cloth: 0x22303a, accent: 0x7fd8ff, skin: 0xd6b196 },
+  gunner:    { armor: 0x2d4d78, cloth: 0x16222f, accent: 0x66d9ff, skin: 0xc99b7d },
+  warlock:   { armor: 0x4b3a78, cloth: 0x221a30, accent: 0xc9a2ff, skin: 0xcda78f }
+};
+
+/* 材质定义：颜色由职业调色板给，参数固定，便于做材质表 */
+var MATDEF = {
+  armor:  { rough: 0.42, metal: 0.50, name: '甲',  tex: '1024 图集 / 无细节贴图' },
+  cloth:  { rough: 0.82, metal: 0.08, name: '衣',  tex: '1024 图集 / 布纹' },
+  skin:   { rough: 0.62, metal: 0.00, name: '肤',  tex: '512 / 面部与手' },
+  accent: { rough: 0.20, metal: 0.10, name: '缀',  tex: '发光，无贴图' },
+  steel:  { rough: 0.24, metal: 0.90, name: '刃',  tex: '512 / 刃口高光条' }
+};
+
+function mk(color, d) {
+  return new THREE.MeshStandardMaterial({
+    color: color, roughness: d.rough, metalness: d.metal
+  });
+}
+
+function materials(kind) {
+  var P = PALETTES[kind];
+  return {
+    armor: mk(P.armor, MATDEF.armor),
+    cloth: mk(P.cloth, MATDEF.cloth),
+    skin: mk(P.skin, MATDEF.skin),
+    accent: new THREE.MeshBasicMaterial({ color: P.accent }),
+    steel: mk(0xc6d4e2, MATDEF.steel)
+  };
+}
+
+/* ---------------- 骨骼 ---------------- */
+var BONE_NAMES = [
+  'root', 'hips', 'spine01', 'spine02', 'neck', 'head',
+  'clav_L', 'upperarm_L', 'forearm_L', 'hand_L',
+  'clav_R', 'upperarm_R', 'forearm_R', 'hand_R',
+  'thigh_L', 'calf_L', 'foot_L', 'thigh_R', 'calf_R', 'foot_R'
+];
+
+function bone(name, pos, parent) {
+  var b = new THREE.Bone();
+  b.name = name;
+  b.position.set(pos[0], pos[1], pos[2]);
+  if (parent) parent.add(b);
+  return b;
+}
+
+function makeSkeleton() {
+  var B = {};
+  B.root = bone('root', [0, 0, 0], null);
+  B.hips = bone('hips', [0, 0.92, 0], B.root);
+  B.spine01 = bone('spine01', [0, 0.10, 0], B.hips);
+  B.spine02 = bone('spine02', [0, 0.16, 0], B.spine01);
+  B.neck = bone('neck', [0, 0.16, 0], B.spine02);
+  B.head = bone('head', [0, 0.08, 0], B.neck);
+
+  [['L', 1], ['R', -1]].forEach(function (s) {
+    var side = s[0], k = s[1];
+    B['clav_' + side] = bone('clav_' + side, [0.055 * k, 0.125, 0], B.spine02);
+    B['upperarm_' + side] = bone('upperarm_' + side, [0.135 * k, 0, 0], B['clav_' + side]);
+    B['forearm_' + side] = bone('forearm_' + side, [0, -0.28, 0], B['upperarm_' + side]);
+    B['hand_' + side] = bone('hand_' + side, [0, -0.26, 0], B['forearm_' + side]);
+
+    B['thigh_' + side] = bone('thigh_' + side, [0.095 * k, 0, 0], B.hips);
+    B['calf_' + side] = bone('calf_' + side, [0, -0.42, 0], B['thigh_' + side]);
+    B['foot_' + side] = bone('foot_' + side, [0, -0.42, 0], B['calf_' + side]);
+  });
+  return B;
+}
+
+/* ---------------- 部件 ---------------- */
+function part(parent, key, makeGeo, mat, pos, rot) {
+  var m = new THREE.Mesh(g(key, makeGeo), mat);
+  m.position.set(pos[0], pos[1], pos[2]);
+  if (rot) m.rotation.set(rot[0], rot[1], rot[2]);
+  parent.add(m);
+  return m;
+}
+
+function buildBody(B, M, kind) {
+  var grp = new THREE.Group();
+
+  /* 躯干：胯（窄）+ 腰 + 胸（宽） */
+  part(B.hips, 'p_pelvis', function () { return new THREE.BoxGeometry(0.26, 0.16, 0.19); }, M.cloth, [0, -0.02, 0]);
+  part(B.spine01, 'p_waist', function () { return new THREE.CylinderGeometry(0.13, 0.145, 0.14, 8); }, M.armor, [0, 0.03, 0]);
+  part(B.spine02, 'p_chest', function () { return new THREE.CylinderGeometry(0.175, 0.15, 0.26, 8); }, M.armor, [0, 0.06, 0]);
+  // 胸前发光条（识别色）
+  part(B.spine02, 'p_plate', function () { return new THREE.BoxGeometry(0.10, 0.055, 0.02); }, M.accent, [0, 0.09, -0.16]);
+
+  /* 头颈 */
+  part(B.neck, 'p_neck', function () { return new THREE.CylinderGeometry(0.045, 0.05, 0.09, 6); }, M.skin, [0, 0.03, 0]);
+  var head = part(B.head, 'p_head', function () { return new THREE.SphereGeometry(0.105, 12, 10); }, M.skin, [0, 0.06, 0]);
+  head.scale.set(0.92, 1.0, 0.98);
+
+  /* 四肢 */
+  ['L', 'R'].forEach(function (side) {
+    var k = side === 'L' ? 1 : -1;
+
+    // 肩甲：三种轮廓语言
+    if (kind === 'gunner') {
+      part(B['clav_' + side], 'p_padBroad', function () { return new THREE.BoxGeometry(0.15, 0.07, 0.19); }, M.armor, [0.01 * k, 0.02, 0], [0, 0, -0.18 * k]);
+    } else if (kind === 'swordsman') {
+      part(B['clav_' + side], 'p_padSlim', function () { return new THREE.ConeGeometry(0.085, 0.19, 5); }, M.armor, [0.02 * k, 0.02, 0], [0, 0, -Math.PI / 2 * k]);
+    } else {
+      part(B['clav_' + side], 'p_padRobe', function () { return new THREE.SphereGeometry(0.072, 8, 6); }, M.cloth, [0.01 * k, 0.01, 0]);
+    }
+
+    part(B['upperarm_' + side], 'p_upperarm', function () { return new THREE.CylinderGeometry(0.042, 0.038, 0.26, 6); }, M.cloth, [0, -0.13, 0]);
+    part(B['forearm_' + side], 'p_forearm', function () { return new THREE.CylinderGeometry(0.040, 0.035, 0.24, 6); }, M.cloth, [0, -0.12, 0]);
+    part(B['forearm_' + side], 'p_cuff', function () { return new THREE.CylinderGeometry(0.048, 0.043, 0.07, 6); }, M.armor, [0, -0.20, 0]);
+    part(B['hand_' + side], 'p_hand', function () { return new THREE.BoxGeometry(0.055, 0.075, 0.045); }, M.skin, [0, -0.04, 0]);
+
+    part(B['thigh_' + side], 'p_thigh', function () { return new THREE.CylinderGeometry(0.058, 0.05, 0.40, 6); }, kind === 'warlock' ? M.cloth : M.armor, [0, -0.20, 0]);
+    part(B['calf_' + side], 'p_calf', function () { return new THREE.CylinderGeometry(0.048, 0.036, 0.40, 6); }, M.cloth, [0, -0.20, 0]);
+    part(B['foot_' + side], 'p_foot', function () { return new THREE.BoxGeometry(0.085, 0.05, 0.20); }, M.cloth, [0, -0.015, -0.045]);
+  });
+
+  /* 职业特征件 */
+  if (kind === 'swordsman') {
+    var bun = part(B.head, 'p_bun', function () { return new THREE.SphereGeometry(0.045, 8, 6); }, M.cloth, [0, 0.14, 0.05]);
+    var tail = part(B.head, 'p_tail', function () { return new THREE.ConeGeometry(0.032, 0.30, 5); }, M.cloth, [0, 0.10, 0.14], [-2.1, 0, 0]);
+    part(B.head, 'p_mask', function () { return new THREE.BoxGeometry(0.10, 0.016, 0.02); }, M.accent, [0, 0.06, -0.098]);
+  } else if (kind === 'gunner') {
+    part(B.head, 'p_goggle', function () { return new THREE.BoxGeometry(0.155, 0.035, 0.025); }, M.accent, [0, 0.075, -0.085]);
+    part(B.head, 'p_helm', function () { return new THREE.BoxGeometry(0.185, 0.04, 0.185); }, M.armor, [0, 0.135, 0]);
+  } else {
+    // 低檐兜帽：贴合头型，帽檐不外扩
+    part(B.head, 'p_hood', function () { return new THREE.SphereGeometry(0.125, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.62); }, M.cloth, [0, 0.07, 0.01], [0.12, 0, 0]);
+    part(B.spine02, 'p_robeTop', function () { return new THREE.CylinderGeometry(0.19, 0.24, 0.30, 8); }, M.cloth, [0, -0.02, 0]);
+  }
+
+  // 长袍下摆挂在 hips 上，随胯摆动
+  if (kind === 'warlock') {
+    part(B.hips, 'p_robe', function () { return new THREE.CylinderGeometry(0.19, 0.30, 0.92, 8); }, M.cloth, [0, -0.46, 0]);
+    part(B.hips, 'p_hem', function () { return new THREE.TorusGeometry(0.30, 0.012, 4, 16); }, M.accent, [0, -0.90, 0], [Math.PI / 2, 0, 0]);
+  }
+
+  grp.userData.bones = B;
+  return grp;
+}
+
+/* ---------------- 武器 ---------------- */
+function buildWeapon(kind, M) {
+  var w = new THREE.Group();
+  if (kind === 'swordsman') {
+    // 长刀：刃长 0.95，柄 0.22
+    var blade = new THREE.Mesh(g('w_katana', function () { return new THREE.BoxGeometry(0.042, 0.95, 0.022); }), M.steel);
+    blade.position.set(0, 0.52, 0);
+    w.add(blade);
+    var edge = new THREE.Mesh(g('w_katanaEdge', function () { return new THREE.BoxGeometry(0.009, 0.95, 0.010); }), M.accent);
+    edge.position.set(-0.024, 0, 0.010);
+    blade.add(edge);
+    var guard = new THREE.Mesh(g('w_guard', function () { return new THREE.BoxGeometry(0.10, 0.018, 0.05); }), M.armor);
+    guard.position.set(0, 0.02, 0);
+    w.add(guard);
+    var grip = new THREE.Mesh(g('w_grip', function () { return new THREE.CylinderGeometry(0.018, 0.018, 0.22, 6); }), M.cloth);
+    grip.position.set(0, -0.10, 0);
+    w.add(grip);
+    w.userData.len = 1.17;
+  } else if (kind === 'gunner') {
+    // 长枪：全长 1.45
+    var body = new THREE.Mesh(g('w_lanceBody', function () { return new THREE.BoxGeometry(0.075, 0.10, 0.62); }), M.armor);
+    body.position.set(0, 0, -0.16);
+    w.add(body);
+    var barrel = new THREE.Mesh(g('w_lanceBarrel', function () { return new THREE.CylinderGeometry(0.026, 0.026, 0.52, 8); }), M.steel);
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.set(0, 0.015, -0.55);
+    w.add(barrel);
+    var stock = new THREE.Mesh(g('w_lanceStock', function () { return new THREE.BoxGeometry(0.055, 0.10, 0.22); }), M.cloth);
+    stock.position.set(0, -0.01, 0.22);
+    w.add(stock);
+    var muzzle = new THREE.Mesh(g('w_muzzle', function () { return new THREE.SphereGeometry(0.03, 8, 6); }), M.accent);
+    muzzle.position.set(0, 0.015, -0.80);
+    w.add(muzzle);
+    w.userData.len = 1.45;
+  } else {
+    // 法杖：杆 1.45，法球 Ø0.14
+    var rod = new THREE.Mesh(g('w_rod', function () { return new THREE.CylinderGeometry(0.024, 0.019, 1.45, 8); }), M.armor);
+    rod.position.set(0, 0.10, 0);
+    w.add(rod);
+    var orb = new THREE.Mesh(g('w_orb', function () { return new THREE.SphereGeometry(0.07, 10, 8); }), M.accent);
+    orb.position.set(0, 0.84, 0);
+    w.add(orb);
+    var halo = new THREE.Mesh(g('w_halo', function () { return new THREE.TorusGeometry(0.105, 0.010, 4, 14); }), M.accent);
+    halo.position.set(0, 0.84, 0);
+    halo.rotation.set(1.2, 0.3, 0);
+    w.add(halo);
+    w.userData.len = 1.60;
+  }
+  return w;
+}
+
+/* ---------------- 装配 ---------------- */
+function buildRig(kind) {
+  var M = materials(kind);
+  var B = makeSkeleton();
+  var root = new THREE.Group();
+  root.add(B.root);
+  buildBody(B, M, kind);
+  root.scale.set(1, 1, 1);
+
+  var weapon = buildWeapon(kind, M);
+  weapon.position.set(0, -0.035, 0);
+  weapon.rotation.set(kind === 'swordsman' ? -0.35 : 0, 0, 0);
+  B.hand_R.add(weapon);
+
+  root.userData = { kind: kind, bones: B, mats: M, weapon: weapon };
+  return root;
+}
+
+/* ---------------- 姿势库 ----------------
+   pose 格式：{ rootY, rootRX, bone: [rx, ry, rz] }
+   -------------------------------------------------- */
+function applyPose(obj, pose) {
+  var B = obj.userData.bones;
+  var baseY = 0.92;
+  B.root.position.y = (pose.rootY || 0);
+  B.root.rotation.set(pose.rootRX || 0, 0, 0);
+  for (var name in B) {
+    if (name === 'root') continue;
+    var p = pose[name];
+    if (p) B[name].rotation.set(p[0], p[1], p[2]);
+    else B[name].rotation.set(0, 0, 0);
+  }
+}
+
+var P = function (o) { return o; };
+
+var ACTIONS = {
+  idle: {
+    cn: '待机', fps: 12, frames: 6,
+    keys: [
+      P({ spine01: [0.02, 0, 0], spine02: [-0.03, 0, 0], head: [0.02, 0, 0], upperarm_L: [0.08, 0, 0.10], upperarm_R: [0.08, 0, -0.10], forearm_L: [-0.16, 0, 0], forearm_R: [-0.16, 0, 0] }),
+      P({ spine01: [0.03, 0, 0], spine02: [-0.05, 0, 0], head: [0.03, 0, 0], upperarm_L: [0.10, 0, 0.10], upperarm_R: [0.10, 0, -0.10], forearm_L: [-0.20, 0, 0], forearm_R: [-0.20, 0, 0] })
+    ]
+  },
+  run: {
+    cn: '跑动', fps: 12, frames: 8,
+    keys: [
+      P({ rootY: 0.02, rootRX: 0.10, thigh_L: [-0.75, 0, 0], calf_L: [0.55, 0, 0], thigh_R: [0.55, 0, 0], calf_R: [0.20, 0, 0], upperarm_L: [0.45, 0, 0], forearm_L: [-1.10, 0, 0], upperarm_R: [-0.30, 0, -0.10], forearm_R: [-0.55, 0, 0], hand_R: [0.72, 0, 0.30], spine02: [0.10, 0.06, 0] }),
+      P({ rootY: 0.05, rootRX: 0.10, thigh_L: [-0.15, 0, 0], calf_L: [0.30, 0, 0], thigh_R: [0.10, 0, 0], calf_R: [0.65, 0, 0], upperarm_L: [0.15, 0, 0], forearm_L: [-1.05, 0, 0], upperarm_R: [-0.25, 0, -0.10], forearm_R: [-0.60, 0, 0], hand_R: [0.72, 0, 0.30], spine02: [0.10, 0, 0] }),
+      P({ rootY: 0.02, rootRX: 0.10, thigh_L: [0.55, 0, 0], calf_L: [0.20, 0, 0], thigh_R: [-0.75, 0, 0], calf_R: [0.55, 0, 0], upperarm_L: [-0.55, 0, 0], forearm_L: [-1.00, 0, 0], upperarm_R: [-0.35, 0, -0.10], forearm_R: [-0.50, 0, 0], hand_R: [0.72, 0, 0.30], spine02: [0.10, -0.06, 0] })
+    ]
+  },
+  sprint: {
+    cn: '疾跑', fps: 14, frames: 8,
+    keys: [
+      P({ rootY: 0.03, rootRX: 0.24, thigh_L: [-1.00, 0, 0], calf_L: [0.85, 0, 0], thigh_R: [0.75, 0, 0], calf_R: [0.25, 0, 0], upperarm_L: [0.70, 0, 0.12], forearm_L: [-1.35, 0, 0], upperarm_R: [-0.45, 0, -0.12], forearm_R: [-0.75, 0, 0], hand_R: [0.86, 0, 0.34], spine02: [0.16, 0.05, 0], head: [-0.10, 0, 0] }),
+      P({ rootY: 0.07, rootRX: 0.24, thigh_L: [-0.20, 0, 0], calf_L: [0.45, 0, 0], thigh_R: [0.05, 0, 0], calf_R: [0.95, 0, 0], upperarm_L: [0.25, 0, 0.12], forearm_L: [-1.30, 0, 0], upperarm_R: [-0.40, 0, -0.12], forearm_R: [-0.80, 0, 0], hand_R: [0.86, 0, 0.34], spine02: [0.16, 0, 0], head: [-0.10, 0, 0] }),
+      P({ rootY: 0.03, rootRX: 0.24, thigh_L: [0.75, 0, 0], calf_L: [0.25, 0, 0], thigh_R: [-1.00, 0, 0], calf_R: [0.85, 0, 0], upperarm_L: [-0.80, 0, 0.12], forearm_L: [-1.25, 0, 0], upperarm_R: [-0.50, 0, -0.12], forearm_R: [-0.70, 0, 0], hand_R: [0.86, 0, 0.34], spine02: [0.16, -0.05, 0], head: [-0.10, 0, 0] })
+    ]
+  },
+  jump: {
+    cn: '跳跃', fps: 16, frames: 8,
+    keys: [
+      P({ rootY: -0.10, rootRX: 0.12, thigh_L: [-0.55, 0, 0], calf_L: [0.95, 0, 0], thigh_R: [-0.55, 0, 0], calf_R: [0.95, 0, 0], upperarm_L: [0.30, 0, 0.15], forearm_L: [-0.90, 0, 0], upperarm_R: [0.30, 0, -0.15], forearm_R: [-0.90, 0, 0], hand_R: [0.62, 0, 0.26], spine02: [0.18, 0, 0] }),
+      P({ rootY: 0.18, rootRX: -0.05, thigh_L: [-0.15, 0, 0], calf_L: [0.10, 0, 0], thigh_R: [-0.15, 0, 0], calf_R: [0.10, 0, 0], upperarm_L: [-0.55, 0, 0.10], forearm_L: [-0.35, 0, 0], upperarm_R: [-0.55, 0, -0.10], forearm_R: [-0.35, 0, 0], hand_R: [0.66, 0, 0.24], spine02: [-0.10, 0, 0] }),
+      P({ rootY: 0.55, rootRX: -0.12, thigh_L: [-0.35, 0, 0], calf_L: [0.50, 0, 0], thigh_R: [-0.20, 0, 0], calf_R: [0.35, 0, 0], upperarm_L: [-0.80, 0, 0.18], forearm_L: [-0.55, 0, 0], upperarm_R: [-0.70, 0, -0.18], forearm_R: [-0.45, 0, 0], hand_R: [0.70, 0, 0.22], spine02: [-0.14, 0, 0], head: [-0.06, 0, 0] }),
+      P({ rootY: 0.10, rootRX: 0.14, thigh_L: [-0.45, 0, 0], calf_L: [0.55, 0, 0], thigh_R: [-0.45, 0, 0], calf_R: [0.55, 0, 0], upperarm_L: [0.20, 0, 0.20], forearm_L: [-0.70, 0, 0], upperarm_R: [0.20, 0, -0.20], forearm_R: [-0.70, 0, 0], hand_R: [0.64, 0, 0.26], spine02: [0.16, 0, 0] }),
+      P({ rootY: -0.14, rootRX: 0.20, thigh_L: [-0.80, 0, 0], calf_L: [1.10, 0, 0], thigh_R: [-0.80, 0, 0], calf_R: [1.10, 0, 0], upperarm_L: [0.45, 0, 0.22], forearm_L: [-1.00, 0, 0], upperarm_R: [0.45, 0, -0.22], forearm_R: [-1.00, 0, 0], hand_R: [0.60, 0, 0.28], spine02: [0.24, 0, 0], head: [0.10, 0, 0] })
+    ]
+  },
+  attack: {
+    cn: '攻击（横斩）', fps: 18, frames: 8,
+    keys: [
+      P({ rootRX: 0.06, spine02: [0.04, 0.30, 0], upperarm_R: [-1.10, 0, -0.30], forearm_R: [-1.40, 0, 0], upperarm_L: [0.25, 0, 0.20], forearm_L: [-0.60, 0, 0], thigh_L: [-0.25, 0, 0], thigh_R: [0.20, 0, 0], head: [0.02, 0.18, 0] }),
+      P({ rootRX: 0.10, spine02: [0.06, -0.40, 0], upperarm_R: [-1.45, 0, 0.60], forearm_R: [-0.45, 0, 0], upperarm_L: [0.55, 0, -0.10], forearm_L: [-0.75, 0, 0], thigh_L: [-0.45, 0, 0], thigh_R: [0.35, 0, 0], head: [0.04, -0.22, 0] }),
+      P({ rootRX: 0.04, spine02: [0.02, -0.20, 0], upperarm_R: [-1.25, 0, 0.30], forearm_R: [-0.70, 0, 0], upperarm_L: [0.30, 0, 0.10], forearm_L: [-0.55, 0, 0], thigh_L: [-0.20, 0, 0], thigh_R: [0.15, 0, 0] })
+    ]
+  },
+  skill: {
+    cn: '技能释放（法球）', fps: 16, frames: 8,
+    keys: [
+      P({ rootY: -0.03, rootRX: 0.05, spine01: [0.04, 0, 0], spine02: [0.10, 0, 0], upperarm_L: [0.20, 0, 0.25], forearm_L: [-0.90, 0, 0], upperarm_R: [-0.90, 0, -0.20], forearm_R: [-1.30, 0, 0], hand_R: [0.85, 0, 0.55], head: [0.10, 0, 0], thigh_L: [-0.18, 0, 0], thigh_R: [0.10, 0, 0] }),
+      P({ rootY: 0.02, rootRX: -0.04, spine01: [-0.02, 0, 0], spine02: [-0.12, 0, 0], upperarm_L: [-1.05, 0, 0.30], forearm_L: [-0.35, 0, 0], upperarm_R: [-0.40, 0, -0.55], forearm_R: [-0.20, 0, 0], hand_R: [1.00, 0, 0.40], head: [-0.14, 0, 0], thigh_L: [-0.05, 0, 0], thigh_R: [-0.05, 0, 0] }),
+      P({ rootY: 0.00, rootRX: -0.02, spine01: [-0.01, 0, 0], spine02: [-0.06, 0, 0], upperarm_L: [-0.75, 0, 0.25], forearm_L: [-0.45, 0, 0], upperarm_R: [-0.25, 0, -0.45], forearm_R: [-0.35, 0, 0], hand_R: [0.90, 0, 0.45] })
+    ]
+  }
+};
+
+/* 关键帧插值：输出 frames 帧，形成连贯帧 */
+function sampleAction(actionKey, frameIndex) {
+  var A = ACTIONS[actionKey];
+  var f = frameIndex % A.frames;
+  var t = f / A.frames;
+  var n = A.keys.length;
+  var segT = t * n;
+  var i = Math.floor(segT) % n;
+  var j = (i + 1) % n;
+  var k = segT - Math.floor(segT);
+
+  var out = {};
+  var a = A.keys[i], b = A.keys[j];
+  for (var name in a) {
+    if (typeof a[name] === 'number') { out[name] = a[name] + ((b[name] === undefined ? a[name] : b[name]) - a[name]) * k; continue; }
+    var av = a[name], bv = b[name] || av;
+    out[name] = [av[0] + (bv[0] - av[0]) * k, av[1] + (bv[1] - av[1]) * k, av[2] + (bv[2] - av[2]) * k];
+  }
+  for (var nb in b) {
+    if (out[nb] !== undefined) continue;
+    if (typeof b[nb] === 'number') out[nb] = b[nb];
+    else out[nb] = b[nb].slice();
+  }
+  return out;
+}
+
+/* 骨骼连线：用于骨架图 */
+function skeletonLines(obj) {
+  var B = obj.userData.bones;
+  var segs = [];
+  var pairs = [
+    ['hips', 'spine01'], ['spine01', 'spine02'], ['spine02', 'neck'], ['neck', 'head'],
+    ['spine02', 'clav_L'], ['clav_L', 'upperarm_L'], ['upperarm_L', 'forearm_L'], ['forearm_L', 'hand_L'],
+    ['spine02', 'clav_R'], ['clav_R', 'upperarm_R'], ['upperarm_R', 'forearm_R'], ['forearm_R', 'hand_R'],
+    ['hips', 'thigh_L'], ['thigh_L', 'calf_L'], ['calf_L', 'foot_L'],
+    ['hips', 'thigh_R'], ['thigh_R', 'calf_R'], ['calf_R', 'foot_R'],
+    ['root', 'hips']
+  ];
+  obj.updateMatrixWorld(true);
+  pairs.forEach(function (p) {
+    var a = new THREE.Vector3().setFromMatrixPosition(B[p[0]].matrixWorld);
+    var b = new THREE.Vector3().setFromMatrixPosition(B[p[1]].matrixWorld);
+    segs.push([a, b]);
+  });
+  return segs;
+}
+
+window.ArenaRig = {
+  buildRig: buildRig, applyPose: applyPose, sampleAction: sampleAction,
+  ACTIONS: ACTIONS, BONE_NAMES: BONE_NAMES, MATDEF: MATDEF, PALETTES: PALETTES,
+  buildWeapon: buildWeapon, materials: materials, skeletonLines: skeletonLines
+};
+
+})();

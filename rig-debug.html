@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>body{font:16px/1.5 Consolas,monospace;white-space:pre-wrap;padding:12px}</style></head>
+<body><div id="log">start</div>
+<script src="vendor/three.min.js"></script>
+<script src="rig.js"></script>
+<script>
+var L = document.getElementById('log');
+function say(s){ L.textContent += '\n' + s; }
+try {
+  say('THREE ' + THREE.REVISION);
+  var rig = window.ArenaRig.buildRig('swordsman');
+  say('rig ok, children=' + rig.children.length);
+  var n = 0, tris = 0;
+  rig.traverse(function (o) { if (o.isMesh) { n++; var g = o.geometry; tris += (g.index ? g.index.count : g.attributes.position.count) / 3; } });
+  say('meshes=' + n + ' tris=' + Math.round(tris));
+  window.ArenaRig.applyPose(rig, window.ArenaRig.RESTPOSE);
+  say('pose ok');
+  var w = window.ArenaRig.buildWeapon('swordsman', window.ArenaRig.materials('swordsman'));
+  say('weapon ok ' + w.children.length);
+} catch (e) {
+  say('ERR: ' + e.message + '\n' + (e.stack || ''));
+}
+</script>
+</body></html>

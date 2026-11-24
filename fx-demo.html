@@ -1,0 +1,135 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>第七竞技场 · 特效验证板</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #0d0f13; }
+  #sheet { display: block; width: 1200px; height: 880px; }
+  #stage { position: fixed; left: -9999px; top: 0; }
+</style>
+</head>
+<body>
+<canvas id="sheet" width="1200" height="880"></canvas>
+<div id="stage"></div>
+<script src="vendor/three.min.js"></script>
+<script src="fx.js"></script>
+<script>
+(function () {
+  const CELL_W = 380, CELL_H = 380;
+  const COLS = 3;
+
+  const sheet = document.getElementById('sheet');
+  const ctx = sheet.getContext('2d');
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  renderer.setSize(CELL_W, CELL_H);
+  renderer.setPixelRatio(1);
+  document.getElementById('stage').appendChild(renderer.domElement);
+
+  function buildScene(view) {
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x161a20);
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(26, 26),
+      new THREE.MeshBasicMaterial({ color: 0x1f242c })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    scene.add(floor);
+    const cam = new THREE.PerspectiveCamera(46, CELL_W / CELL_H, 0.05, 90);
+    if (view === 'ground') {
+      cam.position.set(1.05, 2.15, 1.55);
+      cam.lookAt(0.0, 0.25, -1.25);
+    } else {
+      cam.position.set(0.18, 1.52, 0.55);
+      cam.lookAt(-0.10, 0.92, -1.30);
+    }
+    return { scene: scene, cam: cam };
+  }
+
+  function drain(steps) {
+    for (let i = 0; i < steps; i++) ArenaFX.update(0.05);
+  }
+
+  function capture(spawn, target, label, sub, view) {
+    const s = buildScene(view);
+    ArenaFX.init(s.scene);
+    drain(60);
+    spawn();
+    let t = 0;
+    while (t < target) { ArenaFX.update(1 / 120); t += 1 / 120; }
+    renderer.render(s.scene, s.cam);
+    const buf = document.createElement('canvas');
+    buf.width = CELL_W;
+    buf.height = CELL_H;
+    buf.getContext('2d').drawImage(renderer.domElement, 0, 0);
+    return { canvas: buf, label: label, sub: sub, stats: ArenaFX.stats() };
+  }
+
+  const cells = [];
+
+  cells.push(capture(function () {
+    ArenaFX.slash(new THREE.Vector3(-0.35, 1.05, -1.15), 0);
+  }, 0.20, '墨斩 SLASH', '0.12 前摇 + 0.15 命中 + 0.40 余韵 ／ 5 面片 ／ 青白'));
+
+  cells.push(capture(function () {
+    ArenaFX.muzzle(new THREE.Vector3(0.30, 1.15, -1.10), -0.55);
+  }, 0.13, '击发 MUZZLE', '0.08 + 0.10 + 0.30 ／ 5 面片 ／ 枪口之外不占准心'));
+
+  cells.push(capture(function () {
+    ArenaFX.orbBurst(new THREE.Vector3(0.05, 0.02, -1.35), 0);
+  }, 0.36, '法爆 ORB BURST', '0.15 + 0.30 + 0.50 ／ 7 面片 ／ 淡紫双层墨环', 'ground'));
+
+  cells.push(capture(function () {
+    ArenaFX.hit(new THREE.Vector3(-0.05, 1.10, -1.20), 0);
+  }, 0.10, '敌受击 HIT', '0.20 + 0.35 ／ 6 面片 ／ 朱红，与敌型同色系'));
+
+  cells.push(capture(function () {
+    ArenaFX.land(new THREE.Vector3(0.05, 0.02, -1.40), 0);
+  }, 0.22, '落地拖尾 LAND', '0.30 + 0.50 ／ 5 面片 ／ 灰白墨，环 + 贴地笔', 'ground'));
+
+  cells.push(capture(function () {
+    ArenaFX.slash(new THREE.Vector3(-0.35, 1.05, -1.15), 0);
+    ArenaFX.muzzle(new THREE.Vector3(0.30, 1.15, -1.10), -0.7);
+    ArenaFX.orbBurst(new THREE.Vector3(0.05, 0.02, -1.35), 0);
+    ArenaFX.hit(new THREE.Vector3(-0.05, 1.10, -1.20), 0);
+    ArenaFX.land(new THREE.Vector3(0.05, 0.02, -1.40), 0);
+    ArenaFX.hit(new THREE.Vector3(-0.30, 1.10, -1.20), 0);
+  }, 0.24, '同屏四组上限 CAP', '同时起 6 组只留 4 组；边缘晕走 DOM 独立通道'));
+
+  /* ---- 拼板 ---- */
+  ctx.fillStyle = '#0d0f13';
+  ctx.fillRect(0, 0, sheet.width, sheet.height);
+  ctx.fillStyle = '#e8eef4';
+  ctx.font = '600 26px "Microsoft YaHei", sans-serif';
+  ctx.fillText('第七竞技场 · 特效验证板（fx.js 实渲）', 40, 52);
+  ctx.fillStyle = '#7f8b99';
+  ctx.font = '15px "Microsoft YaHei", sans-serif';
+  ctx.fillText('依据 art/特效 六帧参考与定案：笔触而非粒子、不遮准心、四色分组、同屏活跃组 ≤ 4', 40, 80);
+
+  const top = 104;
+  cells.forEach(function (cell, i) {
+    const cx = 24 + (i % COLS) * (CELL_W + 12);
+    const cy = top + Math.floor(i / COLS) * (CELL_H + 66);
+    ctx.drawImage(cell.canvas, cx, cy, CELL_W, CELL_H);
+    ctx.strokeStyle = '#232a33';
+    ctx.strokeRect(cx + 0.5, cy + 0.5, CELL_W - 1, CELL_H - 1);
+    ctx.fillStyle = '#dfe7ee';
+    ctx.font = '600 16px "Microsoft YaHei", sans-serif';
+    ctx.fillText(cell.label, cx + 2, cy + CELL_H + 26);
+    ctx.fillStyle = '#6f7c8a';
+    ctx.font = '12.5px "Microsoft YaHei", sans-serif';
+    ctx.fillText(cell.sub, cx + 2, cy + CELL_H + 46);
+    if (i === cells.length - 1) {
+      ctx.fillStyle = '#7fd8ff';
+      ctx.font = '600 12.5px "Microsoft YaHei", sans-serif';
+      ctx.fillText('实测：活跃 ' + cell.stats.active + ' / 上限 ' + cell.stats.max +
+        '，层片 ' + cell.stats.layers + '，累计 ' + cell.stats.total, cx + 2, cy + CELL_H + 62);
+    }
+  });
+
+  window.__fxSheet = { cells: cells.length, done: true };
+})();
+</script>
+</body>
+</html>
