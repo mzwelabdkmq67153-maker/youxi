@@ -549,6 +549,26 @@ function addXp(amount) {
   saveProgress();
 }
 
+// 死亡惩罚档位：'level' 掉一级并把本级经验清零；'xp' 只清本级经验（等级不动）
+const DEATH_PENALTY = 'level';
+
+// 死亡结算：只 PVE 扣，1 级有保护（新档不至于被反复清空）。返回被扣掉的旧等级，没掉级返回 null
+function applyDeathPenalty(win) {
+  if (state.mode !== 'pve' || win) return null;
+  if (DEATH_PENALTY !== 'level') {
+    state.xp = 0;
+    saveProgress();
+    return null;
+  }
+  const before = state.lv;
+  state.xp = 0;
+  if (state.lv > 1) state.lv -= 1;
+  saveProgress();
+  if (before === state.lv) return null;
+  toast('等级下降 · Lv ' + state.lv, 1500);
+  return before;
+}
+
 /* ---------------- 玩家 ---------------- */
 function resetPlayer() {
   const C = CLASSES[state.cls];
@@ -580,7 +600,8 @@ function resetPlayer() {
   player.runT = 0;
   player.trailT = 0;
 
-  yawObj.position.set(0, PLAYER_H, 14);
+  // 竞技场（PVP）：出生点从台面十字光槽移开，站到平整台面；对手点同步镜像
+  yawObj.position.set(state.mode === 'pve' ? 0 : 6.5, PLAYER_H, 14);
   yawObj.rotation.y = 0;
   pitchObj.rotation.x = 0;
   camera.position.set(0, 0, 0);
@@ -673,9 +694,26 @@ function updatePlayer(dt) {
   player.en = Math.min(player.maxEn, player.en + 11 * dt);
 }
 
+/* 场景圆形边界（竞技场圆台）：0 表示仍走方形夹止 */
+function stageRadius() {
+  const impl = sceneImpl();
+  if (!impl || !impl.boundary) return 0;
+  const r = impl.boundary();
+  return r > 0 ? r : 0;
+}
+
 function clampPos(p, pad) {
   p.x = clamp(p.x, -HALF + pad, HALF - pad);
   p.z = clamp(p.z, -HALF + pad, HALF - pad);
+  const R = stageRadius();
+  if (R > 0) {
+    const d = hyp(p.x, p.z);
+    const max = R - pad;
+    if (max > 0 && d > max) {
+      p.x *= max / d;
+      p.z *= max / d;
+    }
+  }
   for (let i = 0; i < obstacles.length; i++) {
     const o = obstacles[i];
     const dx = p.x - o.x;
@@ -2270,6 +2308,16 @@ function startGame() {
     if (/[?&]loottest/.test(location.search)) spawnTestLoot();
     // 调试：?bestiary=1 把地宫新增怪与两个 BOSS 并排摆在正前方，用来核对形象与行为
     if (/[?&]bestiary/.test(location.search)) spawnBestiary();
+    // 调试：?die=1 开局 0.8 秒后强制死亡，用来核对掉级结算（不依赖游戏循环）
+    if (/[?&]die/.test(location.search)) {
+      window.setTimeout(() => {
+        if (state.phase === 'playing') {
+          player.hp = 0;
+          player.alive = false;
+          endGame(false);
+        }
+      }, 800);
+    }
   } else if (state.mode === 'online') {
     // 出生点由服务端分配，双方各占一侧，避免两人叠在同一格
     const n = netRef();
@@ -2281,7 +2329,7 @@ function startGame() {
     ensureRemoteMesh();
     toast('对战开始', 1200);
   } else {
-    spawnEnemy('duelist', new THREE.Vector3(0, 0, -14));
+    spawnEnemy('duelist', new THREE.Vector3(-6.5, 0, -14));
     toast('对决开始', 1200);
   }
 
@@ -2307,10 +2355,13 @@ function endGame(win) {
 
   let rows;
   if (state.mode === 'pve') {
+    // 死亡惩罚：掉级在结算前结算一次，只 PVE 生效（PVP/联机不掉级）
+    const lost = applyDeathPenalty(win);
     rows = [
       ['抵达波次', state.wave],
       ['击杀数', state.kills],
       ['玩家等级', 'Lv ' + state.lv + '（' + state.xp + ' / ' + xpNeedFor(state.lv) + '）'],
+      ['等级损失', lost ? ('Lv ' + lost + ' → Lv ' + state.lv) : '无（1 级不吃惩罚）'],
       ['存活时间', fmtTime(state.elapsed)],
       ['职业', state.clsName]
     ];
@@ -3207,6 +3258,7 @@ function netApplyLocalHit(target, dmg, crit) {
 window.__arenaDebug = {
   state: state,
   player: player,
+  get hero() { return yawObj; },
   enemies: enemies,
   spawn: spawnEnemy,
   jump: doJump,
