@@ -122,7 +122,9 @@ const state = {
   spawnQueue: [], spawnTimer: 0, waveRest: null,
   enemyResp: 0, clsName: '剑客',
   sandbox: /sandbox/i.test(location.search),
-  tapTest: /tap/i.test(location.search)
+  tapTest: /tap/i.test(location.search),
+  // 调试：?nolock 不请求指针锁、也不因失锁暂停，便于自动化截图与走位测试
+  noLock: /nolock/i.test(location.search)
 };
 
 const player = {};
@@ -131,6 +133,11 @@ const enemies = [];
 const projectiles = [];
 const effects = [];
 const obstacles = [];
+/* 掉落物：每项 { mesh, item, t, baseY }，只在 PVE 副本里生成 */
+const lootDrops = [];
+let gearDirty = true;
+let bagOpen = false;
+let bagSel = 0;
 
 let lockActive = false;
 let shake = 0;
@@ -241,17 +248,26 @@ function wantScene() {
   return state.mode === 'pve' ? 'dungeon' : 'arena';
 }
 
+/* 场景实现选择：默认走 Tripo 场景模型档（scene_glb.js），
+   ?stage=proc 或模型加载失败时退回 scene.js 的程序化场景。 */
+function sceneImpl() {
+  if (window.SceneGlb && window.SceneGlb.enabled) return window.SceneGlb;
+  return window.ArenaScene || null;
+}
+
 /* 换场：先清障碍再重建，障碍由场景模块重新登记 */
 function syncScene() {
-  if (!window.ArenaScene) return;
-  if (ArenaScene.kind === wantScene()) return;
+  const impl = sceneImpl();
+  if (!impl) return;
+  if (impl.kind === wantScene()) return;
   obstacles.length = 0;
-  ArenaScene.build(wantScene(), scene, obstacles);
-  ArenaScene.tuneLights(scene);
+  impl.build(wantScene(), scene, obstacles);
+  if (impl.tuneLights) impl.tuneLights(scene);
 }
 
 function buildArena() {
-  if (window.ArenaScene) ArenaScene.build(wantScene(), scene, obstacles);
+  const impl = sceneImpl();
+  if (impl) { impl.build(wantScene(), scene, obstacles); return; }
   if (window.ArenaScene) return;
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(HALF * 2, HALF * 2),
@@ -343,7 +359,8 @@ function buildLights() {
     scene.add(pl);
   });
 
-  if (window.ArenaScene) ArenaScene.tuneLights(scene);
+  const implLights = sceneImpl();
+  if (implLights && implLights.tuneLights) implLights.tuneLights(scene);
 }
 
 /* ---------------- 武器 ---------------- */
@@ -442,6 +459,9 @@ function resetPlayer() {
   yawObj.rotation.y = 0;
   pitchObj.rotation.x = 0;
   camera.position.set(0, 0, 0);
+
+  // 装备加成在基础值之上重算一次（顺序必须在这里：先有 C.hp，再叠词条）
+  recalcGear();
 }
 
 function updatePlayer(dt) {
@@ -609,18 +629,25 @@ function spawnTrailGhost() {
 /* ---------------- 攻击 ---------------- */
 function tryAttack() {
   const A = CLASSES[state.cls].attack;
-  const mul = player.overdrive > 0 ? 1.35 : 1;
-  const interval = A.interval * (player.overdrive > 0 ? 0.5 : 1);
+  // 装备加成：伤害% → 乘子，攻击速度% → 冷却缩短，暴击率% → 额外暴击概率
+  const gDmg = 1 + (player.gDmgPct || 0) / 100;
+  const gHaste = 1 / (1 + (player.gAtkSpeedPct || 0) / 100);
+  let mul = (player.overdrive > 0 ? 1.35 : 1) * gDmg;
+  const interval = A.interval * (player.overdrive > 0 ? 0.5 : 1) * gHaste;
+  const crit = Math.random() < (player.gCritPct || 0) / 100;
+  if (crit) mul *= 1.6;
   player.attackCd = interval;
   player.attackAnim = 0.22;
 
-  if (CLASSES[state.cls].attackType === 'melee') meleeAttack(A.dmg * mul);
-  else if (CLASSES[state.cls].attackType === 'hitscan') hitscanAttack(A.dmg * mul, A);
+  if (CLASSES[state.cls].attackType === 'melee') meleeAttack(A.dmg * mul, crit);
+  else if (CLASSES[state.cls].attackType === 'hitscan') hitscanAttack(A.dmg * mul, A, crit);
   else projectileAttack(A.dmg * mul, A);
 }
 
-function meleeAttack(dmg) {
+function meleeAttack(dmg, crit) {
   const A = CLASSES[state.cls].attack;
+  // 攻击距离% 只放大近战扫掠半径，不改张角
+  const reach = A.range * (1 + (player.gRangePct || 0) / 100);
   const ox = yawObj.position.x;
   const oz = yawObj.position.z;
   const fx = -Math.sin(yawObj.rotation.y);
@@ -639,12 +666,12 @@ function meleeAttack(dmg) {
     const dx = e.pos.x - ox;
     const dz = e.pos.z - oz;
     const d = hyp(dx, dz);
-    if (d > A.range + e.radius) continue;
+    if (d > reach + e.radius) continue;
     const dot = d > 0.0001 ? (dx / d) * fx + (dz / d) * fz : 1;
     const ang = Math.acos(clamp(dot, -1, 1));
     // arcDeg 按"半角"解释：66 表示左右各 66°，总张角 132°
     if (ang > A.arcDeg * Math.PI / 180) continue;
-    damageEnemy(e, dmg);
+    damageEnemy(e, dmg, crit);
     if (!hitPoint) { hitPoint = new THREE.Vector3(e.pos.x, 1.15, e.pos.z); hitTarget = e.id; }
     hits++;
   }
@@ -658,8 +685,8 @@ function meleeAttack(dmg) {
       const d = hyp(dx, dz);
       const dot = d > 0.0001 ? (dx / d) * fx + (dz / d) * fz : 1;
       const ang = Math.acos(clamp(dot, -1, 1));
-      if (d <= A.range + 0.55 && ang <= A.arcDeg * Math.PI / 180) {
-        if (netApplyLocalHit(rm, dmg, false)) {
+      if (d <= reach + 0.55 && ang <= A.arcDeg * Math.PI / 180) {
+        if (netApplyLocalHit(rm, dmg, crit)) {
           if (!hitPoint) { hitPoint = new THREE.Vector3(rm.x, 1.15, rm.z); hitTarget = rm.id; }
           hits++;
         }
@@ -731,11 +758,11 @@ function hitscanAttack(dmg, A) {
   spawnTracer(origin, dir, len, CLASSES[state.cls].color);
 
   if (best) {
-    const crit = Math.random() < 0.16;
+    const crit = Math.random() < (0.16 + (player.gCritPct || 0) / 100);
     damageEnemy(best, dmg * (crit ? A.headMul : 1), crit);
     flashHit();
   } else if (bestRemote) {
-    const crit = Math.random() < 0.16;
+    const crit = Math.random() < (0.16 + (player.gCritPct || 0) / 100);
     if (netApplyLocalHit(bestRemote, dmg * (crit ? A.headMul : 1), crit)) {
       flashHit();
     }
@@ -1676,9 +1703,12 @@ function damageEnemy(e, dmg, crit) {
 function killEnemy(e) {
   e.dead = true;
   state.kills++;
-  player.en = Math.min(player.maxEn, player.en + 9);
+  player.en = Math.min(player.maxEn, player.en + 9 * (1 + (player.gEnRegenPct || 0) / 100));
   scene.remove(e.mesh);
   disposeGroup(e.mesh);
+
+  // 副本掉落：只在 PVE 里生成，PVP/联机不掉装备（那边是比分模式，装备无处结算）
+  if (state.mode === 'pve') spawnDropsFor(e);
 
   if (e.type === 'boss') {
     spawnExplosion(e.pos.x, 1.6, e.pos.z, 2.6);
@@ -1709,6 +1739,9 @@ function damagePlayer(dmg) {
   if (state.mode === 'online') return;
   // 调试沙盒：地址带 ?sandbox 时不掉血，用于检查动作与特效
   if (state.sandbox) return;
+  // 装备减伤：叠在上限 55%，避免高减伤后副本失去压力
+  const dr = clamp(player.gDrPct || 0, 0, 55);
+  if (dr > 0) dmg = Math.max(1, dmg * (1 - dr / 100));
   player.hp -= dmg;
   player.invul = 0.55;
   player.hurtT = 0.2;
@@ -1857,10 +1890,11 @@ function updateSkills(dt, cdDt) {
 function startGame() {
   // PVE 进首领厅、PVP 留在竞技场：换场只换视觉与障碍，玩法占地仍是 ±HALF
   // 开局无条件重建一次，避免沿用上一局残留的另一个场景
-  if (window.ArenaScene) {
+  const sceneNow = sceneImpl();
+  if (sceneNow) {
     obstacles.length = 0;
-    ArenaScene.build(wantScene(), scene, obstacles);
-    ArenaScene.tuneLights(scene);
+    sceneNow.build(wantScene(), scene, obstacles);
+    if (sceneNow.tuneLights) sceneNow.tuneLights(scene);
   } else {
     syncScene();
   }
@@ -1880,9 +1914,14 @@ function startGame() {
   input.keys = {};
   input.attacking = false;
 
+  clearLoot();
+  buildGearPanel();
+  toggleBag(false);
+
   resetPlayer();
   buildWeapon();
   updateSkillUI();
+  gearDirty = true;
 
   hudEl.classList.remove('hidden');
   overlayEl.classList.add('hidden');
@@ -1896,6 +1935,8 @@ function startGame() {
   if (state.mode === 'pve') {
     startWave();
     toast('WAVE 1', 1200);
+    // 调试：?loottest=1 在出生点前方摆满六槽各一件，用来核对掉落、拾取与面板
+    if (/[?&]loottest/.test(location.search)) spawnTestLoot();
   } else if (state.mode === 'online') {
     // 出生点由服务端分配，双方各占一侧，避免两人叠在同一格
     const n = netRef();
@@ -2007,6 +2048,7 @@ function backToMenu() {
 }
 
 function requestLock() {
+  if (state.noLock) { lockActive = true; return; }
   if (canvas.requestPointerLock) {
     const p = canvas.requestPointerLock();
     if (p && p.catch) p.catch(() => {});
@@ -2062,6 +2104,8 @@ function updateHUD() {
     objectiveEl.textContent = state.scoreP + ' : ' + state.scoreE + ' · 先到 3 杀';
   }
   timerEl.textContent = fmtTime(state.elapsed);
+
+  refreshGearPanel();
 }
 
 function toast(text, ms) {
@@ -2152,6 +2196,19 @@ function bindInput() {
     initAudio();
     input.keys[k] = true;
     if (state.phase !== 'playing') return;
+
+    // 背包（B 打开）：纯键盘导航，不退出指针锁，避免翻包时被暂停打断节奏
+    if (k === 'b') { toggleBag(); return; }
+    if (bagOpen) {
+      if (k === 'arrowup') { bagMove(-1); return; }
+      if (k === 'arrowdown') { bagMove(1); return; }
+      if (k === 'enter') { bagEquipSelected(); return; }
+      if (k === 'x') { bagDiscardSelected(); return; }
+      if (k === 'escape') { toggleBag(false); return; }
+      if (k === ' ') e.preventDefault();
+      return; // 背包打开时不吃移动/技能键，避免误操作
+    }
+
     if (k === ' ') doJump();
     if (k === 'shift') doSprint();
     if (k === 'q') castSkill(0);
@@ -2188,7 +2245,7 @@ function bindInput() {
 
   document.addEventListener('pointerlockchange', () => {
     lockActive = document.pointerLockElement === canvas;
-    if (!lockActive && state.phase === 'playing') pauseGame();
+    if (!lockActive && state.phase === 'playing' && !state.noLock) pauseGame();
   });
 
   document.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -2198,9 +2255,9 @@ function bindInput() {
     input.keys = {};
   });
 
-  // 切到后台时自动暂停，避免"人不在还被怪打"
+  // 切到后台时自动暂停，避免"人不在还被怪打"（?nolock 调试模式下不暂停）
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden && state.phase === 'playing') pauseGame();
+    if (document.hidden && state.phase === 'playing' && !state.noLock) pauseGame();
   });
 }
 
@@ -2263,6 +2320,7 @@ function animate() {
     updateWave(dt);
     updatePvpRespawn(dt);
     updateWeaponVisual(dt);
+    updateLoot(dt);
     updateHUD();
     if (state.mode === 'online') {
       updateOnlineTimers(raw);
@@ -2273,7 +2331,8 @@ function animate() {
   updateEffects(dt);
   if (state.mode === 'online') updateRemote(dt);
   if (window.ArenaFX) ArenaFX.update(dt);
-  if (window.ArenaScene) ArenaScene.update(dt);
+  var sceneUpd = sceneImpl();
+  if (sceneUpd && sceneUpd.update) sceneUpd.update(dt);
   applyShake(dt);
 
   renderer.render(scene, camera);
@@ -2828,7 +2887,8 @@ window.__arenaDebug = {
     updatePlayer(dt);
     updateEffects(dt);
     if (window.ArenaFX) ArenaFX.update(dt);
-    if (window.ArenaScene) ArenaScene.update(dt);
+    var sceneUpdLoop = sceneImpl();
+    if (sceneUpdLoop && sceneUpdLoop.update) sceneUpdLoop.update(dt);
   }
 };
 
@@ -2880,6 +2940,325 @@ window.__arenaDebug = {
     }
   });
 })();
+
+/* ============================================================================
+   副本掉落与装备（六槽：武器 / 盔甲 / 裤子 / 鞋子 / 项链 / 戒指）
+   ----------------------------------------------------------------------------
+   分工：
+   - loot.js 负责物品数据（稀有度、词条、评分、命名、背包与槽位）；
+   - 本段负责"世界里的事"：掉落实体、拾取、属性结算、HUD 与背包面板。
+   边界：
+   - 只在 PVE 生成掉落（PVP / 联机是比分与服务器仲裁模式，装备无处结算）；
+   - 装备只改出生时的派生属性（maxHp / maxEn / speed / 攻速 / 减伤 / 暴击），
+     不改 CLASSES 基础表，避免同一局里反复叠加。
+   ============================================================================ */
+
+function recalcGear() {
+  if (!window.Gear) return;
+  const C = CLASSES[state.cls];
+  const T = Gear.totals();
+
+  // 血量按"当前比例"随上限平移，换装不会凭空回满血
+  const oldMax = player.maxHp || C.hp;
+  const ratio = oldMax > 0 ? clamp(player.hp / oldMax, 0, 1) : 1;
+
+  player.gDmgPct = T.dmgPct;
+  player.gCritPct = T.critPct;
+  player.gAtkSpeedPct = T.atkSpeedPct;
+  player.gRangePct = T.rangePct;
+  player.gDrPct = T.drPct;
+  player.gEnRegenPct = T.enRegenPct;
+  player.gearPieces = T.pieces;
+
+  player.maxHp = Math.round(C.hp + T.hpFlat);
+  player.hp = clamp(Math.round(player.maxHp * ratio), 1, player.maxHp);
+  player.maxEn = Math.round(C.en + T.enFlat);
+  player.en = Math.min(player.en == null ? player.maxEn : player.en, player.maxEn);
+  player.speed = C.speed * (1 + T.speedPct / 100);
+  player.maxStamina = Math.round(100 * (1 + T.stamPct / 100));
+  player.stamina = Math.min(player.stamina == null ? player.maxStamina : player.stamina, player.maxStamina);
+
+  gearDirty = true;
+}
+
+/* ---------------- 掉落实体 ---------------- */
+function spawnDropsFor(e) {
+  if (!window.Loot) return;
+  const items = Loot.dropFor(e.type, state.wave, state.cls);
+  if (!items.length) return;
+  items.forEach((it, i) => {
+    const ang = (i / items.length) * Math.PI * 2 + rand(0, 0.9);
+    const r = items.length > 1 ? 0.5 : 0;
+    addLootDrop(it, e.pos.x + Math.cos(ang) * r, e.pos.z + Math.sin(ang) * r);
+  });
+}
+
+function lootMesh(item) {
+  const g = new THREE.Group();
+  const col = new THREE.Color(item.hex);
+
+  // 双光柱：内芯细而亮、外圈宽而淡；上下等宽，读作"信标"而不是喇叭口
+  const beamIn = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.085, 0.085, 1.15, 10, 1, true),
+    new THREE.MeshBasicMaterial({
+      color: col, transparent: true, opacity: 0.30, depthWrite: false,
+      side: THREE.DoubleSide, blending: THREE.AdditiveBlending
+    })
+  );
+  beamIn.position.y = 0.62;
+  beamIn.name = 'beamIn';
+  g.add(beamIn);
+
+  const beamOut = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.20, 0.20, 1.02, 12, 1, true),
+    new THREE.MeshBasicMaterial({
+      color: col, transparent: true, opacity: 0.06, depthWrite: false,
+      side: THREE.DoubleSide, blending: THREE.AdditiveBlending
+    })
+  );
+  beamOut.position.y = 0.55;
+  g.add(beamOut);
+
+  // 地面光环：贴地，开口环更有"落点"感
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.30, 0.42, 24),
+    new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.70, depthWrite: false })
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.03;
+  g.add(ring);
+
+  // 本体：按槽给出可辨识的剪影，稀有度色染进金属与自发光
+  let geo;
+  switch (item.slot) {
+    case 'weapon': geo = new THREE.BoxGeometry(0.05, 0.66, 0.016); break;
+    case 'chest':  geo = new THREE.BoxGeometry(0.30, 0.32, 0.18); break;
+    case 'legs':   geo = new THREE.BoxGeometry(0.24, 0.46, 0.16); break;
+    case 'boots':  geo = new THREE.BoxGeometry(0.11, 0.12, 0.26); break;
+    case 'amulet': geo = new THREE.TorusGeometry(0.075, 0.015, 8, 20); break;
+    default:       geo = new THREE.TorusGeometry(0.050, 0.012, 8, 18);
+  }
+  const tint = new THREE.Color(0xb8c4d0).lerp(col, 0.38);
+  const body = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+    color: tint, metalness: 0.55, roughness: 0.30,
+    emissive: col, emissiveIntensity: 0.34
+  }));
+  body.position.y = 0.52;
+  body.scale.setScalar(1.25);
+  body.castShadow = true;
+  body.name = 'body';
+  if (item.slot === 'weapon') body.rotation.z = 0.62;
+  if (item.slot === 'ring') body.rotation.x = Math.PI / 2;
+  g.add(body);
+
+  g.userData.item = item;
+  return g;
+}
+
+function addLootDrop(item, x, z) {
+  const mesh = lootMesh(item);
+  mesh.position.set(
+    clamp(x, -HALF + 0.6, HALF - 0.6),
+    0,
+    clamp(z, -HALF + 0.6, HALF - 0.6)
+  );
+  scene.add(mesh);
+  lootDrops.push({ mesh: mesh, item: item, t: rand(0, 2.2) });
+}
+
+function clearLoot() {
+  for (let i = lootDrops.length - 1; i >= 0; i--) {
+    scene.remove(lootDrops[i].mesh);
+    disposeGroup(lootDrops[i].mesh);
+  }
+  lootDrops.length = 0;
+}
+
+function updateLoot(dt) {
+  for (let i = 0; i < lootDrops.length; i++) {
+    const d = lootDrops[i];
+    d.t += dt;
+    const m = d.mesh;
+    m.rotation.y += dt * 0.8;
+    const body = m.getObjectByName('body');
+    if (body) body.position.y = 0.52 + Math.sin(d.t * 2.0) * 0.055;
+    const beam = m.getObjectByName('beamIn');
+    if (beam) beam.material.opacity = 0.26 + Math.sin(d.t * 2.6) * 0.06;
+  }
+  if (state.phase !== 'playing') return;
+  // 走近 1.45m 自动拾取：不做按键交互，战斗节奏里不打断手
+  for (let i = lootDrops.length - 1; i >= 0; i--) {
+    const d = lootDrops[i];
+    const dx = d.mesh.position.x - yawObj.position.x;
+    const dz = d.mesh.position.z - yawObj.position.z;
+    if (hyp(dx, dz) < 1.45) pickupLoot(d, i);
+  }
+}
+
+function pickupLoot(d, idx) {
+  const it = d.item;
+  const px = d.mesh.position.x;
+  const pz = d.mesh.position.z;
+  lootDrops.splice(idx, 1);
+  scene.remove(d.mesh);
+  disposeGroup(d.mesh);
+
+  spawnRing(px, 0.12, pz, it.hex, 1.3);
+  for (let k = 0; k < 4; k++) spawnParticle(px + rand(-0.2, 0.2), 0.35, pz + rand(-0.2, 0.2), it.hex);
+  tone(880, 0.10, 'triangle', 0.05);
+
+  const cur = Gear.slots[it.slot];
+  if (Gear.better(it, cur)) {
+    Gear.equip(it);
+    recalcGear();
+    toast('装备 ' + it.name + (cur ? ' · 换下 ' + cur.name : ''), 1800);
+  } else {
+    Gear.bag.push(it);
+    Gear.trimBag();
+    Gear.version++;
+    toast('收入背包 ' + it.name + '（当前槽位更强）', 1600);
+  }
+  gearDirty = true;
+  if (bagOpen) renderBag();
+}
+
+/* ?loottest=1：出生点正前方先摆六槽各一件（逐槽高一档）用于验证装备，
+   再摆四件低档同槽，用来验证"更弱 → 进背包"的分支与背包面板 */
+function spawnTestLoot() {
+  if (!window.Loot) return;
+  const rar = ['common', 'rare', 'epic', 'legend', 'rare', 'epic'];
+  Loot.SLOTS.forEach((s, i) => {
+    const it = Loot.roll({ ilvl: 4 + i, slot: s.key, rarity: rar[i], cls: state.cls });
+    addLootDrop(it, (i - 2.5) * 1.5, 10.4);
+  });
+  const weak = ['chest', 'legs', 'boots', 'ring'];
+  weak.forEach((slot, i) => {
+    const it = Loot.roll({ ilvl: 1, slot: slot, rarity: 'common', cls: state.cls });
+    addLootDrop(it, (i - 1.5) * 1.5, 8.2);
+  });
+}
+
+/* ---------------- HUD 装备面板 ---------------- */
+const SLOT_NAMES = { weapon: '武器', chest: '盔甲', legs: '裤子', boots: '鞋子', amulet: '项链', ring: '戒指' };
+
+function buildGearPanel() {
+  if (!hudEl) return;
+  if (!document.getElementById('gearPanel')) {
+    const el = document.createElement('div');
+    el.id = 'gearPanel';
+    hudEl.appendChild(el);
+  }
+  if (!document.getElementById('bagPanel')) {
+    const bg = document.createElement('div');
+    bg.id = 'bagPanel';
+    bg.className = 'hidden';
+    hudEl.appendChild(bg);
+  }
+  gearDirty = true;
+  refreshGearPanel();
+}
+
+function refreshGearPanel() {
+  if (!gearDirty || !hudEl || !window.Gear) return;
+  const el = document.getElementById('gearPanel');
+  if (!el) return;
+  gearDirty = false;
+
+  const T = Gear.totals();
+  const rows = ['<div class="gp-title">装备</div>'];
+  Loot.SLOTS.forEach((s) => {
+    const it = Gear.slots[s.key];
+    rows.push(
+      '<div class="gp-row' + (it ? '' : ' empty') + '">' +
+        '<span class="gp-slot">' + s.name + '</span>' +
+        (it
+          ? '<span class="gp-name" style="color:' + it.color + '">' + it.name + '</span>' +
+            '<span class="gp-score">' + Math.round(it.score) + '</span>'
+          : '<span class="gp-name">—</span><span class="gp-score">·</span>') +
+      '</div>'
+    );
+  });
+
+  const bits = [];
+  if (T.dmgPct) bits.push('伤害+' + Math.round(T.dmgPct) + '%');
+  if (T.critPct) bits.push('暴击+' + Math.round(T.critPct) + '%');
+  if (T.atkSpeedPct) bits.push('攻速+' + Math.round(T.atkSpeedPct) + '%');
+  if (T.hpFlat) bits.push('生命+' + Math.round(T.hpFlat));
+  if (T.drPct) bits.push('减伤+' + Math.round(T.drPct) + '%');
+  if (T.speedPct) bits.push('移速+' + Math.round(T.speedPct) + '%');
+  rows.push('<div class="gp-sum">' + (bits.length ? bits.join(' · ') : '尚未装备 · 杀敌拾取') + '</div>');
+  rows.push('<div class="gp-hint">B 背包 ' + Gear.bag.length + '/' + Gear.bagMax + '</div>');
+  el.innerHTML = rows.join('');
+
+  if (bagOpen) renderBag();
+}
+
+/* ---------------- 背包面板（纯键盘，不退出指针锁） ---------------- */
+function toggleBag(force) {
+  bagOpen = typeof force === 'boolean' ? force : !bagOpen;
+  const bg = document.getElementById('bagPanel');
+  if (!bg) return;
+  bg.classList.toggle('hidden', !bagOpen);
+  if (bagOpen) {
+    input.keys = {};
+    if (bagSel >= Gear.bag.length) bagSel = 0;
+    renderBag();
+  }
+}
+
+function renderBag() {
+  const bg = document.getElementById('bagPanel');
+  if (!bg || !window.Gear) return;
+  const list = Gear.bag;
+  const head = '<div class="bag-head">背包 ' + list.length + '/' + Gear.bagMax +
+    '<span class="bag-keys">↑↓ 选择 · Enter 装备 · X 丢弃 · B 关闭</span></div>';
+  if (!list.length) {
+    bg.innerHTML = head + '<div class="bag-empty">空 · 击杀守卫与首领获得掉落</div>';
+    return;
+  }
+  bagSel = clamp(bagSel, 0, list.length - 1);
+  const rows = list.map((it, i) => {
+    const cur = Gear.slots[it.slot];
+    const better = Gear.better(it, cur);
+    return '<div class="bag-item' + (i === bagSel ? ' sel' : '') + '">' +
+      '<span class="bi-slot">' + it.slotName + '</span>' +
+      '<span class="bi-name" style="color:' + it.color + '">' + it.name + '</span>' +
+      '<span class="bi-ilvl">Lv' + it.ilvl + '</span>' +
+      '<span class="bi-cmp ' + (better ? 'up' : 'down') + '">' + (better ? '↑ 更强' : '↓ 较弱') + '</span>' +
+      '<div class="bi-stats">' + Loot.lines(it).join(' · ') + '</div>' +
+      '</div>';
+  });
+  bg.innerHTML = head + rows.join('');
+}
+
+function bagMove(dir) {
+  if (!bagOpen || !Gear.bag.length) return;
+  bagSel = (bagSel + dir + Gear.bag.length) % Gear.bag.length;
+  renderBag();
+}
+
+function bagEquipSelected() {
+  const it = Gear.bag[bagSel];
+  if (!it) return;
+  Gear.removeFromBag(it.uid);
+  const old = Gear.equip(it);
+  recalcGear();
+  toast('装备 ' + it.name + (old ? ' · 换下 ' + old.name : ''), 1500);
+  bagSel = clamp(bagSel, 0, Math.max(0, Gear.bag.length - 1));
+  renderBag();
+  refreshGearPanel();
+}
+
+function bagDiscardSelected() {
+  const it = Gear.bag[bagSel];
+  if (!it) return;
+  Gear.removeFromBag(it.uid);
+  gearDirty = true;
+  toast('已丢弃 ' + it.name, 1200);
+  bagSel = clamp(bagSel, 0, Math.max(0, Gear.bag.length - 1));
+  renderBag();
+  refreshGearPanel();
+}
 
 /* ---------------- 启动 ---------------- */
 init();

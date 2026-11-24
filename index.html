@@ -107,17 +107,47 @@
 </div>
 
 <script src="vendor/three.min.js"></script>
+<!-- GLB 写实档加载器依赖：官方 GLTFLoader + SkeletonUtils（r128 examples/js UMD，排在 three 之后） -->
+<script src="vendor/GLTFLoader.js"></script>
+<script src="vendor/SkeletonUtils.js"></script>
 <script src="art.js"></script>
 <script src="hero3d.js"></script>
 <script src="real3d.js"></script>
+<script src="glb3d.js"></script>
 <script>
-  /* 写实档人形接进局内：Real3D 与 Hero3D 同签名（build/update/swing/cast），
-     art.js 的 buildHeroHD / buildFighterHD 只认 window.Hero3D，替换这一个引用即可。
-     检查稿阶段：默认走水墨档，写实档用 ?art=real 显式打开；验收通过后再改成默认。 */
+  /* 人形三档开关（冻结契约 brief_glb_seam.md §1 / §4）：
+     - 无参数 / ?art=glb：新 GLB 写实档（window.Hero3D = Glb3D），默认优先；
+     - ?art=real：旧程序化写实档（Real3D）；
+     - ?art=ink：水墨低模（hero3d.js 自带的 window.Hero3D，原样保留，必须一直能跑）。
+     回退链：GLB 档下若 Glb3D 不可用（脚本 / loader 缺失），依次回退 Real3D → hero3d，
+     保证不白屏；本层只替换 window.Hero3D 引用，art.js / game.js 一行不改。 */
   (function () {
     var q = new URLSearchParams(location.search);
-    if (q.get('art') !== 'real') return;
-    if (window.Real3D) window.Hero3D = window.Real3D;
+    var art = q.get('art') || 'glb';
+
+    if (art === 'ink') {
+      /* 水墨低模：不覆盖 hero3d.js 自带的 Hero3D */
+      return;
+    }
+
+    if (art === 'real') {
+      if (window.Real3D) window.Hero3D = window.Real3D;
+      return;
+    }
+
+    /* 默认 / glb：GLB 写实档优先，失败逐级回退 */
+    if (window.Glb3D) {
+      window.Hero3D = window.Glb3D;
+      /* 贴图档位策略：主角 2K / 敌人 1024。该接口由加载器组提供；
+         若尚未落地（无 setTierPolicy）则跳过，不在接入侧改 glb3d.js。 */
+      if (typeof window.Glb3D.setTierPolicy === 'function') {
+        try { window.Glb3D.setTierPolicy({ hero: '2k', enemy: '1024' }); }
+        catch (e) { console.warn('[gate] setTierPolicy 调用失败，跳过：', e); }
+      }
+    } else if (window.Real3D) {
+      window.Hero3D = window.Real3D;
+    }
+    /* 两者都不可用：保留 hero3d.js 自带的 Hero3D 作为最后兜底 */
   })();
 </script>
 <script src="paint.js"></script>
@@ -125,6 +155,9 @@
 <script src="ink.js"></script>
 <script src="hitfeel.js"></script>
 <script src="scene.js"></script>
+<!-- 场景模型档：把 Tripo 生成的副本 / 竞技场 GLB 接进实时场景（?stage=proc 退回程序化场景） -->
+<script src="scene_glb.js"></script>
+<script src="loot.js"></script>
 <script src="net.js"></script>
 <script src="night.js"></script>
   <script src="game.js"></script>

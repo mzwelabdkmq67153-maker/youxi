@@ -423,6 +423,56 @@ button.ghost:hover { color: #cfe8f7; border-color: rgba(110, 227, 255, 0.4); }
 }
 #resultStats .line b { color: #d9f2ff; font-variant-numeric: tabular-nums; }
 
+/* ---------------- 掉落与装备 ---------------- */
+#gearPanel {
+  position: absolute; right: 16px; top: 96px; width: 208px;
+  padding: 10px 11px 9px;
+  border: 1px solid rgba(110, 227, 255, 0.14); border-radius: 10px;
+  background: rgba(6, 12, 20, 0.62);
+  backdrop-filter: blur(3px);
+  font-size: 11.5px; line-height: 1.45; letter-spacing: 0.2px;
+}
+#gearPanel .gp-title { font-size: 10.5px; letter-spacing: 3px; color: #6fa6c2; margin-bottom: 7px; }
+#gearPanel .gp-row {
+  display: flex; align-items: center; gap: 6px; padding: 2.5px 0;
+  border-bottom: 1px solid rgba(110, 227, 255, 0.06);
+}
+#gearPanel .gp-row.empty { opacity: 0.44; }
+#gearPanel .gp-slot { width: 30px; flex: 0 0 30px; color: #7d93a6; }
+#gearPanel .gp-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+#gearPanel .gp-score { font-variant-numeric: tabular-nums; color: #8fb6cc; font-size: 10.5px; }
+#gearPanel .gp-sum { margin-top: 7px; color: #9ec3d6; font-size: 10.8px; line-height: 1.55; }
+#gearPanel .gp-hint { margin-top: 4px; color: #5f7d92; font-size: 10.5px; }
+
+#bagPanel {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(560px, 76vw); max-height: 64vh; overflow: auto;
+  padding: 14px 16px 12px;
+  border: 1px solid rgba(110, 227, 255, 0.20); border-radius: 12px;
+  background: rgba(5, 10, 18, 0.86);
+  backdrop-filter: blur(6px);
+  font-size: 12px;
+}
+#bagPanel .bag-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  color: #cfe6f4; font-size: 11px; letter-spacing: 1.5px; margin-bottom: 9px;
+}
+#bagPanel .bag-keys { color: #64839a; letter-spacing: 0; font-size: 10.5px; }
+#bagPanel .bag-empty { color: #5f7d92; padding: 14px 2px; }
+#bagPanel .bag-item {
+  padding: 7px 9px; margin-bottom: 6px;
+  border: 1px solid rgba(110, 227, 255, 0.10); border-radius: 8px;
+  background: rgba(12, 20, 32, 0.55);
+}
+#bagPanel .bag-item.sel { border-color: rgba(110, 227, 255, 0.55); background: rgba(26, 54, 78, 0.45); }
+#bagPanel .bi-slot { display: inline-block; width: 34px; color: #7d93a6; font-size: 10.5px; }
+#bagPanel .bi-name { font-weight: 600; }
+#bagPanel .bi-ilvl { color: #7fa4b8; font-size: 10.5px; margin-left: 8px; }
+#bagPanel .bi-cmp { float: right; font-size: 10.5px; }
+#bagPanel .bi-cmp.up { color: #7fe0a8; }
+#bagPanel .bi-cmp.down { color: #8b9aa8; }
+#bagPanel .bi-stats { margin-top: 3px; color: #93b3c6; font-size: 10.8px; }
+
 @media (max-width: 620px) {
   .panel { padding: 26px 20px; }
   .panel h1 { font-size: 26px; letter-spacing: 5px; }
