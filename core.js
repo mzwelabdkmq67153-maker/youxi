@@ -184,12 +184,36 @@
         { key: 'E', name: '借力打力', cd: 8, cost: 25, id: 'counterStance', mul: 2.4, desc: '1.6 秒招架：受伤 −65%，被击中的瞬间反击 2.4 倍' },
         { key: 'R', name: '气爆', cd: 20, cost: 45, id: 'kiBurst', mul: 2.6, desc: '5.5 米气浪推开并伤害，自身回复 12% 生命' }
       ]
+    },
+
+    /* ---- P1 · S2 赛季开放 ---- */
+    sniper: {
+      name: '狙击手', family: '枪手', hp: 780, en: 120, res: 'mana',
+      speed: 5.7, color: 0x9fe8ff, kind: 'sniper',
+      attackType: 'hitscan',
+      attack: { mul: 0.52, interval: 0.62, spread: 0.002, headMul: 2.2, crit: 0.18, critMul: 1.9 },
+      skills: [
+        { key: 'Q', name: '瞄准射击', cd: 12, cost: 30, id: 'aimShot', mul: 4.2, desc: '0.9 秒屏息，直线 26 米单体 4.2 倍；出手后后坐 0.4 秒不能移动' },
+        { key: 'E', name: '绊线雷', cd: 10, cost: 25, id: 'tripMine', mul: 1.8, desc: '身前 4 米布雷，0.8 秒后引爆：4 米内 1.8 倍并减速 3 秒' },
+        { key: 'R', name: '穿甲弹', cd: 22, cost: 55, id: 'apRound', mul: 3.4, desc: '沿视线贯穿 24 米内所有敌人，每个 3.4 倍并破甲 4 秒' }
+      ]
+    },
+    frost: {
+      name: '冰霜法师', family: '法师', hp: 790, en: 165, res: 'mana',
+      speed: 6.0, color: 0x8fd0ff, kind: 'frost',
+      attackType: 'projectile',
+      attack: { mul: 0.95, interval: 0.72, speed: 24, splash: 1.8, crit: 0.08, critMul: 1.6 },
+      skills: [
+        { key: 'Q', name: '寒冰锥', cd: 8, cost: 30, id: 'frostSpike', mul: 1.6, desc: '直线 10 米冰锥，命中叠 1 层冰霜（最多 3 层，每层更慢）' },
+        { key: 'E', name: '霜环', cd: 11, cost: 28, id: 'frostNova', mul: 1.2, desc: '5.5 米霜环，冻结 1 秒并叠 2 层冰霜' },
+        { key: 'R', name: '冰封领域', cd: 26, cost: 60, id: 'frostField', mul: 0.8, desc: '4 秒领域，每 0.6 秒 0.8 倍并叠冰霜；范围内移速再降 30%' }
+      ]
     }
   };
 
   var CLASS_ORDER = ['blade', 'boxer', 'gunner', 'mage', 'assassin', 'priest'];
   /* 已经可以上手的 P1 职业：菜单会多出一行，rules 层跟着 ARCH 的赛季标注走 */
-  var CLASS_P1_OPEN = ['greatsword', 'monk'];
+  var CLASS_P1_OPEN = ['greatsword', 'monk', 'sniper', 'frost'];
   function classMenu() {
     var out = [];
     for (var i = 0; i < CLASS_ORDER.length; i++) out.push({ key: CLASS_ORDER[i], tier: 'P0', arch: archOf(CLASS_ORDER[i]) });

@@ -536,6 +536,51 @@ function buildWeapon() {
     }
     g.scale.setScalar(0.62);
     weaponBase = { x: 0.34, y: -0.4, z: -0.5, rx: -0.1, ry: -0.3, rz: 0 };
+  } else if (cls === 'sniper') {
+    // 狙击手：长身管 + 瞄准镜 + 脚架，枪身比枪炮师细长一倍
+    const metal = new THREE.MeshStandardMaterial({ color: 0x243040, roughness: 0.4, metalness: 0.85 });
+    const glass = new THREE.MeshStandardMaterial({ color: 0x9fe8ff, roughness: 0.12, metalness: 0.6, emissive: 0x1b5b78 });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.1, 0.72), metal);
+    body.position.set(0, 0, -0.16);
+    g.add(body);
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.026, 0.86, 10), metal);
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.set(0, 0.014, -0.86);
+    g.add(barrel);
+    const scope = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.042, 0.24, 12), metal);
+    scope.rotation.x = Math.PI / 2;
+    scope.position.set(0, 0.085, -0.28);
+    g.add(scope);
+    const lens = new THREE.Mesh(new THREE.CircleGeometry(0.032, 14), glass);
+    lens.position.set(0, 0.085, -0.4);
+    g.add(lens);
+    for (let i = 0; i < 2; i++) {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.2, 6), metal);
+      leg.position.set(i === 0 ? -0.05 : 0.05, -0.09, -0.6);
+      leg.rotation.z = i === 0 ? 0.5 : -0.5;
+      g.add(leg);
+    }
+    g.scale.setScalar(0.62);
+    weaponBase = { x: 0.36, y: -0.34, z: -0.52, rx: -0.02, ry: -0.04, rz: 0 };
+  } else if (cls === 'frost') {
+    // 冰霜法师：霜晶法杖，杖头悬浮两块对转的冰棱
+    const rod = new THREE.MeshStandardMaterial({ color: 0xdff0ff, roughness: 0.45, metalness: 0.3 });
+    const ice = new THREE.MeshStandardMaterial({ color: 0x8fd0ff, roughness: 0.15, metalness: 0.5, emissive: 0x1d5e86 });
+    const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.022, 0.92, 8), rod);
+    staff.rotation.x = Math.PI / 2;
+    staff.position.set(0, 0, -0.4);
+    g.add(staff);
+    for (let i = 0; i < 2; i++) {
+      const shard = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.24, 5), ice);
+      shard.position.set(i === 0 ? -0.055 : 0.055, 0.02, -0.86);
+      shard.rotation.set(0, 0, i === 0 ? 0.55 : -0.55);
+      g.add(shard);
+    }
+    const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.055, 0), ice);
+    core.position.set(0, 0.02, -0.86);
+    g.add(core);
+    g.scale.setScalar(0.6);
+    weaponBase = { x: 0.38, y: -0.38, z: -0.5, rx: -0.14, ry: -0.24, rz: 0.08 };
   } else {
     const wood = new THREE.MeshStandardMaterial({ color: 0x1d2436, roughness: 0.5, metalness: 0.5 });
     const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.024, 0.95, 8), wood);
@@ -913,6 +958,8 @@ function resetPlayer() {
   player.whirlTick = 0;
   player.counterT = 0;
   player.moveMul = 1;
+  player.frostField = 0;
+  player.frostFieldTick = 0;
   player.alive = true;
   player.respawn = 0;
   player.hurtT = 0;
@@ -1859,11 +1906,157 @@ function runSkill(id, idx) {
       sfx('skill');
       break;
     }
+
+    /* ---------- P1 · S2：狙击手 ---------- */
+    case 'aimShot': {
+      // 屏息 0.9 秒：先把人钉住（不能移动、不能出招），到点沿视线打一记窄锥
+      player.lockT = Math.max(player.lockT || 0, 0.9);
+      toast('屏息…', 700);
+      spawnCastCircle(px, pz, 0x9fe8ff);
+      const snap = { x: px, z: pz, fx: fx, fz: fz };
+      window.setTimeout(() => {
+        if (state.phase !== 'playing' || !player.alive) return;
+        const dmg = D(4.2);
+        const R0 = 26 * RM;
+        let hit = 0;
+        for (let i = 0; i < enemies.length; i++) {
+          const e = enemies[i];
+          if (e.dead) continue;
+          const dx = e.pos.x - snap.x;
+          const dz = e.pos.z - snap.z;
+          const d = hyp(dx, dz);
+          const dot = d > 0.0001 ? (dx / d) * snap.fx + (dz / d) * snap.fz : 1;
+          if (d < R0 && dot > 0.92) { damageEnemy(e, dmg, true); hit++; break; }  // 单体：只打最近的一个
+        }
+        if (aoeHitRemote(snap.x, snap.z, R0, dmg, true, snap.fx, snap.fz)) hit++;
+        spawnTracer(
+          new THREE.Vector3(snap.x, 1.45, snap.z),
+          new THREE.Vector3(snap.fx, 0, snap.fz),
+          R0, 0x9fe8ff
+        );
+        spawnRing(snap.x, 1.2, snap.z, 0x9fe8ff, 1.6);
+        shake = hit ? 0.5 : 0.3;
+        player.lockT = Math.max(player.lockT || 0, 0.4);   // 后坐
+        sfx(hit ? 'hit' : 'skill');
+      }, 900);
+      break;
+    }
+    case 'tripMine': {
+      const mx = clamp(px + fx * 4.0, -HALF + 1, HALF - 1);
+      const mz = clamp(pz + fz * 4.0, -HALF + 1, HALF - 1);
+      spawnCastCircle(mx, mz, 0xffb04a);
+      spawnRing(mx, 0.12, mz, 0xffb04a, 1.2);
+      const dmg = D(1.8);
+      window.setTimeout(() => {
+        if (state.phase !== 'playing') return;
+        const R1 = 4.0 * RM;
+        for (let i = 0; i < enemies.length; i++) {
+          const e = enemies[i];
+          if (e.dead) continue;
+          if (hyp(e.pos.x - mx, e.pos.z - mz) < R1) {
+            damageEnemy(e, dmg);
+            e.slow = Math.max(e.slow || 0, 3.0 * tune.ctrl);
+            e.slowMul = Math.min(e.slowMul || 0.5, 0.5);
+          }
+        }
+        aoeHitRemote(mx, mz, R1, dmg, false);
+        spawnExplosion(mx, 0.4, mz, 1.4);
+        spawnRing(mx, 0.3, mz, 0xffb04a, R1);
+        shake = 0.35;
+        sfx('skill');
+      }, 800);
+      toast('布雷', 700);
+      sfx('cast');
+      break;
+    }
+    case 'apRound': {
+      // 贯穿：沿视线 24 米、横向偏移 1.6 米以内全部吃满，命中一并破甲
+      const dmg = D(3.4);
+      const R2 = 24 * RM;
+      let hit = 0;
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+        if (e.dead) continue;
+        const dx = e.pos.x - px;
+        const dz = e.pos.z - pz;
+        const along = dx * fx + dz * fz;
+        const off = Math.abs(dx * fz - dz * fx);
+        if (along > 0 && along < R2 && off < 1.6) {
+          damageEnemy(e, dmg, true);
+          e.sunderT = 4;
+          hit++;
+        }
+      }
+      aoeHitRemote(px, pz, R2, dmg, true, fx, fz);
+      spawnTracer(new THREE.Vector3(px, 1.5, pz), new THREE.Vector3(fx, 0, fz), R2, 0xffd28a);
+      spawnSlashArc(0xffd28a);
+      shake = 0.45;
+      sfx(hit ? 'hit' : 'skill');
+      break;
+    }
+
+    /* ---------- P1 · S2：冰霜法师 ---------- */
+    case 'frostSpike': {
+      const R3 = 10 * RM;
+      let hit = 0;
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+        if (e.dead) continue;
+        const dx = e.pos.x - px;
+        const dz = e.pos.z - pz;
+        const d = hyp(dx, dz);
+        const dot = d > 0.0001 ? (dx / d) * fx + (dz / d) * fz : 1;
+        if (d < R3 && dot > 0.8) { damageEnemy(e, D(1.6)); addFrost(e, 1); hit++; }
+      }
+      if (aoeHitRemote(px, pz, R3, D(1.6), false, fx, fz)) hit++;
+      spawnTracer(new THREE.Vector3(px, 1.45, pz), new THREE.Vector3(fx, 0.15, fz), R3, 0x8fd0ff);
+      spawnRing(px, 0.5, pz, 0x8fd0ff, 3.2);
+      shake = 0.2;
+      sfx(hit ? 'hit' : 'cast');
+      break;
+    }
+    case 'frostNova': {
+      const R4 = 5.5 * RM;
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+        if (e.dead) continue;
+        if (hyp(e.pos.x - px, e.pos.z - pz) < R4) {
+          damageEnemy(e, D(1.2));
+          addFrost(e, 2);
+          e.stunT = Math.max(e.stunT || 0, 1.0 * tune.ctrl);
+        }
+      }
+      aoeHitRemote(px, pz, R4, D(1.2), false);
+      spawnCastCircle(px, pz, 0x8fd0ff);
+      spawnRing(px, 0.6, pz, 0x8fd0ff, R4);
+      spawnExplosion(px, 0.7, pz, 1.4);
+      shake = 0.28;
+      sfx('skill');
+      break;
+    }
+    case 'frostField': {
+      player.frostField = 4;
+      player.frostFieldTick = 0;
+      toast('冰封领域', 900);
+      spawnCastCircle(px, pz, 0x8fd0ff);
+      spawnRing(px, 0.5, pz, 0x8fd0ff, 6.0);
+      sfx('skill');
+      break;
+    }
   }
 }
 
 function svfxRing(x, z) {
   spawnRing(x, 1.6, z, 0xffffff, 4.4);
+}
+
+/* 冰霜层：1 / 2 / 3 层分别把移速压到 0.8 / 0.65 / 0.5，5 秒不再叠就整层掉光 */
+const FROST_MUL = { 1: 0.8, 2: 0.65, 3: 0.5 };
+function addFrost(e, n) {
+  if (!e || e.dead) return;
+  e.frostStacks = Math.min(3, (e.frostStacks || 0) + n);
+  e.slow = Math.max(e.slow || 0, 5.0);
+  e.slowMul = FROST_MUL[e.frostStacks] || 0.5;
 }
 
 /* ---------------- 敌人 ---------------- */
@@ -2057,7 +2250,10 @@ function updateEnemies(dt) {
       e.mesh.scale.setScalar(e.baseScale * (0.08 + 0.92 * k));
     }
     if (e.flash > 0) e.flash -= dt;
-    if (e.slow > 0) e.slow -= dt;
+    if (e.slow > 0) {
+      e.slow -= dt;
+      if (e.slow <= 0) { e.slow = 0; e.slowMul = 0; e.frostStacks = 0; }
+    }
 
     /* ---- 状态机（GDD 6.1）：定身 / 击退 / 中毒 / 点燃 / 破甲 ---- */
     if (e.sunderT > 0) e.sunderT = Math.max(0, e.sunderT - dt);
@@ -2107,7 +2303,7 @@ function updateEnemies(dt) {
     const d = hyp(dx, dz) || 1;
     const nx = dx / d;
     const nz = dz / d;
-    const spd = e.speed * (e.slow > 0 ? 0.5 : 1);
+    const spd = e.speed * (e.slow > 0 ? (e.slowMul || 0.5) : 1);
 
     if (isMeleeType(e.type)) {
       // 石傀在更远处起手（长前摇重击），蚀虫直接贴脸快咬
@@ -3082,6 +3278,30 @@ function updateSkills(dt, cdDt) {
       player.moveMul = 1;
       toast('回旋结束', 700);
     }
+  }
+  // 冰霜法师冰封领域：4 秒内每 0.6 秒结算一次，落点叠冰霜并压低移速
+  if (player.frostField > 0) {
+    player.frostField -= dt;
+    player.frostFieldTick -= dt;
+    if (player.frostFieldTick <= 0) {
+      player.frostFieldTick = 0.6;
+      const fdist = 6.0;
+      const fd = skillDmg(2, 0.8);
+      const wx = yawObj.position.x;
+      const wz = yawObj.position.z;
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+        if (e.dead) continue;
+        if (hyp(e.pos.x - wx, e.pos.z - wz) < fdist) {
+          damageEnemy(e, fd);
+          addFrost(e, 1);
+          e.slowMul = Math.min(e.slowMul || 1, 0.35);   // 领域内再降 30%
+        }
+      }
+      aoeHitRemote(wx, wz, fdist, fd, false);
+      spawnRing(wx, 0.6, wz, 0x8fd0ff, fdist);
+    }
+    if (player.frostField <= 0) { player.frostField = 0; toast('领域结束', 700); }
   }
 }
 
