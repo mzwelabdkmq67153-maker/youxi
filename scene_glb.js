@@ -18,22 +18,31 @@
     arena: {
       file: 'art/模型/场景/arena_scene_lod.glb',
       mode: 'disc',
-      targetRadius: 31.2,
-      fog: [0x8ea3b4, 55, 165],
-      bg: 0x93a9ba,
+      /* 模型自带的圆台：半径 6.0、台面高 6.2（离线量体测出，单位=模型单位） */
+      deckR: 6.0,
+      deckZ: 6.2,
+      targetRadius: 22.8,
+      fog: [0xa8bccb, 120, 320],
+      bg: 0xa8bccb,
       glow: 0xb8e2ff,
-      glowI: 0.28,
-      glowD: 46
+      glowI: 0.34,
+      glowD: 46,
+      envI: 1.2,
+      exposure: 0.95
     },
     dungeon: {
       file: 'art/模型/场景/fuben_scene_lod.glb',
       mode: 'rect',
+      /* 模型自带的地面在 1.0 高（下方 1 单位是台基），以地面为准对齐 y=0 */
+      floorZ: 1.0,
       targetSpan: 44,
-      fog: [0x0a1418, 22, 78],
-      bg: 0x081014,
+      fog: [0x1b2a33, 55, 150],
+      bg: 0x0d1720,
       glow: 0x66d8ff,
-      glowI: 0.95,
-      glowD: 26
+      glowI: 1.25,
+      glowD: 30,
+      envI: 1.6,
+      exposure: 1.15
     }
   };
 
@@ -127,11 +136,115 @@
            场景是石头/铁件，压到低金属度，靠漫反射出体积 */
         mm.metalness = 0.08;
         if (typeof mm.roughness === 'number') mm.roughness = Math.max(mm.roughness, 0.72);
+        /* Tripo 的 albedo 整体偏暗（尤其副本的冷色石头），纯靠打光会糊成一团；
+           用 albedo 做微弱自发光把暗部细节提出来，同时保留贴图层次 */
+        if (mm.map) {
+          mm.emissiveMap = mm.map;
+          mm.emissive = new THREE.Color(0xffffff);
+          mm.emissiveIntensity = 0.26;
+          mm.userData._lift = true;
+        }
         /* 单面材质从场内看会被背面剔除，场景一律双面 */
         mm.side = THREE.DoubleSide;
         mm.needsUpdate = true;
       }
     });
+  }
+
+  /* ---------- 环境光：Tripo 是 PBR 材质，没有环境贴图石头就渲染成一团黑 ---------- */
+  var envCache = {};
+
+  function envSceneOf(k) {
+    var isD = k === 'dungeon';
+    var s = new THREE.Scene();
+    var geo = new THREE.SphereGeometry(55, 32, 20);
+    var pos = geo.attributes.position;
+    var top = new THREE.Color(isD ? 0x51677a : 0xe2eff9);
+    var mid = new THREE.Color(isD ? 0x22303a : 0xa6b3ba);
+    var bot = new THREE.Color(isD ? 0x070b0d : 0x5a5d58);
+    var cols = [];
+    var c = new THREE.Color();
+    for (var i = 0; i < pos.count; i++) {
+      var t = (pos.getY(i) / 55 + 1) * 0.5;
+      if (t < 0.5) c.copy(bot).lerp(mid, t * 2); else c.copy(mid).lerp(top, (t - 0.5) * 2);
+      cols.push(c.r, c.g, c.b);
+    }
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+    s.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
+    /* 头顶一团天光，给石面一点方向感 */
+    var lit = new THREE.Color().setRGB(isD ? 1.5 : 2.8, isD ? 1.8 : 2.7, isD ? 2.3 : 2.5);
+    var d = new THREE.Mesh(
+      new THREE.CircleGeometry(isD ? 12 : 20, 24),
+      new THREE.MeshBasicMaterial({ color: lit, side: THREE.DoubleSide })
+    );
+    d.position.set(0, 22, 0);
+    d.rotation.x = -Math.PI / 2;
+    s.add(d);
+    return s;
+  }
+
+  function cubeFallback(k) {
+    var isD = k === 'dungeon';
+    var cTop = isD ? '#4a5f72' : '#dce9f3';
+    var cBot = isD ? '#080c0e' : '#525550';
+    var faces = [];
+    for (var i = 0; i < 6; i++) {
+      var cv = document.createElement('canvas');
+      cv.width = cv.height = 128;
+      var g = cv.getContext('2d');
+      var lg = g.createLinearGradient(0, 0, 0, 128);
+      if (i === 2) { lg.addColorStop(0, cTop); lg.addColorStop(1, cTop); }
+      else if (i === 3) { lg.addColorStop(0, cBot); lg.addColorStop(1, cBot); }
+      else { lg.addColorStop(0, cTop); lg.addColorStop(1, cBot); }
+      g.fillStyle = lg;
+      g.fillRect(0, 0, 128, 128);
+      faces.push(cv);
+    }
+    var tex = new THREE.CubeTexture(faces);
+    tex.mapping = THREE.CubeReflectionMapping;
+    tex.needsUpdate = true;
+    return tex;
+  }
+
+  function envOf(k) {
+    if (envCache[k]) return envCache[k].tex;
+    var tex = null;
+    var r = window.__renderer;
+    if (r && THREE.PMREMGenerator) {
+      try {
+        var pm = new THREE.PMREMGenerator(r);
+        var rt = pm.fromScene(envSceneOf(k), 0.06, 1, 120);
+        tex = rt.texture;
+        pm.dispose();
+      } catch (e) {
+        log('env pmrem failed', e && e.message);
+        tex = null;
+      }
+    }
+    if (!tex) tex = cubeFallback(k);
+    envCache[k] = { tex: tex };
+    return tex;
+  }
+
+  function applyEnv(obj, k) {
+    var tex = envOf(k);
+    if (!tex) return;
+    var cfg = CFG[k] || CFG.arena;
+    var ei = cfg.envI || 1.2;
+    var n = 0;
+    obj.traverse(function (o) {
+      if (!o.isMesh) return;
+      var mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+      for (var i = 0; i < mats.length; i++) {
+        var mm = mats[i];
+        if (!mm || !mm.isMeshStandardMaterial) continue;
+        mm.envMap = tex;
+        mm.envMapIntensity = ei;
+        mm.needsUpdate = true;
+        n++;
+      }
+    });
+    log('env applied', k, n);
   }
 
   function collectPulses() {
@@ -142,7 +255,7 @@
       var mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
       for (var i = 0; i < mats.length; i++) {
         var mm = mats[i];
-        if (mm && mm.emissive && mm.emissiveIntensity > 0.2) {
+        if (mm && mm.emissive && mm.emissiveIntensity > 0.2 && !mm.userData._lift) {
           if (mm.userData._base === undefined) mm.userData._base = mm.emissiveIntensity;
           pulses.push(mm);
         }
@@ -188,20 +301,24 @@
     var isD = kind === 'dungeon';
     var sc = scene || sceneRef;
     if (!sc) return;
+    /* GLB 是 PBR 材质、贴图本身偏暗，曝光按场景单独抬一档（程序化场景仍用 0.80） */
+    if (window.__renderer && CFG[kind]) {
+      window.__renderer.toneMappingExposure = CFG[kind].exposure || 0.8;
+    }
     var dirs = 0;
     sc.traverse(function (o) {
       if (o.isHemisphereLight) {
-        o.color.setHex(isD ? 0x5b8aa6 : 0xcfe2f2);
-        o.groundColor.setHex(isD ? 0x0c1418 : 0x6b6153);
-        o.intensity = isD ? 0.55 : 0.68;
+        o.color.setHex(isD ? 0x7fb0cc : 0xd6e6f2);
+        o.groundColor.setHex(isD ? 0x1b2a33 : 0x7a736a);
+        o.intensity = isD ? 1.35 : 1.15;
       }
       if (o.isDirectionalLight) {
         if (dirs === 0) {
-          o.color.setHex(isD ? 0xa9cede : 0xfff2dc);
-          o.intensity = isD ? 0.66 : 0.76;
+          o.color.setHex(isD ? 0xbfe2f4 : 0xfff4e2);
+          o.intensity = isD ? 1.2 : 1.35;
         } else {
-          o.color.setHex(isD ? 0x2a6cff : 0xcfd9e0);
-          o.intensity = isD ? 0.26 : 0.30;
+          o.color.setHex(isD ? 0x4a8ce0 : 0xd3dde4);
+          o.intensity = isD ? 0.55 : 0.5;
         }
         dirs++;
       }
@@ -219,31 +336,29 @@
 
     loader.load(cfg.file, function (gltf) {
       var obj = gltf.scene;
-      var m = measure(obj);
-      var f = { scale: 1 };
-      if (m) {
-        var scale = cfg.mode === 'disc'
-          ? cfg.targetRadius / m.radius
-          : cfg.targetSpan / Math.max(m.size.x, m.size.z);
-        obj.scale.multiplyScalar(scale);
-        obj.updateMatrixWorld(true);
-        var box = boxOf(obj);
-        var c = box.getCenter(new THREE.Vector3());
-        /* disc（竞技场）：台面顶抬到 0，台身沉到地下；
-           rect（副本）：模型自带 z=0 地面，直接把最低点对到 0 */
-        var floorY = cfg.mode === 'disc' ? m.topY * scale : box.min.y;
-        obj.position.x -= c.x;
-        obj.position.z -= c.z;
-        obj.position.y -= floorY;
-        var box2 = boxOf(obj);
-        f = {
-          scale: scale,
-          deckRadius: m.radius * scale,
-          deckTop: cfg.mode === 'disc' ? 0 : 0,
-          floor: floorY,
-          size: box2.getSize(new THREE.Vector3())
-        };
-      }
+      var box0 = boxOf(obj);
+      var size0 = box0.getSize(new THREE.Vector3());
+      var scale = cfg.mode === 'disc'
+        ? cfg.targetRadius / cfg.deckR
+        : cfg.targetSpan / Math.max(size0.x, size0.z);
+      obj.scale.multiplyScalar(scale);
+      obj.updateMatrixWorld(true);
+      var box = boxOf(obj);
+      var c = box.getCenter(new THREE.Vector3());
+      /* 以模型自带的“台面/地面”为准落到 y=0：
+         disc（竞技场）用圆台面，rect（副本）用室内地面；下方台基沉到地面以下 */
+      var deckY = (cfg.mode === 'disc' ? cfg.deckZ : cfg.floorZ) * scale;
+      obj.position.x -= c.x;
+      obj.position.z -= c.z;
+      obj.position.y -= deckY;
+      var box2 = boxOf(obj);
+      var f = {
+        scale: scale,
+        deckRadius: cfg.mode === 'disc' ? cfg.deckR * scale : 0,
+        deckTop: 0,
+        floor: deckY,
+        size: box2.getSize(new THREE.Vector3())
+      };
       prepMaterials(obj);
       var entry = { root: obj, fit: f, tris: trisOf(obj) };
       cache[k] = entry;
@@ -282,6 +397,7 @@
     group.add(inst);
     root = inst;
     fit = entry.fit;
+    applyEnv(inst, k);
     collectPulses();
 
     var cfg = CFG[k];
@@ -382,3 +498,5 @@
 
   log('ready, enabled=' + window.SceneGlb.enabled + (FORCE_PROC ? ' (?stage=proc)' : ''));
 })();
+
+

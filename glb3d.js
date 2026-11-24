@@ -25,7 +25,10 @@
   var KIND_MAP = {
     swordsman: 'swordsman_idle', blade: 'swordsman_idle', grunt: 'swordsman_idle', elite: 'swordsman_idle',
     gunner: 'gunner_idle', shooter: 'gunner_idle', duelist: 'gunner_idle',
-    warlock: 'mage_idle', mage: 'mage_idle', boss: 'mage_idle'
+    warlock: 'mage_idle', mage: 'mage_idle', boss: 'mage_idle',
+    /* 地宫副本新增：重甲近战借剑客模型，法系借术士模型（体型差异全交给 game.js 根 scale） */
+    golem: 'swordsman_idle', swarm: 'swordsman_idle', warden: 'swordsman_idle',
+    hexer: 'mage_idle', oracle: 'mage_idle'
   };
   /* GLB 自带名义身高（m） */
   var GLB_H = { swordsman_idle: 1.84, gunner_idle: 1.89, mage_idle: 1.96 };
@@ -36,7 +39,12 @@
     shooter: 1.800 / 1.89,
     duelist: 1.800 / 1.89,
     elite: 1.800 / 1.84,
-    boss: 1.800 / 1.96
+    boss: 1.800 / 1.96,
+    golem: 1.800 / 1.84,
+    swarm: 1.800 / 1.84,
+    hexer: 1.800 / 1.96,
+    warden: 1.800 / 1.84,
+    oracle: 1.800 / 1.96
   };
   var BASE_DIR = 'art/模型/glb/';
 
@@ -45,7 +53,7 @@
      同一模型可同时存在 2K 与 1024 两个 URL，cache 按 URL 分开。 */
   var qs = new URLSearchParams(location.search);
   var HERO_KINDS = { swordsman: 1, blade: 1, gunner: 1, warlock: 1, mage: 1 };
-  var ENEMY_KINDS = { grunt: 1, shooter: 1, duelist: 1, elite: 1, boss: 1 };
+  var ENEMY_KINDS = { grunt: 1, shooter: 1, duelist: 1, elite: 1, boss: 1, golem: 1, swarm: 1, hexer: 1, warden: 1, oracle: 1 };
   var policy = { hero: '2k', enemy: '1024' };
   var urlOverride = qs.get('tex') === '1024' ? '1024' : (qs.get('tex') === '2k' ? '2k' : null);
 
@@ -470,7 +478,9 @@
   /* ---------- 同签名占位导出 ---------- */
   var PAL = {
     swordsman: { accent: 0x74e6f2 }, gunner: { accent: 0x35d8f2 }, warlock: { accent: 0xa87ef0 },
-    grunt: { accent: 0x94c56f }, shooter: { accent: 0xd0ad55 }, elite: { accent: 0xcf5a68 }, boss: { accent: 0xb8453c }
+    grunt: { accent: 0x94c56f }, shooter: { accent: 0xd0ad55 }, elite: { accent: 0xcf5a68 }, boss: { accent: 0xb8453c },
+    golem: { accent: 0x9fd8ff }, swarm: { accent: 0xa4ff6b }, hexer: { accent: 0xb98cff },
+    warden: { accent: 0xffcf6b }, oracle: { accent: 0xc98cff }
   };
   var HEAD = { R: 0.112, sx: 0.70, sy: 1.10, sz: 0.90, cy: 0.118 };
   function matSet(kind) { return PAL[resolveModel(kind)] || PAL.swordsman; }

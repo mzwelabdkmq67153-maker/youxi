@@ -179,7 +179,13 @@
     shooter: { chance: 0.14, weights: { common: 70, rare: 25, epic: 5, legend: 0 },  ilvl: 0, extra: 0 },
     elite:   { chance: 0.45, weights: { common: 30, rare: 42, epic: 22, legend: 6 }, ilvl: 1, extra: 0 },
     boss:    { chance: 1.00, weights: { common: 0,  rare: 40, epic: 42, legend: 18 }, ilvl: 2, extra: 1 },
-    duelist: { chance: 0.00, weights: null, ilvl: 0, extra: 0 }  // PVP 对手不掉装备
+    duelist: { chance: 0.00, weights: null, ilvl: 0, extra: 0 },  // PVP 对手不掉装备
+    /* 地宫副本新增怪：石傀是厚甲小关底，蚀虫是虫潮，咒术师是法系小精英，两个 BOSS 必掉两件 */
+    golem:   { chance: 0.30, weights: { common: 45, rare: 38, epic: 15, legend: 2 },  ilvl: 1, extra: 0 },
+    swarm:   { chance: 0.10, weights: { common: 80, rare: 18, epic: 2,  legend: 0 },  ilvl: 0, extra: 0 },
+    hexer:   { chance: 0.22, weights: { common: 55, rare: 33, epic: 11, legend: 1 },  ilvl: 1, extra: 0 },
+    warden:  { chance: 1.00, weights: { common: 0,  rare: 34, epic: 44, legend: 22 }, ilvl: 2, extra: 1 },
+    oracle:  { chance: 1.00, weights: { common: 0,  rare: 34, epic: 44, legend: 22 }, ilvl: 2, extra: 1 }
   };
 
   function rollRarity(weights) {

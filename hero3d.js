@@ -392,7 +392,12 @@
     grunt: { armor: 0x8e4a44, cloth: 0x2a2328, skin: 0x6a544a, accent: 0xff6a5a, hair: 0x120c0c },
     shooter: { armor: 0x7d4a44, cloth: 0x2b2429, skin: 0x68504a, accent: 0xff6a5a, hair: 0x120c0c },
     elite: { armor: 0x9c4a3c, cloth: 0x2b1f22, skin: 0x634740, accent: 0xff8a5a, hair: 0x100a0a },
-    boss: { armor: 0x3d3a46, cloth: 0x18141c, skin: 0x5c423b, accent: 0xff3a2a, hair: 0x0a0808 }
+    boss: { armor: 0x3d3a46, cloth: 0x18141c, skin: 0x5c423b, accent: 0xff3a2a, hair: 0x0a0808 },
+    golem: { armor: 0x6d7681, cloth: 0x2a2f36, skin: 0x555c63, accent: 0x9fd8ff, hair: 0x14161a },
+    swarm: { armor: 0x46603a, cloth: 0x1f2a1a, skin: 0x6f8a57, accent: 0xa4ff6b, hair: 0x0d1409 },
+    hexer: { armor: 0x4a3568, cloth: 0x241b30, skin: 0x9c86b4, accent: 0xb98cff, hair: 0x120c18 },
+    warden: { armor: 0xa8862e, cloth: 0x3a2a10, skin: 0x7a6444, accent: 0xffcf6b, hair: 0x100c08 },
+    oracle: { armor: 0x5a3a6e, cloth: 0x241228, skin: 0x9a86b0, accent: 0xc98cff, hair: 0x100818 }
   };
 
   function matSet(kind) {

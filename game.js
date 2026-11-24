@@ -45,12 +45,26 @@ const CLASSES = {
 };
 
 const TYPES = {
-  grunt:   { hp: 58,  speed: 3.1, dmg: 8,  radius: 0.52, color: 0xff5c72, score: 1 },
-  shooter: { hp: 44,  speed: 2.7, dmg: 9,  radius: 0.50, color: 0xffa23c, score: 1 },
-  elite:   { hp: 150, speed: 2.9, dmg: 17, radius: 0.78, color: 0xff9a6b, score: 2 },
-  boss:    { hp: 900, speed: 2.3, dmg: 22, radius: 1.50, color: 0xff3860, score: 5 },
-  duelist: { hp: 150, speed: 5.2, dmg: 13, radius: 0.50, color: 0xff7a45, score: 1 }
+  grunt:   { name: '地宫守卫', hp: 58,  speed: 3.1, dmg: 8,  radius: 0.52, color: 0xff5c72, score: 1 },
+  shooter: { name: '弩手',     hp: 44,  speed: 2.7, dmg: 9,  radius: 0.50, color: 0xffa23c, score: 1 },
+  elite:   { name: '精英卫',   hp: 150, speed: 2.9, dmg: 17, radius: 0.78, color: 0xff9a6b, score: 2 },
+  boss:    { name: '地宫主宰', hp: 900, speed: 2.3, dmg: 22, radius: 1.50, color: 0xff3860, score: 5 },
+  duelist: { name: '对手',     hp: 150, speed: 5.2, dmg: 13, radius: 0.50, color: 0xff7a45, score: 1 },
+  /* 地宫副本新增（取材《全职高手》地宫 / 野图副本的机制意象，命名与形象为原创） */
+  golem:   { name: '石傀',     hp: 240, speed: 1.9, dmg: 24, radius: 0.86, color: 0x9aa7b4, score: 2 },
+  swarm:   { name: '蚀虫',     hp: 28,  speed: 3.7, dmg: 6,  radius: 0.36, color: 0xa4ff6b, score: 1 },
+  hexer:   { name: '咒术师',   hp: 70,  speed: 2.5, dmg: 14, radius: 0.52, color: 0xb98cff, score: 2 },
+  warden:  { name: '守卫长',   hp: 1100, speed: 2.5, dmg: 30, radius: 1.35, color: 0xffcf6b, score: 6 },
+  oracle:  { name: '咒缚主祭', hp: 950, speed: 2.2, dmg: 20, radius: 1.30, color: 0xc98cff, score: 6 }
 };
+
+/* 行为分族：近战类共用一套糊脸/前摇逻辑，BOSS 类共用缩放与出场播报 */
+const BOSS_TYPES = { boss: 1, warden: 1, oracle: 1 };
+const MELEE_TYPES = { grunt: 1, elite: 1, golem: 1, swarm: 1 };
+const WIND_OF = { grunt: 0.42, elite: 0.52, golem: 0.78, swarm: 0.24 };
+const CD_OF = { grunt: 1.05, elite: 1.3, golem: 1.95, swarm: 0.78 };
+function isBossType(t) { return !!BOSS_TYPES[t]; }
+function isMeleeType(t) { return !!MELEE_TYPES[t]; }
 
 /* ---------------- 工具 ---------------- */
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -179,6 +193,7 @@ function init() {
   dmgLayerEl = document.getElementById('dmgLayer');
 
   renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, powerPreference: 'high-performance' });
+  window.__renderer = renderer;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   // 影子是场景层次的一半：柱列与角色有了接触阴影才不“浮”在地面上
@@ -1073,7 +1088,7 @@ function buildEnemyMesh(type) {
 function spawnEnemy(type, pos) {
   if (enemies.length > 26) return;
   const T = TYPES[type];
-  const waveScale = 1 + (state.wave - 1) * (type === 'boss' ? 0.1 : 0.16);
+  const waveScale = 1 + (state.wave - 1) * (isBossType(type) ? 0.1 : 0.16);
   const e = {
     type: type,
     pos: pos.clone(),
@@ -1090,15 +1105,48 @@ function spawnEnemy(type, pos) {
     strafe: Math.random() < 0.5 ? 1 : -1,
     strafeT: rand(1, 2.6),
     summonT: 9,
+    volleyT: 11,
     wind: 0,
     baseScale: window.ArenaArt ? ArenaArt.scaleOf(type) : 1,
     mesh: buildEnemyMesh(type)
   };
   e.mesh.position.copy(e.pos);
   e.mesh.scale.setScalar(e.baseScale * 0.08);
+  decorateEnemy(e);
   scene.add(e.mesh);
   enemies.push(e);
   return e;
+}
+
+/* 附加识别标记：各档模型贴图不同，但 BOSS 与小精英靠发光环保证一眼可辨 */
+function decorateEnemy(e) {
+  const m = e.mesh;
+  const deco = [];
+  const ring = (r, t, color, y, rx) => {
+    const mesh = new THREE.Mesh(
+      new THREE.TorusGeometry(r, t, 6, 24),
+      new THREE.MeshBasicMaterial({
+        color: color, transparent: true, opacity: 0.55,
+        blending: THREE.AdditiveBlending, depthWrite: false
+      })
+    );
+    mesh.position.y = y;
+    if (rx != null) mesh.rotation.x = rx;
+    m.add(mesh);
+    deco.push(mesh);
+  };
+  if (e.type === 'warden') {
+    ring(0.52, 0.040, 0xffcf6b, 2.00, Math.PI / 2);   // 头顶金环
+    ring(1.05, 0.050, 0xffcf6b, 0.06, Math.PI / 2);   // 脚下金环
+  } else if (e.type === 'oracle') {
+    ring(0.62, 0.035, 0xc98cff, 1.55, 0);              // 背后竖环
+    ring(0.80, 0.030, 0xc98cff, 1.62, Math.PI / 7);
+  } else if (e.type === 'golem') {
+    ring(0.62, 0.040, 0x9fd8ff, 0.05, Math.PI / 2);
+  } else if (e.type === 'hexer') {
+    ring(0.30, 0.025, 0xb98cff, 1.86, Math.PI / 2);
+  }
+  if (deco.length) m.userData.deco = deco;
 }
 
 function updateEnemies(dt) {
@@ -1113,6 +1161,12 @@ function updateEnemies(dt) {
     }
     if (e.flash > 0) e.flash -= dt;
     if (e.slow > 0) e.slow -= dt;
+    // 调试图鉴：冻结 AI，只保留待机与朝向，方便比对形象
+    if (e.frozen) {
+      e.mesh.position.copy(e.pos);
+      e.mesh.rotation.y = Math.atan2(yawObj.position.x - e.pos.x, yawObj.position.z - e.pos.z);
+      continue;
+    }
     e.attackCd -= dt;
     e.strafeT -= dt;
     if (e.strafeT <= 0) { e.strafeT = rand(1.2, 2.6); e.strafe *= -1; }
@@ -1124,8 +1178,9 @@ function updateEnemies(dt) {
     const nz = dz / d;
     const spd = e.speed * (e.slow > 0 ? 0.5 : 1);
 
-    if (e.type === 'grunt' || e.type === 'elite') {
-      const reach = e.radius + 2.2; // 停在两米半左右出手，避免糊满镜头
+    if (isMeleeType(e.type)) {
+      // 石傀在更远处起手（长前摇重击），蚀虫直接贴脸快咬
+      const reach = e.radius + (e.type === 'golem' ? 2.6 : 2.2);
       if (d > reach) {
         e.pos.x += nx * spd * dt;
         e.pos.z += nz * spd * dt;
@@ -1136,12 +1191,14 @@ function updateEnemies(dt) {
           const onGround = (player.y - PLAYER_H) < 0.85;
           if (onGround && !losBlocked(e.pos.x, e.pos.z, yawObj.position.x, yawObj.position.z)) {
             damagePlayer(e.dmg);
-            spawnRing(e.pos.x, 0.9, e.pos.z, 0xff5c72, 1.2);
+            spawnRing(e.pos.x, 0.9, e.pos.z, e.type === 'swarm' ? 0xa4ff6b : 0xff5c72, 1.2);
+            // 石傀落地砸出一下地面冲击，逼玩家离开原地
+            if (e.type === 'golem') spawnRing(e.pos.x, 0.08, e.pos.z, 0x9aa7b4, 2.6);
           }
         }
       } else if (e.attackCd <= 0) {
-        e.wind = e.type === 'elite' ? 0.52 : 0.42;
-        e.attackCd = (e.type === 'elite' ? 1.3 : 1.05) + e.wind;
+        e.wind = WIND_OF[e.type] != null ? WIND_OF[e.type] : 0.42;
+        e.attackCd = (CD_OF[e.type] != null ? CD_OF[e.type] : 1.05) + e.wind;
         spawnRing(e.pos.x, 0.07, e.pos.z, 0xff5c72, e.radius + 2.4);
         if (window.Hero3D) Hero3D.swing(e.mesh, 'slash', e.wind + 0.18);
       }
@@ -1160,6 +1217,23 @@ function updateEnemies(dt) {
         e.attackCd = 1.7;
         fireEnemyShot(e, 0.05);
         if (window.Hero3D) Hero3D.swing(e.mesh, 'shoot', 0.30);
+      }
+    } else if (e.type === 'hexer') {
+      // 咒术师：保持 9–16m 站位，在玩家落脚点埋延迟炸圈，被贴身就后退拉开距离
+      if (d < 9) {
+        e.pos.x -= nx * spd * dt;
+        e.pos.z -= nz * spd * dt;
+      } else if (d > 16) {
+        e.pos.x += nx * spd * dt;
+        e.pos.z += nz * spd * dt;
+      } else {
+        e.pos.x += -nz * spd * 0.5 * e.strafe * dt;
+        e.pos.z += nx * spd * 0.5 * e.strafe * dt;
+      }
+      if (e.attackCd <= 0 && d < 30) {
+        e.attackCd = 3.2;
+        castHexTrap(e, 0, 0);
+        if (window.Hero3D) Hero3D.cast(e.mesh, 1.25);
       }
     } else if (e.type === 'boss') {
       if (d > 13) {
@@ -1180,6 +1254,63 @@ function updateEnemies(dt) {
           spawnEnemy('grunt', new THREE.Vector3(e.pos.x + rand(-2, 2), 0, e.pos.z + rand(-2, 2)));
         }
         toast('BOSS 召唤援军', 900);
+      }
+    } else if (e.type === 'warden') {
+      // 守卫长（重装近战 BOSS）：压到 7–13m，扇形弹幕压走位，周期性召石傀与裂地冲击
+      if (d > 13) {
+        e.pos.x += nx * spd * dt;
+        e.pos.z += nz * spd * dt;
+      } else if (d < 7) {
+        e.pos.x -= nx * spd * dt;
+        e.pos.z -= nz * spd * dt;
+      }
+      if (e.attackCd <= 0) {
+        e.attackCd = 2.0;
+        bossBurst(e, 0xffcf6b);
+      }
+      e.summonT -= dt;
+      if (e.summonT <= 0) {
+        e.summonT = 8;
+        for (let k = 0; k < 2; k++) {
+          spawnEnemy('golem', new THREE.Vector3(e.pos.x + rand(-2.4, 2.4), 0, e.pos.z + rand(-2.4, 2.4)));
+        }
+        toast('守卫长 召来石傀', 1000);
+        sfx('skill');
+      }
+      e.volleyT -= dt;
+      if (e.volleyT <= 0 && d < 14) {
+        e.volleyT = 10.5;
+        groundSlam(e);
+        if (window.Hero3D) Hero3D.swing(e.mesh, 'slash', 0.9);
+      }
+    } else if (e.type === 'oracle') {
+      // 咒缚主祭（法系召唤 BOSS）：站 10–18m，双圈咒缚、蚀虫潮、五发追踪弹幕
+      if (d > 18) {
+        e.pos.x += nx * spd * dt;
+        e.pos.z += nz * spd * dt;
+      } else if (d < 10) {
+        e.pos.x -= nx * spd * dt;
+        e.pos.z -= nz * spd * dt;
+      }
+      if (e.attackCd <= 0) {
+        e.attackCd = 3.0;
+        castHexTrap(e, 0, 0);
+        castHexTrap(e, rand(-3.4, 3.4), rand(-3.4, 3.4));
+        if (window.Hero3D) Hero3D.cast(e.mesh, 1.25);
+      }
+      e.summonT -= dt;
+      if (e.summonT <= 0) {
+        e.summonT = 8;
+        for (let k = 0; k < 3; k++) {
+          spawnEnemy('swarm', new THREE.Vector3(e.pos.x + rand(-2.6, 2.6), 0, e.pos.z + rand(-2.6, 2.6)));
+        }
+        toast('咒缚主祭 召来蚀虫', 1000);
+        sfx('skill');
+      }
+      e.volleyT -= dt;
+      if (e.volleyT <= 0) {
+        e.volleyT = 9;
+        bossBurst(e, 0xc98cff);
       }
     } else if (e.type === 'duelist') {
       if (d > 14) {
@@ -1230,6 +1361,11 @@ function updateEnemies(dt) {
 
     e.mesh.position.copy(e.pos);
     e.mesh.rotation.y = Math.atan2(nx, nz);
+    // 识别光环自转
+    if (e.mesh.userData.deco) {
+      const deco = e.mesh.userData.deco;
+      for (let k = 0; k < deco.length; k++) deco[k].rotation.y += dt * (0.55 + k * 0.3);
+    }
 
     // 关节动画：按实际位移算步速，受击时叠一个后仰
     if (window.Hero3D && e.mesh.userData && e.mesh.userData.hero3d) {
@@ -1279,7 +1415,8 @@ function fireEnemyShot(e, spread) {
   sfx('enemyShot');
 }
 
-function bossBurst(e) {
+function bossBurst(e, color) {
+  const col = color == null ? 0xff3860 : color;
   const base = Math.atan2(yawObj.position.x - e.pos.x, yawObj.position.z - e.pos.z);
   const n = 7;
   for (let i = 0; i < n; i++) {
@@ -1289,9 +1426,27 @@ function bossBurst(e) {
       rand(-0.05, 0.05),
       Math.cos(base + a)
     ).normalize();
-    spawnProjectile(new THREE.Vector3(e.pos.x, 1.8, e.pos.z), dir, 13, e.dmg, 'enemy', 0, 0xff3860);
+    spawnProjectile(new THREE.Vector3(e.pos.x, 1.8, e.pos.z), dir, 13, e.dmg, 'enemy', 0, col);
   }
   sfx('enemyShot');
+}
+
+/* 咒缚圈：预判玩家当前落点，1.25 秒后起爆；起爆前闪烁给闪避窗口 */
+function castHexTrap(e, dx, dz) {
+  const px = clamp(yawObj.position.x + (dx || 0), -HALF + 1, HALF - 1);
+  const pz = clamp(yawObj.position.z + (dz || 0), -HALF + 1, HALF - 1);
+  spawnDelayedBlast(px, pz, 1.25, 2.9, e.dmg + 12, 0xb98cff, true);
+  spawnRing(px, 0.06, pz, 0xb98cff, 2.9);
+  spawnCastCircle(px, pz, 0xb98cff);
+  sfx('cast');
+}
+
+/* 裂地：以 BOSS 自身为圆心的重击圈，把贴脸的人逼出去 */
+function groundSlam(e) {
+  spawnDelayedBlast(e.pos.x, e.pos.z, 0.9, 4.4, e.dmg, 0xffcf6b, true);
+  spawnRing(e.pos.x, 0.09, e.pos.z, 0xffcf6b, 4.4);
+  spawnCastCircle(e.pos.x, e.pos.z, 0xffcf6b);
+  sfx('skill');
 }
 
 /* ---------------- 弹丸与特效 ---------------- */
@@ -1505,7 +1660,7 @@ function spawnTracer(origin, dir, len, color) {
   effects.push({ mesh: line, kind: 'tracer', life: 0.09, maxLife: 0.09 });
 }
 
-function spawnDelayedBlast(x, z, delay, radius, dmg, color) {
+function spawnDelayedBlast(x, z, delay, radius, dmg, color, hostile) {
   const ring = new THREE.Mesh(
     new THREE.RingGeometry(radius * 0.92, radius, 40),
     new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.35, side: THREE.DoubleSide })
@@ -1515,7 +1670,8 @@ function spawnDelayedBlast(x, z, delay, radius, dmg, color) {
   scene.add(ring);
   effects.push({
     mesh: ring, kind: 'delayed', life: delay, maxLife: delay,
-    radius: radius, dmg: dmg, blastColor: color, cx: x, cz: z
+    radius: radius, dmg: dmg, blastColor: color, cx: x, cz: z,
+    hostile: !!hostile
   });
 }
 
@@ -1623,7 +1779,12 @@ function updateEffects(dt) {
     if (f.kind === 'delayed') {
       f.mesh.material.opacity = 0.25 + Math.abs(Math.sin(f.life * 14)) * 0.45;
       if (f.life <= 0) {
-        splashDamage(new THREE.Vector3(f.cx, 0.4, f.cz), f.radius, f.dmg);
+        // 玩家技能的范围炸打怪；敌方咒缚 / 裂地圈只打玩家，不伤自己人（避免 BOSS 自残）
+        if (!f.hostile) splashDamage(new THREE.Vector3(f.cx, 0.4, f.cz), f.radius, f.dmg);
+        if (f.hostile) {
+          const pd = hyp(yawObj.position.x - f.cx, yawObj.position.z - f.cz);
+          if (pd < f.radius + 0.5) damagePlayer(f.dmg);
+        }
         spawnExplosion(f.cx, 1.0, f.cz, f.radius * 0.65);
         f.mesh.material.color.setHex(f.blastColor);
         f.mesh.scale.setScalar(1.6);
@@ -1710,10 +1871,10 @@ function killEnemy(e) {
   // 副本掉落：只在 PVE 里生成，PVP/联机不掉装备（那边是比分模式，装备无处结算）
   if (state.mode === 'pve') spawnDropsFor(e);
 
-  if (e.type === 'boss') {
+  if (isBossType(e.type)) {
     spawnExplosion(e.pos.x, 1.6, e.pos.z, 2.6);
-    spawnShards(e.pos, 16, 0xff3860);
-    toast('BOSS 击破', 1300);
+    spawnShards(e.pos, 16, TYPES[e.type].color);
+    toast(TYPES[e.type].name + ' 击破', 1300);
   } else {
     spawnExplosion(e.pos.x, 1.1, e.pos.z, 1.1);
     spawnShards(e.pos, 7, TYPES[e.type].color);
@@ -1802,21 +1963,43 @@ function spawnDamageText(pos, amount, crit) {
 }
 
 /* ---------------- 波次与对局 ---------------- */
-function startWave() {
-  // 首波只放 3 只，留出熟悉跳跃与疾跑的时间；之后按波次递增
-  const count = state.wave === 1 ? 3 : 3 + state.wave * 2;
+function buildWaveQueue(wave) {
   const q = [];
-  for (let i = 0; i < count; i++) {
-    let t = 'grunt';
+  // 数量随波次递增；首波只放 3 只，留出熟悉跳跃与疾跑的时间
+  const n = wave === 1 ? 3 : Math.min(30, 3 + wave * 2);
+  // 小怪按波次解锁：蚀虫第 2 波起成群，石傀与咒术师第 4 波加入，精英第 6 波
+  for (let i = 0; i < n; i++) {
     const r = Math.random();
-    if (state.wave >= 6 && r < 0.22) t = 'elite';
-    else if (state.wave >= 3 && r < 0.42) t = 'shooter';
-    q.push(t);
+    if (wave >= 6 && r < 0.18) q.push('elite');
+    else if (wave >= 4 && r < 0.34) q.push('hexer');
+    else if (wave >= 4 && r < 0.50) q.push('golem');
+    else if (wave >= 2 && r < 0.66) q.push('swarm');
+    else if (wave >= 3) q.push('shooter');
+    else q.push('grunt');
   }
-  if (state.wave % 5 === 0) q.push('boss');
-  state.spawnQueue = q;
+  // BOSS 轮换：第 5 波守卫长，第 10 波咒缚主祭，之后交替；第 20 波起双 BOSS 同场
+  if (wave % 5 === 0) {
+    const cycle = Math.floor(wave / 5);
+    if (wave >= 20) {
+      q.push(cycle % 2 === 0 ? 'oracle' : 'warden');
+      q.push(cycle % 2 === 0 ? 'warden' : 'oracle');
+    } else {
+      q.push(cycle % 2 === 1 ? 'warden' : 'oracle');
+    }
+  }
+  return q;
+}
+
+function startWave() {
+  state.spawnQueue = buildWaveQueue(state.wave);
   state.spawnTimer = 0;
-  if (state.wave % 5 === 0) toast('BOSS 来袭', 1500);
+  if (state.wave % 5 === 0) {
+    const names = [];
+    state.spawnQueue.forEach((t) => {
+      if (isBossType(t) && names.indexOf(TYPES[t].name) < 0) names.push(TYPES[t].name);
+    });
+    toast((state.wave >= 20 ? '双 BOSS 来袭 · ' : 'BOSS 来袭 · ') + names.join(' / '), 1600);
+  }
 }
 
 function randomSpawnPos() {
@@ -1933,10 +2116,21 @@ function startGame() {
     : state.mode === 'online' ? '局域网对战' : 'PVP 对决';
 
   if (state.mode === 'pve') {
+    // 调试：?wave=5 直接从指定波次起手，用来核对 BOSS 波编队
+    const wq = /[?&]wave=(\d+)/.exec(location.search);
+    if (wq) state.wave = clamp(parseInt(wq[1], 10) || 1, 1, 60);
     startWave();
-    toast('WAVE 1', 1200);
+    // 调试：?boss=warden / oracle 只在正前方 12m 放这一只 BOSS，用来单看走位、弹幕与召唤
+    const bq = /[?&]boss=(warden|oracle|boss)/.exec(location.search);
+    if (bq) {
+      state.spawnQueue = [];
+      spawnEnemy(bq[1], new THREE.Vector3(yawObj.position.x, 0, yawObj.position.z - 12));
+    }
+    toast('WAVE ' + state.wave, 1200);
     // 调试：?loottest=1 在出生点前方摆满六槽各一件，用来核对掉落、拾取与面板
     if (/[?&]loottest/.test(location.search)) spawnTestLoot();
+    // 调试：?bestiary=1 把地宫新增怪与两个 BOSS 并排摆在正前方，用来核对形象与行为
+    if (/[?&]bestiary/.test(location.search)) spawnBestiary();
   } else if (state.mode === 'online') {
     // 出生点由服务端分配，双方各占一侧，避免两人叠在同一格
     const n = netRef();
@@ -3135,6 +3329,18 @@ function spawnTestLoot() {
   weak.forEach((slot, i) => {
     const it = Loot.roll({ ilvl: 1, slot: slot, rarity: 'common', cls: state.cls });
     addLootDrop(it, (i - 1.5) * 1.5, 8.2);
+  });
+}
+
+/* ?bestiary=1：把新增的五种敌人并排摆在出生点正前方，冻结 AI 只做形象展示 */
+function spawnBestiary() {
+  // 图鉴模式下收起常驻装备栏，避免挡住最右一只
+  const gp = document.getElementById('gearPanel');
+  if (gp) gp.classList.add('hidden');
+  const rows = ['golem', 'swarm', 'hexer', 'warden', 'oracle'];
+  rows.forEach((t, i) => {
+    const e = spawnEnemy(t, new THREE.Vector3((i - 2) * 2.6, 0, 2.4));
+    if (e) e.frozen = true;
   });
 }
 

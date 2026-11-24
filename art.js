@@ -64,6 +64,27 @@ const KITS = {
   duelist: {
     armor: 0x1d6560, cloth: 0x0b2a26, accent: 0x2ee6c0,
     weapon: 'rifle', scale: 1.04, cloak: false, crest: false
+  },
+  /* 地宫副本新增形象：石傀是厚甲重锤、蚀虫是矮小快攻、咒术师与主祭走长袍法系 */
+  golem: {
+    armor: 0x6d7681, cloth: 0x2a2f36, accent: 0x9fd8ff,
+    weapon: 'greatsword', scale: 1.44, cloak: false, crest: true
+  },
+  swarm: {
+    armor: 0x46603a, cloth: 0x1f2a1a, accent: 0xa4ff6b,
+    weapon: 'sword', scale: 0.72, cloak: false, crest: false
+  },
+  hexer: {
+    armor: 0x4a3568, cloth: 0x241b30, accent: 0xb98cff,
+    weapon: 'staff', scale: 1.02, cloak: true, crest: false
+  },
+  warden: {
+    armor: 0xa8862e, cloth: 0x3a2a10, accent: 0xffcf6b,
+    weapon: 'greatsword', scale: 1.62, cloak: true, crest: true
+  },
+  oracle: {
+    armor: 0x5a3a6e, cloth: 0x241228, accent: 0xc98cff,
+    weapon: 'staff', scale: 1.55, cloak: true, crest: true
   }
 };
 

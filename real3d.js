@@ -244,7 +244,12 @@
     grunt:     { skin: 0xa07d64, hair: 0x241a17, cloth: 0x40402f, leather: 0x4a3c2c, metal: 0x8a8f8c, accent: 0x94c56f },
     shooter:   { skin: 0x9d7a62, hair: 0x1d1815, cloth: 0x353a36, leather: 0x453528, metal: 0x8b9095, accent: 0xd0ad55 },
     elite:     { skin: 0x91725b, hair: 0x211a16, cloth: 0x2f333a, leather: 0x3f3226, metal: 0x9ba1a6, accent: 0xcf5a68 },
-    boss:      { skin: 0x8a6a56, hair: 0x161314, cloth: 0x24272d, leather: 0x352a22, metal: 0xa8a294, accent: 0xb8453c }
+    boss:      { skin: 0x8a6a56, hair: 0x161314, cloth: 0x24272d, leather: 0x352a22, metal: 0xa8a294, accent: 0xb8453c },
+    golem:     { skin: 0x6d7681, hair: 0x14161a, cloth: 0x2a2f36, leather: 0x33383e, metal: 0x8b939b, accent: 0x9fd8ff },
+    swarm:     { skin: 0x6f8a57, hair: 0x0d1409, cloth: 0x1f2a1a, leather: 0x2b3a22, metal: 0x4a5a3c, accent: 0xa4ff6b },
+    hexer:     { skin: 0x9c86b4, hair: 0x120c18, cloth: 0x241b30, leather: 0x2e2540, metal: 0x584a70, accent: 0xb98cff },
+    warden:    { skin: 0x7a6444, hair: 0x100c08, cloth: 0x3a2a10, leather: 0x453217, metal: 0xa8862e, accent: 0xffcf6b },
+    oracle:    { skin: 0x9a86b0, hair: 0x100818, cloth: 0x241228, leather: 0x2c1a33, metal: 0x6a4a80, accent: 0xc98cff }
   };
 
   var _texCache = {};
