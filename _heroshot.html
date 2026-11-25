@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>hero glb 巡视</title>
+<style>
+  html,body{margin:0;height:100%;background:#15181d;overflow:hidden;font:12px/1.3 system-ui,sans-serif;color:#cfd6e0}
+  #c{display:block;width:100%;height:100%}
+  #lab{position:absolute;inset:0;pointer-events:none}
+  #lab i{position:absolute;transform:translate(-50%,0);color:#8fd8ff;font-style:normal;letter-spacing:.02em}
+  #t{position:absolute;left:12px;top:10px;color:#7b8797}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="lab"></div>
+<div id="t"></div>
+<script src="vendor/three.min.js"></script>
+<script src="vendor/GLTFLoader.js"></script>
+<script>
+const BATCH = {
+  1: ['blade_hero','boxer_hero','wrestler_hero','cannon_hero','grenade_hero','arcane_hero','shadow_hero'],
+  2: ['night_hero','priest_hero','paladin_hero','monk_hero','ascetic_hero','greatsword_hero','breaker_hero'],
+  3: ['sniper_hero','frost_hero','dancer_hero','iron_hero','blood_hero','poison_hero','seer_hero'],
+  4: ['swordsman_idle','gunner_idle','mage_idle']
+};
+const b = +(new URLSearchParams(location.search).get('b') || 1);
+const names = BATCH[b] || BATCH[1];
+document.getElementById('t').textContent = 'batch ' + b + ' · ' + names.join(' / ');
+
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+const COL = 7, GAP = 1.35, CELL = 1.85;
+const W = COL * GAP, H = CELL * Math.ceil(names.length / COL);
+const cam = new THREE.OrthographicCamera(-W/2, W/2, H/2, -H/2, 0.01, 60);
+cam.position.set(0, H * 0.28, 14);
+cam.lookAt(0, H * 0.28, 0);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1b1f26);
+scene.add(new THREE.HemisphereLight(0xdfe9ff, 0x2b2f38, 1.35));
+const key = new THREE.DirectionalLight(0xffffff, 2.1); key.position.set(3, 6, 8); scene.add(key);
+const rim = new THREE.DirectionalLight(0x9fd8ff, 1.6); rim.position.set(-5, 3, -6); scene.add(rim);
+const fill = new THREE.DirectionalLight(0xffd9a8, 0.9); fill.position.set(-6, 1.5, 4); scene.add(fill);
+
+const loader = new THREE.GLTFLoader();
+const lab = document.getElementById('lab');
+
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false);
+  const aspect = w / h;
+  // 视口按内容比例铺满，保持模型不被拉扁
+  if (W / H > aspect) { cam.top = W / aspect / 2; cam.bottom = -cam.top; cam.left = -W/2; cam.right = W/2; }
+  else { cam.left = -H * aspect / 2; cam.right = -cam.left; cam.top = H/2; cam.bottom = -H/2; }
+  cam.updateProjectionMatrix();
+  renderer.render(scene, cam);
+}
+addEventListener('resize', resize);
+
+function place(i) {
+  const cx = (i % COL) * GAP - (COL - 1) * GAP / 2;
+  const row = Math.floor(i / COL);
+  const cy = (Math.ceil(names.length / COL) - 1) * CELL / 2 - row * CELL - CELL / 2;
+  return [cx, cy];
+}
+
+let pending = names.length;
+names.forEach(function (n, i) {
+  loader.load('art/模型/glb/' + n + '.glb', function (gltf) {
+    const obj = gltf.scene;
+    const box = new THREE.Box3().setFromObject(obj);
+    const h = Math.max(0.01, box.max.y - box.min.y);
+    const s = 1.75 / h;
+    obj.scale.setScalar(s);
+    const b2 = new THREE.Box3().setFromObject(obj);
+    const [cx, cy] = place(i);
+    obj.position.set(cx - (b2.min.x + b2.max.x) / 2, cy - (b2.max.y + b2.min.y) / 2, 0);
+    obj.traverse(function (o) {
+      if (!o.isMesh) return;
+      const ms = Array.isArray(o.material) ? o.material : [o.material];
+      o.material = (Array.isArray(o.material) ? ms : [o.material]).map(function (m) {
+        if (!m) return m;
+        const c = m.clone();
+        if (!c.metalnessMap && (c.metalness == null || c.metalness > 0.25)) c.metalness = 0.25;
+        c.envMapIntensity = 0.5;
+        c.side = THREE.DoubleSide;
+        return c;
+      });
+      if (!Array.isArray(o.material)) o.material = o.material[0];
+    });
+    scene.add(obj);
+    const g = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1), new THREE.MeshBasicMaterial({ color: 0x2a3038 }));
+    g.rotation.x = -Math.PI / 2; g.position.set(cx, cy - 0.88, -0.02); scene.add(g);
+    const t = document.createElement('i');
+    t.textContent = n.replace('_hero', '');
+    const v = new THREE.Vector3(cx, cy - 1.02, 0).project(cam);
+    t.style.left = ((v.x + 1) / 2 * innerWidth) + 'px';
+    t.style.top = ((-v.y + 1) / 2 * innerHeight + 4) + 'px';
+    lab.appendChild(t);
+    if (--pending === 0) resize();
+  }, undefined, function (e) { console.warn(n, e); if (--pending === 0) resize(); });
+});
+
+window.__info = function () {
+  return { batch: b, names: names, ready: pending === 0, tris: renderer.info.render.triangles };
+};
+</script>
+</body>
+</html>

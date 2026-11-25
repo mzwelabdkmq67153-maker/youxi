@@ -305,6 +305,8 @@ if (window.Glb3D) {
         k: f.kind, tris: f.tris, sc: +(f.scale || 0).toFixed(2), mesh: meshes, vis: vis,
         rb: rb ? [[+rb.min.x.toFixed(1), +rb.min.y.toFixed(1), +rb.min.z.toFixed(1)], [+rb.max.x.toFixed(1), +rb.max.y.toFixed(1), +rb.max.z.toFixed(1)]] : null,
         px: H ? +H.position.x.toFixed(2) : -999, pz: H ? +H.position.z.toFixed(2) : -999,
+        py: H ? +H.position.y.toFixed(2) : -999,
+        dt: (window.SceneGlb && SceneGlb.info && SceneGlb.info.fit) ? +(+SceneGlb.info.fit.deckTop).toFixed(2) : -999,
         pr: H ? +Math.hypot(H.position.x, H.position.z).toFixed(2) : -999,
         br: window.SceneGlb && SceneGlb.boundary ? +SceneGlb.boundary().toFixed(2) : 0,
         obs: window.SceneGlb && SceneGlb.info ? SceneGlb.info.obstacles.length : -1,
@@ -342,6 +344,19 @@ if (window.Glb3D) {
         var cam = D.camera();
         cam.aspect = 1280 / 960;
         cam.updateProjectionMatrix();
+        /* ?cam=out：拉一个总览机位，绕过玩家第一人称（圆台世界出生点贴地时用它出界面图）
+           ?cam=mid：稍低的四分之三俯视，适合看清台面与专属道具层 */
+        var cm = q.get('cam') || '';
+        if (cm) {
+          var hi = parseFloat(q.get('ch') || '0'), dd = parseFloat(q.get('cd') || '0');
+          if (cm === 'out') {
+            cam.position.set(0, hi > 0 ? hi : 42, dd > 0 ? dd : 58);
+            cam.lookAt(0, 3, 0);
+          } else if (cm === 'mid') {
+            cam.position.set(0, hi > 0 ? hi : 14, dd > 0 ? dd : 30);
+            cam.lookAt(0, 2.4, 0);
+          }
+        }
         D.render();
         var u = r.domElement.toDataURL('image/png');
         fetch('http://127.0.0.1:8095/snap?name=' + encodeURIComponent(q.get('out') || 'ingame'),

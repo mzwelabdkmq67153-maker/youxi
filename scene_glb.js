@@ -568,6 +568,31 @@
         floor: deckY,
         size: box2.getSize(new THREE.Vector3())
       };
+      /* 台面真实高度：从正上方打一条射线量出来。
+         deckZ 是模型自带单位，落到 y=0 后不一定等于 0，玩家会被放到台脚（相机贴地仰视）。
+         中心十字水槽略低，取 0.35R 与 0.6R 两圈四个点的中位数更稳。 */
+      try {
+        obj.updateMatrixWorld(true);
+        var rc = new THREE.Raycaster();
+        var ys = [];
+        var rr = f.deckRadius || Math.min(box2.max.x, box2.max.z) * 0.6;
+        [[0, 0], [rr * 0.35, 0], [-rr * 0.35, 0], [0, rr * 0.35], [0, -rr * 0.35],
+         [rr * 0.6 * 0.707, rr * 0.6 * 0.707], [-rr * 0.6 * 0.707, -rr * 0.6 * 0.707]]
+          .forEach(function (p) {
+            rc.set(new THREE.Vector3(p[0], box2.max.y + 200, p[1]), new THREE.Vector3(0, -1, 0));
+            var hs = rc.intersectObject(obj, true);
+            /* 室内世界头顶有拱顶，从上面打第一条命中的是屋顶；取最靠近 y=0 的那一层当地面 */
+            var best = null;
+            for (var i = 0; i < hs.length; i++) {
+              if (best === null || Math.abs(hs[i].point.y) < Math.abs(best)) best = hs[i].point.y;
+            }
+            if (best !== null && Math.abs(best) < 8) ys.push(best);
+          });
+        if (ys.length) {
+          ys.sort(function (a, b) { return a - b; });
+          f.deckTop = ys[Math.min(ys.length - 1, Math.floor(ys.length * 0.75))];
+        }
+      } catch (e) { log('deckTop probe failed', e && e.message); }
       prepMaterials(obj, sk);
       var entry = { root: obj, fit: f, tris: trisOf(obj) };
       cache[sk] = entry;
@@ -913,10 +938,10 @@
     var cloud = new THREE.Group();
     cloud.name = 'worldClouds';
     var rings = [
-      { r: 34, y: -1.5, o: 0.62 },
-      { r: 54, y: -3.8, o: 0.46 },
-      { r: 88, y: -7.4, o: 0.30 },
-      { r: 152, y: -12.5, o: 0.16 }
+      { r: 40, y: -3.2, o: 0.55 },
+      { r: 60, y: -6.0, o: 0.45 },
+      { r: 92, y: -9.5, o: 0.30 },
+      { r: 155, y: -14.0, o: 0.16 }
     ];
     for (var i = 0; i < rings.length; i++) {
       var R = rings[i];
@@ -932,6 +957,8 @@
       m.userData.tag = 'world_cloud';
       cloud.add(m);
     }
+    /* 云面按台面高度抬起来（圆台模型台面不在 y=0，否则云海沉到台基下面看不见） */
+    cloud.position.y = (fit && typeof fit.deckTop === 'number') ? fit.deckTop : 0;
     group.add(cloud);
   }
 
@@ -997,7 +1024,7 @@
     addSky(k, group);
 
     glowLight = new THREE.PointLight(cfg.glow, cfg.glowI, cfg.glowD, 1.8);
-    glowLight.position.set(0, cfg.glowY || 1.4, 0);
+    glowLight.position.set(0, (cfg.glowY || 1.4) + ((fit && typeof fit.deckTop === 'number') ? fit.deckTop : 0), 0);
     group.add(glowLight);
 
     log('attached', k, 'tris', entry.tris, 'deckRadius', fit.deckRadius ? fit.deckRadius.toFixed(1) : '-');
