@@ -23,14 +23,25 @@
   var chh = parseInt(q.get('ch') || '0', 10) || 720;
   var gap = 6;
   var label = q.get('label') !== '0';
-  var bg = q.get('bg') || '1a2129';
+  /* 每个世界的布光与底色：冷钢竞技台、暖砂主城、土黄野外、幽金神坛各走一套 */
+  var LOOK = {
+    arena:  { bg: '1b242c', hemi: ['#c9dcf0', '#121a22', 0.80], key: ['#fff4e4', 1.34], fill: ['#4a7bd0', 0.40] },
+    dungeon:{ bg: '0c1418', hemi: ['#8fb6c4', '#0d1216', 0.72], key: ['#ffdfae', 1.30], fill: ['#2a6f88', 0.46] },
+    city:   { bg: '2b241b', hemi: ['#ffdfae', '#332a1e', 0.86], key: ['#ffe0a6', 1.44], fill: ['#5a8fc0', 0.28] },
+    peak:   { bg: '7d8894', hemi: ['#ffefd0', '#66655f', 0.92], key: ['#fff2d4', 1.40], fill: ['#8fb4de', 0.32] },
+    wild:   { bg: '2c2117', hemi: ['#ffcc92', '#241a10', 0.88], key: ['#ffb468', 1.50], fill: ['#6a8ad0', 0.24] },
+    cliff:  { bg: '141c26', hemi: ['#b3cddf', '#0e141a', 0.74], key: ['#e6f2ff', 1.30], fill: ['#3d6fa8', 0.42] },
+    throne: { bg: '17111f', hemi: ['#e2c78e', '#120c18', 0.86], key: ['#ffcf8e', 1.42], fill: ['#7a5fd0', 0.44] }
+  };
+  var look = LOOK[kind] || LOOK.city;
+  var bg = q.get('bg') || look.bg;
   var fov = parseFloat(q.get('fov') || '38');
 
   var renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(1);
   renderer.setSize(cw, chh, false);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.02;
+  renderer.toneMappingExposure = parseFloat(q.get('exp') || '1.28');
   renderer.setClearColor(new THREE.Color('#' + bg), 1);
   window.__renderer = renderer;
   document.body.appendChild(renderer.domElement);
@@ -39,20 +50,22 @@
   scene.background = new THREE.Color('#' + bg);
   var camera = new THREE.PerspectiveCamera(fov, cw / chh, 0.1, 900);
 
-  scene.add(new THREE.HemisphereLight(0xbdd7ee, 0x222b33, 0.85));
-  var key = new THREE.DirectionalLight(0xfff3e2, 1.35);
+  scene.add(new THREE.HemisphereLight(new THREE.Color(look.hemi[0]), new THREE.Color(look.hemi[1]), look.hemi[2]));
+  var key = new THREE.DirectionalLight(new THREE.Color(look.key[0]), look.key[1]);
   key.position.set(60, 90, 40);
   scene.add(key);
-  var fill = new THREE.DirectionalLight(0x6f9ad8, 0.45);
+  var fill = new THREE.DirectionalLight(new THREE.Color(look.fill[0]), look.fill[1]);
   fill.position.set(-50, 30, -60);
   scene.add(fill);
-  var rim = new THREE.DirectionalLight(0xffffff, 0.35);
+  var rim = new THREE.DirectionalLight(0xffffff, 0.22);
   rim.position.set(-20, 25, 80);
   scene.add(rim);
 
   var obstacles = [];
   SceneGlb.build(kind, scene, obstacles);
   if (SceneGlb.tuneLights) SceneGlb.tuneLights(scene);
+  /* tuneLights 会按场景改曝光与天色，八视展示统一抬一档曝光 */
+  renderer.toneMappingExposure = parseFloat(q.get('exp') || '1.06');
 
   var maxAniso = renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 4;
   var mapKeys = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap'];

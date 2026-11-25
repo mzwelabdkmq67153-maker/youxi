@@ -31,7 +31,7 @@
   renderer.setPixelRatio(pr);
   window.__ss = pr;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.9;
+  renderer.toneMappingExposure = parseFloat(q.get('exp') || '1.24');
   window.__renderer = renderer;
   document.body.appendChild(renderer.domElement);
 
@@ -77,6 +77,8 @@
   var obstacles = [];
   SceneGlb.build(kind, scene, obstacles);
   SceneGlb.tuneLights(scene);
+  /* tuneLights 会按场景改曝光，出图时统一抬到展示档 */
+  renderer.toneMappingExposure = parseFloat(q.get('exp') || '1.08');
 
   /* 纹理抗锯齿：各向异性过滤拉满 + 强制 mipmap，消掉斜面的贴图噪点与摩尔纹 */
   var maxAniso = renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 4;
@@ -168,6 +170,10 @@
       clearInterval(iv);
       setTimeout(function () {
         var i;
+        /* lift：竞技台的台身沉在补地圆盘之下，只出图时把 root 抬到地表上 */
+        var lift = parseFloat(q.get('lift') || '0');
+        var D = window.__sceneGlbDebug;
+        if (lift && D && D.root) D.root.position.y += lift;
         for (i = 0; i < 3; i++) renderer.render(scene, camera);
         var url = renderer.domElement.toDataURL('image/png');
         var a = document.createElement('a');

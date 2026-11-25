@@ -219,22 +219,71 @@
      宫体 0.965×0.985、台面顶 0.153 / 地面 0.004（模型单位）。
      缺省档（无参数）仍是原来的双资产 + 换气质做法。 */
   if (q.get('set') === 'tripo') {
+    /* tripo 档自带一套美术参数：天色 / 雾 / 曝光 / 灯光色温，配合 PAINT 的白模调色。
+       默认档不受影响，两档可以并排对比。 */
     var TRIPO_SET = {
-      arena: { f: 'tripo_arena_lod.glb', autoFit: 48, autoGround: 'top' },
-      dungeon: { f: 'tripo_dungeon_lod.glb', autoFit: 44, autoGround: 'bottom' },
-      village: { f: 'tripo_wild_lod.glb', autoFit: 44, autoGround: 'bottom' },
-      city: { f: 'tripo_city_lod.glb', autoFit: 44, autoGround: 'bottom' },
-      peak: { f: 'tripo_peak_lod.glb', autoFit: 44, autoGround: 'bottom' },
-      wild: { f: 'tripo_wild_lod.glb', autoFit: 44, autoGround: 'bottom' },
-      cliff: { f: 'tripo_cliff_lod.glb', autoFit: 44, autoGround: 'bottom' },
-      throne: { f: 'tripo_throne_lod.glb', autoFit: 44, autoGround: 'bottom' }
+      arena: {
+        f: 'tripo_arena_lod.glb', autoFit: 48, autoGround: 'top', groundColor: 0x4c5763,
+        sky: [0x25343f, 0x6d8ba1], bg: 0x2b3a46, fog: [0x2b3a46, 90, 260], exposure: 1.06,
+        lights: { hemiSky: 0xc9dcf0, hemiGround: 0x26313a, hemi: 0.95,
+                  keyColor: 0xfff4e4, key: 1.20, fillColor: 0x4a7bd0, fill: 0.52 }
+      },
+      dungeon: {
+        f: 'tripo_dungeon_lod.glb', autoFit: 44, autoGround: 'bottom', groundColor: 0x1d2628,
+        sky: [0x0c161a, 0x21363e], bg: 0x0f191d, fog: [0x14232a, 55, 150], exposure: 1.22,
+        lights: { hemiSky: 0x9ec2cf, hemiGround: 0x223028, hemi: 1.15,
+                  keyColor: 0xffdfae, key: 1.24, fillColor: 0x2a6f88, fill: 0.55 }
+      },
+      village: {
+        f: 'tripo_wild_lod.glb', autoFit: 44, autoGround: 'bottom', groundColor: 0x6f6248,
+        sky: [0x7a5c38, 0xcfa06a], bg: 0x9d7d52, fog: [0xa98a5e, 70, 230], exposure: 1.08,
+        lights: { hemiSky: 0xffe0b8, hemiGround: 0x3a3128, hemi: 0.92,
+                  keyColor: 0xffd9a8, key: 1.10, fillColor: 0x7f96c8, fill: 0.40 }
+      },
+      city: {
+        f: 'tripo_city_lod.glb', autoFit: 44, autoGround: 'bottom', groundColor: 0x9c8464,
+        sky: [0x8a6b42, 0xd9b884], bg: 0xb29068, fog: [0xc4a276, 80, 240], exposure: 1.08,
+        lights: { hemiSky: 0xffdfae, hemiGround: 0x50432f, hemi: 1.10,
+                  keyColor: 0xffe0a6, key: 1.20, fillColor: 0x5a8fc0, fill: 0.42 }
+      },
+      peak: {
+        f: 'tripo_peak_lod.glb', autoFit: 44, autoGround: 'bottom', groundColor: 0xb2c1ce,
+        sky: [0x9db2c6, 0xeef3f6], bg: 0xccd9e2, fog: [0xdbe4ec, 70, 250], exposure: 1.04,
+        lights: { hemiSky: 0xffefd0, hemiGround: 0x777570, hemi: 1.04,
+                  keyColor: 0xfff2d4, key: 1.18, fillColor: 0x8fb4de, fill: 0.40 }
+      },
+      wild: {
+        f: 'tripo_wild_lod.glb', autoFit: 44, autoGround: 'bottom', groundColor: 0x6f6248,
+        sky: [0x7a5c38, 0xcfa06a], bg: 0x9d7d52, fog: [0xa98a5e, 70, 230], exposure: 1.08,
+        lights: { hemiSky: 0xffe0b8, hemiGround: 0x3a3128, hemi: 0.92,
+                  keyColor: 0xffd9a8, key: 1.10, fillColor: 0x7f96c8, fill: 0.40 }
+      },
+      cliff: {
+        f: 'tripo_cliff_lod.glb', autoFit: 44, autoGround: 'bottom', groundColor: 0x394b5b,
+        sky: [0x1a2a38, 0x5c7a92], bg: 0x354a5c, fog: [0x3d5468, 80, 240], exposure: 1.06,
+        lights: { hemiSky: 0xb3cddf, hemiGround: 0x1e2a33, hemi: 0.88,
+                  keyColor: 0xe6f2ff, key: 1.16, fillColor: 0x3d6fa8, fill: 0.52 }
+      },
+      throne: {
+        f: 'tripo_throne_lod.glb', autoFit: 44, autoGround: 'bottom', groundColor: 0x362a3e,
+        sky: [0x2b1f3b, 0x8d6c5c], bg: 0x3c2b46, fog: [0x46324e, 80, 240], exposure: 1.06,
+        lights: { hemiSky: 0xe2c78e, hemiGround: 0x241c2e, hemi: 1.00,
+                  keyColor: 0xffcf8e, key: 1.22, fillColor: 0x7a5fd0, fill: 0.52 }
+      }
     };
     for (var tk in TRIPO_SET) {
       if (!CFG[tk]) continue;
-      CFG[tk].file = 'art/模型/场景/' + TRIPO_SET[tk].f;
+      var ts = TRIPO_SET[tk];
+      CFG[tk].file = 'art/模型/场景/' + ts.f;
       CFG[tk].src = tk;
-      CFG[tk].autoFit = TRIPO_SET[tk].autoFit;
-      CFG[tk].autoGround = TRIPO_SET[tk].autoGround;
+      CFG[tk].autoFit = ts.autoFit;
+      CFG[tk].autoGround = ts.autoGround;
+      if (ts.groundColor !== undefined) CFG[tk].groundColor = ts.groundColor;
+      if (ts.sky) CFG[tk].sky = ts.sky;
+      if (ts.bg !== undefined) CFG[tk].bg = ts.bg;
+      if (ts.fog) CFG[tk].fog = ts.fog;
+      if (ts.exposure) CFG[tk].exposure = ts.exposure;
+      if (ts.lights) CFG[tk].lights = ts.lights;
     }
     console.log('[SceneGlb] tripo set on');
   }
@@ -330,6 +379,94 @@
     return n;
   }
 
+  /* ---------- 场景配色（tripo 白模的色彩/材质补全） ----------
+     白模 albedo 近白，靠世界高度把资产分成"台基／主体／顶部"三段着色：
+     lo 低处（地砖、台基、崖脚）、mid 主体（墙体、崖壁）、hi 高处（台面、顶饰）。
+     tint 是乘法系数（>1 可提亮，允许超过 1），acc 给自发光带氛围色。
+     纯几何着色，不改 GLB、不加贴图，游戏与离线渲染吃同一份。 */
+  var PAINT = {
+    /* 以下色值按 sRGB 视觉写，paintMaterial 内统一转线性 */
+    /* 竞技场：青钢台壁，台面冷白钢，青蓝环线自发 */
+    arena:   { lo: [0.36, 0.44, 0.54], mid: [0.62, 0.70, 0.82], hi: [0.92, 0.94, 0.97],
+               acc: [0.22, 0.86, 0.98], emi: 0.32, rough: 0.74, metal: 0.12 },
+    /* 地宫：苔绿石墙，王座区暖金 */
+    dungeon: { lo: [0.32, 0.36, 0.30], mid: [0.55, 0.60, 0.50], hi: [0.78, 0.80, 0.70],
+               acc: [0.95, 0.62, 0.26], emi: 0.42, rough: 0.88, metal: 0.04 },
+    /* 主城：灰白台面 + 暖砂台壁，内城青琉璃 */
+    city:    { lo: [0.40, 0.32, 0.24], mid: [0.72, 0.58, 0.40], hi: [0.92, 0.88, 0.82],
+               acc: [0.90, 0.55, 0.24], emi: 0.38, rough: 0.84, metal: 0.06 },
+    /* 孤峰：雪白岩体，淡金轮廓 */
+    peak:    { lo: [0.42, 0.48, 0.56], mid: [0.66, 0.72, 0.80], hi: [0.97, 0.97, 0.98],
+               acc: [0.95, 0.80, 0.50], emi: 0.34, rough: 0.82, metal: 0.05 },
+    /* 野外：土黄荒原，苔绿残件 */
+    wild:    { lo: [0.40, 0.32, 0.22], mid: [0.62, 0.50, 0.34], hi: [0.86, 0.72, 0.50],
+               acc: [0.46, 0.62, 0.30], emi: 0.36, rough: 0.90, metal: 0.03 },
+    /* 断崖：冷蓝崖体，锈红标记 */
+    cliff:   { lo: [0.28, 0.36, 0.46], mid: [0.48, 0.60, 0.74], hi: [0.88, 0.93, 1.00],
+               acc: [0.85, 0.28, 0.20], emi: 0.34, rough: 0.86, metal: 0.04 },
+    /* 神坛：紫曜台阶，幽金顶饰 */
+    throne:  { lo: [0.36, 0.26, 0.44], mid: [0.56, 0.42, 0.64], hi: [0.90, 0.82, 0.52],
+               acc: [0.80, 0.55, 0.95], emi: 0.46, rough: 0.70, metal: 0.16 }
+  };
+
+  function paintMaterial(mm, p) {
+    if (!p || mm.userData._painted) return;
+    mm.userData._painted = true;
+    /* 本工程是 three r128，没有 ColorManagement：材质色/顶点色都按线性值参与着色，
+       而 PAINT 表是按 sRGB 视觉写的，这里统一做 sRGB→线性，否则 0.9 看着还是白 */
+    var toLin = function (a) {
+      return new THREE.Color(Math.pow(a[0], 2.2), Math.pow(a[1], 2.2), Math.pow(a[2], 2.2));
+    };
+    var u = {
+      uPaintLo: { value: toLin(p.lo) },
+      uPaintMid: { value: toLin(p.mid) },
+      uPaintHi: { value: toLin(p.hi) },
+      uPaintLowY: { value: 0 },
+      uPaintHighY: { value: 10 },
+      uPaintMix: { value: parseFloat(q.get('pmix') || '1') }
+    };
+    mm.userData.paintU = u;
+    mm.onBeforeCompile = function (sh) {
+      sh.uniforms.uPaintLo = u.uPaintLo;
+      sh.uniforms.uPaintMid = u.uPaintMid;
+      sh.uniforms.uPaintHi = u.uPaintHi;
+      sh.uniforms.uPaintLowY = u.uPaintLowY;
+      sh.uniforms.uPaintHighY = u.uPaintHighY;
+      sh.uniforms.uPaintMix = u.uPaintMix;
+      sh.vertexShader = 'varying vec3 vPaintW;\n' + sh.vertexShader.replace(
+        '#include <begin_vertex>',
+        '#include <begin_vertex>\n  vPaintW = (modelMatrix * vec4(transformed, 1.0)).xyz;'
+      );
+      sh.fragmentShader = 'varying vec3 vPaintW;\n' +
+        'uniform vec3 uPaintLo;\nuniform vec3 uPaintMid;\nuniform vec3 uPaintHi;\n' +
+        'uniform float uPaintLowY;\nuniform float uPaintHighY;\nuniform float uPaintMix;\n' +
+        sh.fragmentShader.replace(
+          '#include <map_fragment>',
+          '#include <map_fragment>\n  {\n' +
+          '    float ph = clamp((vPaintW.y - uPaintLowY) / max(uPaintHighY - uPaintLowY, 0.001), 0.0, 1.0);\n' +
+          '    vec3 pt = mix(uPaintLo, uPaintMid, smoothstep(0.18, 0.34, ph));\n' +
+          '    pt = mix(pt, uPaintHi, smoothstep(0.62, 0.88, ph));\n' +
+          '    /* 减面后的镂空内壁背光会掉到纯黑，抬一个地板色避免死黑 */\n' +
+          '    diffuseColor.rgb = max(diffuseColor.rgb, vec3(0.055));\n' +
+          '    diffuseColor.rgb *= mix(vec3(1.0), pt, uPaintMix);\n' +
+          '  }'
+        );
+    };
+    mm.needsUpdate = true;
+  }
+
+  function setPaintRange(obj, low, high) {
+    var h = Math.max(high - low, 0.5);
+    obj.traverse(function (o) {
+      if (!o.isMesh || !o.material) return;
+      var mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (var i = 0; i < mats.length; i++) {
+        var u = mats[i] && mats[i].userData && mats[i].userData.paintU;
+        if (u) { u.uPaintLowY.value = low; u.uPaintHighY.value = low + h; }
+      }
+    });
+  }
+
   function prepMaterials(obj, k) {
     obj.traverse(function (o) {
       if (!o.isMesh) return;
@@ -349,14 +486,19 @@
         mm.envMapIntensity = 0.85;
         /* Tripo 材质的金属度默认是 1，游戏里没有环境贴图时金属会全反射成黑；
            场景是石头/铁件，压到低金属度，靠漫反射出体积 */
-        mm.metalness = 0.08;
-        if (typeof mm.roughness === 'number') mm.roughness = Math.max(mm.roughness, 0.72);
+        /* 配色：?paint=0 可关掉，回到原白模 */
+        var pp = (q.get('paint') !== '0' && PAINT[k]) ? PAINT[k] : null;
+        mm.metalness = pp ? pp.metal : 0.08;
+        if (typeof mm.roughness === 'number') {
+          mm.roughness = pp ? pp.rough : Math.max(mm.roughness, 0.72);
+        }
+        paintMaterial(mm, pp);
         /* Tripo 的 albedo 整体偏暗（尤其副本的冷色石头），纯靠打光会糊成一团；
            用 albedo 做微弱自发光把暗部细节提出来，同时保留贴图层次 */
         if (mm.map) {
           mm.emissiveMap = mm.map;
-          mm.emissive = new THREE.Color(0xffffff);
-          mm.emissiveIntensity = (k === 'arena' ? 0.15 : 0.26);
+          mm.emissive = pp ? new THREE.Color(Math.pow(pp.acc[0], 2.2), Math.pow(pp.acc[1], 2.2), Math.pow(pp.acc[2], 2.2)) : new THREE.Color(0xffffff);
+          mm.emissiveIntensity = pp ? (pp.emi * 0.62) : (k === 'arena' ? 0.15 : 0.26);
           mm.userData._lift = true;
         }
         /* 单面材质从场内看会被背面剔除，场景一律双面 */
@@ -484,7 +626,9 @@
     c.width = c.height = 256;
     var g = c.getContext('2d');
     var dark = (CFG[k] && typeof CFG[k].groundDark === 'boolean') ? CFG[k].groundDark : (k === 'dungeon');
-    g.fillStyle = dark ? '#20262a' : '#6a7176';
+    var gc = (CFG[k] && typeof CFG[k].groundColor === 'number') ? CFG[k].groundColor : (dark ? 0x2a3338 : 0x7b858a);
+    var gcHex = '#' + ('000000' + gc.toString(16)).slice(-6);
+    g.fillStyle = gcHex;
     g.fillRect(0, 0, 256, 256);
     g.globalAlpha = 0.10;
     for (var i = 0; i < 70; i++) {
@@ -499,7 +643,7 @@
       new THREE.CircleGeometry(radius, 64),
       new THREE.MeshStandardMaterial({
         map: tex,
-        color: dark ? 0x2a3338 : 0x7b858a,
+        color: gc,
         roughness: 0.95,
         metalness: 0.05
       })
@@ -627,6 +771,8 @@
         }
       } catch (e) { log('deckTop probe failed', e && e.message); }
       prepMaterials(obj, sk);
+      /* 配色按资产真实高度归一化（竞技台是 -7.5~0，其它是 0~高度） */
+      setPaintRange(obj, box2.min.y, box2.max.y);
       var entry = { root: obj, fit: f, tris: trisOf(obj) };
       cache[sk] = entry;
       log('load ok', sk, 'tris', entry.tris, 'scale', f.scale.toFixed(2));
