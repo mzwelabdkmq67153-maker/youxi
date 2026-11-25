@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>场景 · 八视渲染</title>
+<style>
+  html,body{margin:0;background:#10161c;overflow:hidden}
+  #hud{position:fixed;left:12px;top:10px;color:#8fe7ff;font:13px/1.5 monospace;z-index:9}
+</style>
+</head>
+<body>
+<div id="hud">…</div>
+<script src="vendor/three.min.js"></script>
+<script src="vendor/GLTFLoader.js"></script>
+<script src="scene.js"></script>
+<script src="scene_glb.js"></script>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var kind = q.get('k') || 'city';
+  var cols = parseInt(q.get('cols') || '4', 10);
+  var cw = parseInt(q.get('cw') || '0', 10) || 960;
+  var chh = parseInt(q.get('ch') || '0', 10) || 720;
+  var gap = 6;
+  var label = q.get('label') !== '0';
+  var bg = q.get('bg') || '1a2129';
+  var fov = parseFloat(q.get('fov') || '38');
+
+  var renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(1);
+  renderer.setSize(cw, chh, false);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.02;
+  renderer.setClearColor(new THREE.Color('#' + bg), 1);
+  window.__renderer = renderer;
+  document.body.appendChild(renderer.domElement);
+
+  var scene = new THREE.Scene();
+  scene.background = new THREE.Color('#' + bg);
+  var camera = new THREE.PerspectiveCamera(fov, cw / chh, 0.1, 900);
+
+  scene.add(new THREE.HemisphereLight(0xbdd7ee, 0x222b33, 0.85));
+  var key = new THREE.DirectionalLight(0xfff3e2, 1.35);
+  key.position.set(60, 90, 40);
+  scene.add(key);
+  var fill = new THREE.DirectionalLight(0x6f9ad8, 0.45);
+  fill.position.set(-50, 30, -60);
+  scene.add(fill);
+  var rim = new THREE.DirectionalLight(0xffffff, 0.35);
+  rim.position.set(-20, 25, 80);
+  scene.add(rim);
+
+  var obstacles = [];
+  SceneGlb.build(kind, scene, obstacles);
+  if (SceneGlb.tuneLights) SceneGlb.tuneLights(scene);
+
+  var maxAniso = renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 4;
+  var mapKeys = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap'];
+  scene.traverse(function (o) {
+    if (!o.isMesh || !o.material) return;
+    var mats = Array.isArray(o.material) ? o.material : [o.material];
+    for (var i = 0; i < mats.length; i++) {
+      for (var k = 0; k < mapKeys.length; k++) {
+        var t = mats[i][mapKeys[k]];
+        if (!t) continue;
+        t.anisotropy = maxAniso;
+        t.generateMipmaps = true;
+        t.minFilter = THREE.LinearMipmapLinearFilter;
+        t.magFilter = THREE.LinearFilter;
+        t.needsUpdate = true;
+      }
+      mats[i].needsUpdate = true;
+    }
+  });
+
+  /* 只测量场景资产本体，不含灯光 */
+  function assetBox() {
+    var D = window.__sceneGlbDebug;
+    if (D && D.root) return new THREE.Box3().setFromObject(D.root);
+    var b = new THREE.Box3();
+    scene.traverse(function (o) { if (o.isMesh && o.geometry) b.expandByObject(o); });
+    return b;
+  }
+
+  var done = 0, lifted = false;
+  var lift = parseFloat(q.get('lift') || '0');
+  function shoot() {
+    var D = window.__sceneGlbDebug;
+    if (lift && D && D.root && !lifted) { D.root.position.y += lift; lifted = true; }
+    var box = assetBox();
+    if (!box || !isFinite(box.min.x)) { document.getElementById('hud').textContent = 'bbox fail'; return; }
+    var c = box.getCenter(new THREE.Vector3());
+    var size = box.getSize(new THREE.Vector3());
+    var span = Math.max(size.x, size.z, size.y);
+    var R = span * 1.34;
+    var camY = c.y + span * 0.72;
+    var look = new THREE.Vector3(c.x, c.y - size.y * 0.08, c.z);
+
+    var colsN = cols, rowsN = 2, n = 8;
+    var W = colsN * cw + (colsN - 1) * gap;
+    var H = rowsN * chh + (rowsN - 1) * gap;
+    var sheet = document.createElement('canvas');
+    sheet.width = W; sheet.height = H;
+    var g2 = sheet.getContext('2d');
+    g2.fillStyle = '#' + bg; g2.fillRect(0, 0, W, H);
+
+    renderer.render(scene, camera); /* warm */
+
+    for (var i = 0; i < n; i++) {
+      var az = i * 45;
+      var rad = az * Math.PI / 180;
+      camera.position.set(c.x + Math.sin(rad) * R, camY, c.z + Math.cos(rad) * R);
+      camera.lookAt(look);
+      camera.updateProjectionMatrix();
+      renderer.render(scene, camera);
+      var gx = (i % colsN) * (cw + gap);
+      var gy = Math.floor(i / colsN) * (chh + gap);
+      g2.drawImage(renderer.domElement, gx, gy, cw, chh);
+      if (label) {
+        g2.font = '600 22px monospace';
+        g2.fillStyle = 'rgba(150,225,255,0.95)';
+        g2.fillText('AZ ' + az + '\u00b0', gx + 16, gy + chh - 18);
+      }
+      done++;
+      document.getElementById('hud').textContent = kind + ' · ' + done + '/8';
+    }
+
+    var url = sheet.toDataURL('image/png');
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = (q.get('out') || kind) + '_8v_' + W + 'x' + H + '.png';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { a.remove(); }, 500);
+    document.getElementById('hud').textContent = kind + ' · done ' + W + 'x' + H;
+    document.title = 'EIGHT ' + kind + ' ' + W + 'x' + H + ' span=' + span.toFixed(1);
+  }
+
+  var iv = setInterval(function () {
+    var s = SceneGlb.stats();
+    if (!s.ready || !s.tris) return;
+    clearInterval(iv);
+    setTimeout(shoot, 1400);
+  }, 350);
+  setTimeout(function () {
+    document.getElementById('hud').textContent = 'loading ' + kind + ' …';
+  }, 300);
+})();
+</script>
+</body>
+</html>
