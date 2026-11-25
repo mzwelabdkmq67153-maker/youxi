@@ -33,7 +33,8 @@ if not errorlevel 1 (
 
 set /a FAILS=0
 :loop
-"%NODE%" server.js 8123
+rem --lan: listen on 0.0.0.0 so phones / other PCs on the same WiFi can connect.
+"%NODE%" server.js 8123 --lan
 set /a FAILS+=1
 if %FAILS% GEQ 20 (
   echo [server] too many failures, giving up.
