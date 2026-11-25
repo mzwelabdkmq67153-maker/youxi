@@ -1022,6 +1022,9 @@
     }
     collectPulses();
     addSky(k, group);
+    /* 道具层是在模型到之前按 y=0 摆好的；竞技场/主城这类圆台的台面实际抬在 5.7m，
+       不跟着抬的话断柱与掩体全埋在台基里，只剩几个方块从台面戳出来——看起来就像「两个图层」 */
+    alignPropsToDeck();
 
     glowLight = new THREE.PointLight(cfg.glow, cfg.glowI, cfg.glowD, 1.8);
     glowLight.position.set(0, (cfg.glowY || 1.4) + ((fit && typeof fit.deckTop === 'number') ? fit.deckTop : 0), 0);
@@ -1037,8 +1040,19 @@
     if (group.parent) group.parent.remove(group);
     group = null;
     root = null;
+    fit = null;
     glowLight = null;
     pulses.length = 0;
+  }
+
+  /* 道具层对齐台面：fit.deckTop 是量出来的台面高度（arena 约 5.7，副本类为 0） */
+  function alignPropsToDeck() {
+    if (!group) return;
+    var props = group.getObjectByName('stageProps');
+    if (!props) return;
+    var top = (fit && typeof fit.deckTop === 'number') ? fit.deckTop : 0;
+    props.position.y = top;
+    return top;
   }
 
   function fallback(k, scene, obstacles) {

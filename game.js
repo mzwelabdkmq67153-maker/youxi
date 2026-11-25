@@ -1065,7 +1065,7 @@ function updatePlayer(dt) {
       player.hp = player.maxHp;
       player.en = player.maxEn;
       player.invul = 1.2;
-      yawObj.position.set(rand(-8, 8), PLAYER_H, 16);
+      yawObj.position.set(rand(-8, 8), PLAYER_H + groundBase, 16);
       toast('重生', 900);
     }
     return;
@@ -2140,6 +2140,13 @@ function addFrost(e, n) {
 function buildEnemyMesh(type) {
   // 形象由 art.js（白露的资产模块）接管；下面保留旧几何体实现作为低配回退
   if (window.ArenaArt && ArenaArt.buildFighter) {
+    /* PVP 的假人是"对面那个玩家"，不该是一尊灰白石像——白色大理石台面上根本认不出。
+       直接借十职业的专属 hero 模型，挑一个和自己不同的职业避免撞影。 */
+    if (type === 'duelist' && ArenaArt.buildHero && window.Hero3D) {
+      const pick = state.cls === 'blade' ? 'frost' : 'blade';
+      const hm = ArenaArt.buildHero(pick);
+      if (hm) return hm;
+    }
     return ArenaArt.buildFighter(type);
   }
   const g = new THREE.Group();
@@ -2237,6 +2244,9 @@ function buildEnemyMesh(type) {
 
 function spawnEnemy(type, pos) {
   if (enemies.length > 26) return;
+  /* 敌人没有竖直维度：生成点若贴在 y=0，而当前场景台面抬在 5~6m（竞技场/主城圆台），
+     对手就会整个埋在台基里，和玩家差一层楼。统一落到玩家的地面基准上。 */
+  if (pos.y <= 0.01 && groundBase > 0.01) pos.y = groundBase;
   const T = TYPES[type];
   // GDD 14.1：血量 = (300 + 40L) × 类型倍率 × 人数比 × 世界难度 × 波次进度
   const waveMul = 1 + (state.wave - 1) * (isBossType(type) ? 0.1 : 0.16);
@@ -2268,7 +2278,8 @@ function spawnEnemy(type, pos) {
     summonT: 9,
     volleyT: 11,
     wind: 0,
-    baseScale: window.ArenaArt ? ArenaArt.scaleOf(type) : 1,
+    /* hero 模型自带身高归一（十职业 1.80–1.94m），比例尺就该是 1，别再套 duelist_stone 的 1.04 */
+    baseScale: window.ArenaArt ? (type === 'duelist' && window.Hero3D ? 1 : ArenaArt.scaleOf(type)) : 1,
     mesh: buildEnemyMesh(type)
   };
   // PVP 的对手按玩家当前血量与攻击折算，保证双方对等（GDD 6.4）
@@ -2320,6 +2331,9 @@ function updateEnemies(dt) {
   for (let i = enemies.length - 1; i >= 0; i--) {
     const e = enemies[i];
     if (e.dead) { enemies.splice(i, 1); continue; }
+
+    /* 台面高度是场景异步量出来的：生成早于量体的敌人在这里被抬到同一层 */
+    if (Math.abs(e.pos.y - groundBase) > 0.02) e.pos.y = groundBase;
 
     if (e.spawn > 0) {
       e.spawn -= dt;
@@ -3602,6 +3616,9 @@ function lockClass() {
 
 /* ---------------- 对局流程 ---------------- */
 function startGame() {
+  // 0) ?mode=pvp|pve|online 直接指定玩法（无头截图与回归脚本用）
+  const mq0 = /[?&]mode=(pvp|pve|online)/.exec(location.search);
+  if (mq0) state.mode = mq0[1];
   // 1) 等级先落定：调试参数与存档都在这里合并，世界门槛要用到最终等级
   if (/[?&]resetlv/.test(location.search)) {
     state.lv = 1;
@@ -3735,7 +3752,9 @@ function startGame() {
     ensureRemoteMesh();
     toast('对战开始', 1200);
   } else {
-    spawnEnemy('duelist', new THREE.Vector3(-10, 0, -16));
+    /* 出生点避开台心那道十字凹槽（槽底比台面低将近一米，站在槽里只会露出上半身），
+       取盘面上偏移一点的位置，对局开场玩家切进去就是正面遭遇 */
+    spawnEnemy('duelist', new THREE.Vector3(-3.2, 0, -5.2));
     toast('对决开始', 1200);
   }
 
@@ -4221,6 +4240,22 @@ function applyShake(dt) {
 
 function animate() {
   requestAnimationFrame(animate);
+  if (/[?&]ydbg=1/.test(location.search)) {
+    const impl = sceneImpl();
+    const f = impl && impl.info ? ((typeof impl.info === 'function') ? impl.info() : impl.info) : null;
+    const fit = f && f.fit;
+    const e0 = enemies.length ? enemies[0] : null;
+    document.title = 'px=' + yawObj.position.x.toFixed(1) + ' pz=' + yawObj.position.z.toFixed(1) +
+      ' py=' + yawObj.position.y.toFixed(2) + ' gb=' + groundBase.toFixed(2) +
+      ' deckTop=' + (fit && typeof fit.deckTop === 'number' ? fit.deckTop.toFixed(2) : '-') +
+      ' deckR=' + (fit && fit.deckRadius ? fit.deckRadius.toFixed(1) : '-') +
+      ' scene=' + (impl && impl.kind) +
+      ' | e=' + (e0 ? e0.type + ' y=' + e0.pos.y.toFixed(2) + ' my=' + e0.mesh.position.y.toFixed(2) +
+        ' sc=' + e0.mesh.scale.y.toFixed(2) + ' h=' + (function () {
+          const bb = new THREE.Box3().setFromObject(e0.mesh);
+          return (bb.max.y - bb.min.y).toFixed(2) + '/' + (bb.min.y - e0.pos.y).toFixed(2);
+        })() : 'none');
+  }
   const raw = Math.min(clock.getDelta(), 0.05);
   // 顿帧改为角色级时间膨胀：只压表现层，冷却与网络走 raw（规格第 6 节红线）
   if (hitStop > 0) hitStop = Math.max(0, hitStop - raw);
@@ -4670,7 +4705,9 @@ function updateRemote(dt) {
   while (dy < -Math.PI) dy += Math.PI * 2;
   remoteSmooth.yaw += dy * k;
 
-  grp.position.set(remoteSmooth.x, remoteSmooth.y, remoteSmooth.z);
+  /* 对端上报的是眼睛高度（player.y = 地面 + 1.68），模型原点在脚底，
+     直接拿来当 position.y 会让联机里的对手浮空一层楼，台面上尤其明显 */
+  grp.position.set(remoteSmooth.x, remoteSmooth.y - PLAYER_H, remoteSmooth.z);
   grp.rotation.y = remoteSmooth.yaw;
 
   // 动作表现：跑动上下摆、攻击前倾、跳跃抬升

@@ -378,6 +378,29 @@ node serve.js
 
 **预览光照**：角色页预览在原三光基础上加了正面弱补光、`toneMappingExposure` 提到 1.14（Tripo 把细节全烘进贴图，暗甲缺正面光会糊成一团）。
 
+## 台面高度统一（2026-11-25）
+
+现象：PVP 竞技场里"玩家和对手不在同一个图层"——玩家站在大理石台面上，对手整只埋在台基里，道具也只剩几个方块从台面戳出来。
+
+根因是一条高度基准没对齐：竞技场的台面是实测出来的（`scene_glb.js` 用射线探针量 `fit.deckTop`，arena 稳定在 **5.72m**，`deckRadius` 24.0），玩家出生点用 `PLAYER_H + groundBase` 站了上去，但下面三类对象全部还按 `y = 0` 摆：
+
+1. **敌人**。`spawnEnemy` 的 y 只由调用方传，PVP 传的是 `new THREE.Vector3(-10, 0, -16)`，PVE 的 `randomSpawnPos()` 也是贴地 0；`updateEnemy` 里只改 x/z，y 一旦定下就再不动。
+2. **场景道具层**。`addProps` 在模型加载前按 `y = 0` 摆断柱与掩体，`targetRadius` 缩放后它们全落在台基内部。
+3. **联机对手**。远端上报的是 `player.y`（眼睛高度 = 地面 + 1.68），而 hero 模型原点在脚底，直接当 `position.y` 用会浮空一层楼。
+
+三处修法：
+
+- `game.js`：`spawnEnemy` 开头把贴地生成点（`pos.y ≤ 0.01`）抬到 `groundBase`；`updateEnemy` 每帧吸附 `e.pos.y = groundBase`（台面是异步量出来的，先出生的敌人也能被纠正）；死亡重生 `y` 改 `PLAYER_H + groundBase`。
+- `scene_glb.js`：新增 `alignPropsToDeck()`，`attach()` 挂完天空后把 `stageProps` 整层抬到 `fit.deckTop`；`clearAll()` 补 `fit = null`，避免切场后残留旧机位的台面高度。
+- `game.js`（联机）：远端模型 `position.y = remoteSmooth.y - PLAYER_H`，把眼睛高度换成脚底。
+
+另外两处顺带改的观感问题：
+
+- **PVP 假人换成活人模型**。原来 `duelist` 走 `duelist_stone`，一尊灰白石像站在白色大理石上几乎认不出来；现在借十职业的 hero 模型（玩家选 blade 时对手用 frost，避免撞影），`baseScale` 归 1（hero 自带身高归一，不再叠 `duelist_stone` 的 1.04）。
+- **对手出生点从 `(-10,0,-16)` 移到 `(-3.2,0,-5.2)`**。原来 38 米外只有几十像素；同时避开台心那道十字凹槽（槽底比台面低近一米，站进去只露上半身）。
+
+验证口径：`?ydbg=1` 每帧写 `document.title`，PVP 读到 `py=7.40 gb=5.72 deckTop=5.72 | e=duelist y=5.72 my=5.72 sc=1.00 h=2.02/-0.07`（`h` 是包围盒高/脚底相对 `pos.y`），PVE 主城读到 `e=grunt y=5.72`，副本场景（`deckTop≈0`）仍为 0，两者不再分层。
+
 
 
 GLB 写实档已接入局内，与旧程序化写实档、水墨低模共用同一签名（`build/update/swing/cast`），`art.js / game.js` 不改，只切换 `window.Hero3D` 引用。
@@ -605,5 +628,7 @@ PVE 里获得经验、累积等级，**等级跨局保留**，写在 `localStora
 | `?hero=idle` | 十职业退回旧骨骼 Idle 资产（对比静态 hero 用） |
 | `?ui=title\|world\|char\|hub` | 入口直接落在某一段（无头截图用） |
 | `?pvdbg=1` | 把角色预览的取景参数（h / 机位 / canvas 尺寸 / 三角形数）写到 `document.title` |
+| `?mode=pvp\|pve\|online` | 越过菜单直接进某模式（无头截图复现 PVP / 联机用） |
+| `?ydbg=1` | 每帧把 `px/pz/py/gb/deckTop/deckR/scene` 与首个敌人的 `y/my/sc/包围盒高/脚底相对 y` 写到 `document.title`，用来查"分层" |
 
 **边界**：三、四、五段世界已有专属地貌件（见上一节），但仍是"同一份 GLB + 道具层"，不是独立建模的新地图；装备掉落的副本档位权重已接 `Rules.DUNGEONS.drop`，但团队/深渊仍需联机房间才可开；P1 的 18 个职业只有配置与排期，还没有各自的技能实现。
