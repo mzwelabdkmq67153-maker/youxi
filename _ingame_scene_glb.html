@@ -331,6 +331,27 @@ if (window.Glb3D) {
       });
     } catch (e) { document.title = 'DIAG-ERR ' + e.message; }
   }, 1500);
+
+  /* ?snap=1：离屏 1280x960 渲染并回传到本机接收器（后台标签也能出图） */
+  if (q.get('snap') === '1') {
+    setTimeout(function () {
+      try {
+        var D = window.__arenaDebug, r = window.__renderer;
+        if (!D || !r) { document.title = 'PUSHFAIL no-debug'; return; }
+        r.setSize(1280, 960, false);
+        var cam = D.camera();
+        cam.aspect = 1280 / 960;
+        cam.updateProjectionMatrix();
+        D.render();
+        var u = r.domElement.toDataURL('image/png');
+        fetch('http://127.0.0.1:8095/snap?name=' + encodeURIComponent(q.get('out') || 'ingame'),
+              { method: 'POST', body: u })
+          .then(function (x) { return x.text(); })
+          .then(function (t) { document.title = 'PUSH ' + t; })
+          .catch(function (e) { document.title = 'PUSHFAIL ' + e; });
+      } catch (e) { document.title = 'PUSHFAIL ' + e.message; }
+    }, 5200);
+  }
 })();
 </script>
 </body>

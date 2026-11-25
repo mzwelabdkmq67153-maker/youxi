@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>资产陈列 · GLB</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0d1116; overflow: hidden; }
+  #hud { position: fixed; left: 12px; top: 10px; color: #cfe3f5; font: 12px/1.6 ui-monospace, monospace; z-index: 6;
+         background: rgba(8,12,18,.72); padding: 8px 10px; border-radius: 8px; white-space: pre; display: none; }
+  .tag { position: fixed; transform: translate(-50%, -100%); color: #d8e6f5; font: 12px/1.5 "PingFang SC", "Microsoft YaHei", sans-serif;
+         background: rgba(8,12,18,.66); padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(120,160,200,.28);
+         pointer-events: none; white-space: nowrap; }
+  #title { position: fixed; left: 50%; top: 14px; transform: translateX(-50%); color: #9fb6cc;
+           font: 13px/1.4 "PingFang SC", "Microsoft YaHei", sans-serif; letter-spacing: .08em; }
+</style>
+</head>
+<body>
+<div id="title"></div>
+<div id="hud"></div>
+<script src="vendor/three.min.js"></script>
+<script src="vendor/GLTFLoader.js"></script>
+<script>
+(function () {
+  var Q = new URLSearchParams(location.search);
+  var BASE = 'art/模型/glb/';
+  // 资产表：文件 → [中文名, 类别, 真实最大尺寸(m)]
+  var A = {
+    // 怪物
+    grunt_stone: ['石皮杂兵', '怪', 2.05], shooter_stone: ['石皮射手', '怪', 1.70], elite_stone: ['石甲精英', '怪', 1.95],
+    golem_lava: ['石傀', '怪', 2.60], swarm_bug: ['蚀虫', '怪', 0.95], hexer_stone: ['咒术师', '怪', 1.85],
+    duelist_stone: ['决斗者', '怪', 2.00], boss_stone: ['守卫长', '怪', 3.00], oracle_hex: ['咒缚主祭', '怪', 2.60],
+    boss_king: ['守关首领', '怪', 3.20],
+    // 职业
+    boxer_hero: ['拳师', '职业', 1.90], blade_hero: ['刺客', '职业', 1.80], priest_hero: ['牧师', '职业', 1.86],
+    greatsword_hero: ['重剑士', '职业', 2.05], monk_hero: ['武僧', '职业', 1.95], sniper_hero: ['狙击手', '职业', 1.86],
+    frost_hero: ['冰霜法师', '职业', 1.88], night_hero: ['夜行者', '职业', 1.82], paladin_hero: ['圣骑士', '职业', 1.98],
+    dancer_hero: ['剑舞者', '职业', 1.86], wrestler_hero: ['摔跤手', '职业', 2.05], cannon_hero: ['机炮手', '职业', 1.92],
+    blood_hero: ['血术士', '职业', 1.90], poison_hero: ['毒术士', '职业', 1.88], seer_hero: ['先知', '职业', 1.90],
+    breaker_hero: ['破军', '职业', 2.02], iron_hero: ['铁卫', '职业', 2.08], grenade_hero: ['掷弹兵', '职业', 1.88],
+    arcane_hero: ['秘术师', '职业', 1.90], shadow_hero: ['影舞', '职业', 1.82], ascetic_hero: ['苦修者', '职业', 1.95],
+    // 装备
+    eq_weapon: ['武器 · 长剑', '装', 1.05], eq_helm: ['头盔', '装', 0.34], eq_shoulder: ['肩甲', '装', 0.40],
+    eq_chest: ['胸甲', '装', 0.62], eq_glove: ['护手', '装', 0.28], eq_belt: ['腰带', '装', 0.95],
+    eq_leg: ['护腿', '装', 0.60], eq_boot: ['战靴', '装', 0.36], eq_necklace: ['项链', '装', 0.30],
+    eq_ring: ['戒指', '装', 0.05], eq_offhand: ['副手', '装', 0.65], eq_ring2: ['第二戒指', '装', 0.055]
+  };
+  var items = (Q.get('items') || 'boxer_hero,blade_hero,priest_hero').split(',').filter(Boolean);
+  var gap = parseFloat(Q.get('gap') || '0.62');   // 间距 = 尺寸 × gap
+  var spin = Q.get('spin') !== '0';
+
+  var renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(1);
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
+  document.body.appendChild(renderer.domElement);
+
+  var scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0f161d);
+  var pm = new THREE.PMREMGenerator(renderer);
+  var envScene = new THREE.Scene();
+  envScene.add(new THREE.Mesh(new THREE.SphereGeometry(60, 16, 12),
+    new THREE.MeshBasicMaterial({ color: 0x2a3a4c, side: THREE.BackSide })));
+  var lamp = new THREE.Mesh(new THREE.SphereGeometry(6, 12, 8), new THREE.MeshBasicMaterial({ color: 0xbcd2ea }));
+  lamp.position.set(24, 30, 18);
+  envScene.add(lamp);
+  scene.environment = pm.fromScene(envScene, 0.06).texture;
+  scene.add(new THREE.HemisphereLight(0xa9c3dd, 0x2b323b, 0.9));
+  var key = new THREE.DirectionalLight(0xfff2e0, 1.3); key.position.set(6, 12, 8); scene.add(key);
+  var rim = new THREE.DirectionalLight(0x8fb6ff, 0.7); rim.position.set(-8, 6, -10); scene.add(rim);
+
+  var ground = new THREE.Mesh(new THREE.CircleGeometry(30, 48),
+    new THREE.MeshStandardMaterial({ color: 0x39434e, roughness: 0.93, metalness: 0.04 }));
+  ground.rotation.x = -Math.PI / 2;
+  scene.add(ground);
+
+  var camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.02, 400);
+  window.__renderer = renderer; window.__scene = scene; window.__camera = camera;
+  // 离屏快照：不依赖窗口是否在前台（后台标签/最小化也能出图）
+  window.__snap = function (w, h) {
+    w = w || 1280; h = h || 960;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h; camera.updateProjectionMatrix();
+    group.rotation.y = 0;
+    if (box && !box.isEmpty()) { refit(); }
+    renderer.render(scene, camera);
+    var url = renderer.domElement.toDataURL('image/png');
+    return url;
+  };
+  var loader = new THREE.GLTFLoader();
+  var group = new THREE.Group();
+  scene.add(group);
+
+  var tags = [];
+  var done = 0, failed = [];
+  var box = new THREE.Box3();
+
+  // 先把每个资产放到位，再统一框景
+  var slots = [];
+  var cursor = 0;
+  items.forEach(function (name) {
+    var meta = A[name] || [name, '?', 1.0];
+    slots.push({ name: name, label: meta[0], size: meta[2], x: 0 });
+  });
+  // 位置：按尺寸 + gap 递推
+  var totalW = 0;
+  slots.forEach(function (s, i) {
+    var w = s.size * 0.9;
+    if (i > 0) totalW += Math.max(0.25, w * gap);
+  });
+  var x = -totalW / 2;
+  slots.forEach(function (s, i) {
+    if (i > 0) x += Math.max(0.25, s.size * 0.9 * gap);
+    s.x = x;
+  });
+
+  slots.forEach(function (s) {
+    loader.load(BASE + s.name + '.glb', function (gltf) {
+      var root = gltf.scene;
+      root.position.set(s.x, 0, 0);
+      if (Q.get('rotx') === '1') {
+        root.rotation.x = Math.PI / 2;
+        root.updateMatrixWorld(true);
+        var bb0 = new THREE.Box3().setFromObject(root);
+        root.position.y = -bb0.min.y;
+      }
+      root.traverse(function (o) {
+        if (o.isMesh && o.material) {
+          var m = o.material;
+          m.metalness = Math.min(0.12, m.metalness === undefined ? 0.08 : m.metalness);
+          m.roughness = 0.9;
+          if (m.normalScale) m.normalScale.set(0.45, 0.45);
+          m.envMapIntensity = 0.3;
+          m.side = THREE.DoubleSide;
+        }
+      });
+      group.add(root);
+      s.root = root;
+      box.expandByObject(root);
+      var tag = document.createElement('div');
+      tag.className = 'tag';
+      tag.textContent = s.label + ' · ' + s.size.toFixed(2) + 'm';
+      document.body.appendChild(tag);
+      tags.push({ el: tag, s: s });
+      done++;
+      if (done === slots.length) finish();
+    }, undefined, function (e) {
+      failed.push(s.name);
+      done++;
+      if (done === slots.length) finish();
+    });
+  });
+
+  function refit() {
+    var c = box.getCenter(new THREE.Vector3());
+    var size = box.getSize(new THREE.Vector3());
+    var w = Math.max(size.x, 0.02), h = Math.max(size.y, 0.02);
+    var fov = camera.fov * Math.PI / 180;
+    var distH = (h * 0.5) / Math.tan(fov / 2) * 1.14;
+    var distW = (w * 0.5) / Math.tan(fov / 2) / camera.aspect * 1.16;
+    var dist = Math.max(distH, distW, 1.0) * parseFloat(Q.get('zoom') || '1');
+    camera.position.set(c.x, c.y + h * 0.08, c.z + dist);
+    camera.lookAt(c.x, c.y * 0.99, c.z);
+    camera.updateProjectionMatrix();
+  }
+
+  function finish() {
+    if (!box.isEmpty()) { refit(); }
+    document.getElementById('title').textContent = '资产陈列 · ' + slots.length + ' 件' + (failed.length ? '（失败 ' + failed.join(',') + '）' : '');
+    document.getElementById('hud').textContent = report();
+    document.title = 'DIAG ' + report();
+    // ?snap=1：把画面以指定尺寸渲到一张 img 上，供外部读取（避免 WebGL 后台截图发黑）
+    if (Q.get('snap') === '1') {
+      setTimeout(function () {
+        var u = window.__snap(parseInt(Q.get('w') || '1280', 10), parseInt(Q.get('h') || '960', 10));
+        fetch('http://127.0.0.1:8095/snap?name=' + encodeURIComponent(Q.get('out') || 'props'),
+              { method: 'POST', body: u })
+          .then(function (r) { return r.text(); })
+          .then(function (t) { document.title = 'PUSH ' + t; })
+          .catch(function (e) { document.title = 'PUSHFAIL ' + e; });
+      }, 700);
+    }
+  }
+
+  function report() {
+    var lines = [];
+    slots.forEach(function (s) {
+      if (!s.root) { lines.push(s.name + ' MISSING'); return; }
+      var b = new THREE.Box3().setFromObject(s.root);
+      var sz = b.getSize(new THREE.Vector3());
+      var tris = (function () {
+        var n = 0;
+        s.root.traverse(function (o) { if (o.isMesh && o.geometry) n += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; });
+        return Math.round(n);
+      })();
+      lines.push(s.name + ' tris=' + tris + ' h=' + sz.y.toFixed(2) + ' w=' + sz.x.toFixed(2) + ' d=' + sz.z.toFixed(2));
+    });
+    return lines.join('\n');
+  }
+
+  var v = new THREE.Vector3();
+  function frame(now) {
+    if (spin) group.rotation.y = Math.sin(now / 4200) * 0.22;
+    renderer.render(scene, camera);
+    tags.forEach(function (t) {
+      if (!t.s.root) { t.el.style.display = 'none'; return; }
+      var b = new THREE.Box3().setFromObject(t.s.root);
+      v.set(t.s.x, b.max.y + 0.02, 0).project(camera);
+      t.el.style.left = ((v.x * 0.5 + 0.5) * innerWidth) + 'px';
+      t.el.style.top = ((-v.y * 0.5 + 0.5) * innerHeight) + 'px';
+      t.el.style.display = (v.z < 1) ? 'block' : 'none';
+    });
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  addEventListener('resize', function () {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  });
+  // 键盘：1 正视 2 侧视 3 俯视
+  addEventListener('keydown', function (e) {
+    var c = box.getCenter(new THREE.Vector3());
+    var size = box.getSize(new THREE.Vector3());
+    var d = Math.max(size.x, size.y) * 1.6 + 1;
+    if (e.key === '1') { camera.position.set(c.x, c.y, c.z + d); camera.lookAt(c.x, c.y, c.z); }
+    if (e.key === '2') { camera.position.set(c.x + d, c.y, c.z); camera.lookAt(c.x, c.y, c.z); }
+    if (e.key === '3') { camera.position.set(c.x, c.y + d, c.z + 0.01); camera.lookAt(c.x, c.y, c.z); }
+  });
+})();
+</script>
+</body>
+</html>

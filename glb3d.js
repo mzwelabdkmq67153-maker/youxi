@@ -26,37 +26,39 @@
     swordsman: 'swordsman_idle', blade: 'swordsman_idle', grunt: 'grunt_stone', elite: 'elite_stone',
     /* 拳师：重装近战，暂借剑客模型；刺客借枪手（轻装细身），牧师借术士（长袍） */
     boxer: 'swordsman_idle', assassin: 'gunner_idle', priest: 'mage_idle',
-    gunner: 'gunner_idle', shooter: 'shooter_stone', duelist: 'gunner_idle',
+    gunner: 'gunner_idle', shooter: 'shooter_stone',
     warlock: 'mage_idle', mage: 'mage_idle', boss: 'boss_king',
     /* 地宫副本新增：重甲近战借刀客模型，法系借术士模型（体型差异全交给 game.js 根 scale） */
-    golem: 'golem_lava', swarm: 'swordsman_idle', warden: 'boss_stone',
-    hexer: 'hexer_stone', oracle: 'mage_idle',
+    golem: 'golem_lava', swarm: 'swarm_bug', warden: 'boss_stone',
+    hexer: 'hexer_stone', oracle: 'oracle_hex',
+    duelist: 'duelist_stone',
     /* P1 · S1：重剑士仍借剑客（体型靠根 scale 拉高），武僧借剑客轻装版 */
     greatsword: 'swordsman_idle', monk: 'swordsman_idle',
     /* P1 · S2：狙击手借枪手细长身，冰霜法师借术士长袍 */
     sniper: 'gunner_idle', frost: 'mage_idle'
   };
   /* 独立 Tripo 静态模型（无骨骼、无 clip）：保留自身的程序化动作 */
-  var STATIC_MODEL = { grunt_stone: 1, golem_lava: 1, boss_stone: 1, shooter_stone: 1, elite_stone: 1, hexer_stone: 1, boss_king: 1 };
+  var STATIC_MODEL = { grunt_stone: 1, golem_lava: 1, boss_stone: 1, shooter_stone: 1, elite_stone: 1, hexer_stone: 1, boss_king: 1, swarm_bug: 1, duelist_stone: 1, oracle_hex: 1, boxer_hero: 1, blade_hero: 1, priest_hero: 1 };
   /* GLB 自带名义身高（m） */
   var GLB_H = {
     swordsman_idle: 1.84, gunner_idle: 1.89, mage_idle: 1.96,
     grunt_stone: 2.05, golem_lava: 2.60, boss_stone: 3.00, shooter_stone: 1.70, elite_stone: 1.95,
-    hexer_stone: 1.85, boss_king: 3.20
+    hexer_stone: 1.85, boss_king: 3.20, swarm_bug: 0.95, duelist_stone: 2.00, oracle_hex: 2.60,
+    boxer_hero: 1.90, blade_hero: 1.80, priest_hero: 1.86
   };
   /* fit 只做「敌人基准 1.800m / GLB 名义身高」归一；类型差异（elite/boss 放大）全部交给
      game.js 根 scale，禁止把根 scale 再算进 FIT（否则重复放大）。玩家/远端 fit=1。 */
   var FIT = {
     grunt: 1.800 / 2.05,
     shooter: 1.800 / 1.70,
-    duelist: 1.800 / 1.89,
+    duelist: 1.800 / 2.00,
     elite: 1.800 / 1.95,
     boss: 1.800 / 3.20,
     golem: 1.800 / 2.60,
-    swarm: 1.800 / 1.84,
+    swarm: 1.800 / 0.95,
     hexer: 1.800 / 1.85,
     warden: 1.800 / 3.00,
-    oracle: 1.800 / 1.96
+    oracle: 1.400 / 2.60
   };
   var BASE_DIR = 'art/模型/glb/';
 
