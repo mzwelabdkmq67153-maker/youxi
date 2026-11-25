@@ -20,10 +20,16 @@
   var kind = q.get('k') || 'dungeon';
   var view = q.get('v') || 'in';
 
-  var W = window.innerWidth, H = window.innerHeight;
-  var renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(W, H);
-  renderer.setPixelRatio(1);
+  var q0 = q.get('w') || '', q1 = q.get('h') || '';
+  var W = parseInt(q0, 10) || window.innerWidth || 1280;
+  var H = parseInt(q1, 10) || window.innerHeight || 720;
+  var shot = q.get('shot') === '1';
+  var ss = parseFloat(q.get('ss') || '0');
+  var renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: shot });
+  renderer.setSize(W, H, !shot);
+  var pr = ss > 0 ? ss : Math.min(window.devicePixelRatio || 1, 2);
+  renderer.setPixelRatio(pr);
+  window.__ss = pr;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.9;
   window.__renderer = renderer;
@@ -33,8 +39,10 @@
   var camera = new THREE.PerspectiveCamera(55, W / H, 0.1, 600);
   if (view === 'out') {
     var disc = kind === 'arena';
-    camera.position.set(disc ? 6 : 10, disc ? 30 : 74, disc ? 44 : 96);
-    camera.lookAt(0, disc ? -3 : 8, 0);
+    camera.fov = 45;
+    camera.updateProjectionMatrix();
+    camera.position.set(disc ? 10 : 16, disc ? 34 : 40, disc ? 82 : 68);
+    camera.lookAt(0, disc ? -3 : 6, 0);
   } else {
     camera.position.set(0, 1.7, kind === 'arena' ? 8 : -10);
     camera.lookAt(0, 2.2, kind === 'arena' ? -10 : 12);
@@ -69,6 +77,27 @@
   var obstacles = [];
   SceneGlb.build(kind, scene, obstacles);
   SceneGlb.tuneLights(scene);
+
+  /* 纹理抗锯齿：各向异性过滤拉满 + 强制 mipmap，消掉斜面的贴图噪点与摩尔纹 */
+  var maxAniso = renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 4;
+  var mapKeys = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap'];
+  scene.traverse(function (o) {
+    if (!o.isMesh || !o.material) return;
+    var mats = Array.isArray(o.material) ? o.material : [o.material];
+    for (var mi = 0; mi < mats.length; mi++) {
+      var m = mats[mi];
+      for (var ki = 0; ki < mapKeys.length; ki++) {
+        var tex = m[mapKeys[ki]];
+        if (!tex) continue;
+        tex.anisotropy = maxAniso;
+        tex.generateMipmaps = true;
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.needsUpdate = true;
+      }
+      m.needsUpdate = true;
+    }
+  });
 
   if (q.get('test') === 'basic') {
     /* 诊断：把模型换成纯红 Basic，验证几何与变换是否到位 */
@@ -130,6 +159,26 @@
       ' kids=' + scene.children.length + ' progs=' + renderer.info.programs.length;
     document.title = hi + ' | ' + meshInfo.join(' | ');
   }, 2500);
+
+  if (shot) {
+    /* 高清出图：等模型 ready 后按 ss 倍像素渲染，直接下载 PNG */
+    var iv = setInterval(function () {
+      var s = SceneGlb.stats();
+      if (!s.ready || !s.tris) return;
+      clearInterval(iv);
+      setTimeout(function () {
+        var i;
+        for (i = 0; i < 3; i++) renderer.render(scene, camera);
+        var url = renderer.domElement.toDataURL('image/png');
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = (q.get('name') || kind + '_' + view) + '_' + renderer.domElement.width + 'x' + renderer.domElement.height + '.png';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function () { a.remove(); }, 500);
+      }, 900);
+    }, 300);
+  }
 })();
 </script>
 </body>

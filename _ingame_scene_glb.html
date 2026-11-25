@@ -340,9 +340,10 @@ if (window.Glb3D) {
       try {
         var D = window.__arenaDebug, r = window.__renderer;
         if (!D || !r) { document.title = 'PUSHFAIL no-debug'; return; }
-        r.setSize(1280, 960, false);
+        var SW = parseInt(q.get('w') || '0', 10) || 1280, SH = parseInt(q.get('h') || '0', 10) || 960;
+        r.setSize(SW, SH, false);
         var cam = D.camera();
-        cam.aspect = 1280 / 960;
+        cam.aspect = SW / SH;
         cam.updateProjectionMatrix();
         /* ?cam=out：拉一个总览机位，绕过玩家第一人称（圆台世界出生点贴地时用它出界面图）
            ?cam=mid：稍低的四分之三俯视，适合看清台面与专属道具层 */
@@ -359,6 +360,15 @@ if (window.Glb3D) {
         }
         D.render();
         var u = r.domElement.toDataURL('image/png');
+        if (q.get('dl') === '1') {
+          var a = document.createElement('a');
+          a.href = u;
+          a.download = (q.get('out') || 'ingame') + '_' + r.domElement.width + 'x' + r.domElement.height + '.png';
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(function () { a.remove(); }, 500);
+          document.title = 'DL ' + r.domElement.width + 'x' + r.domElement.height;
+        }
         fetch('http://127.0.0.1:8095/snap?name=' + encodeURIComponent(q.get('out') || 'ingame'),
               { method: 'POST', body: u })
           .then(function (x) { return x.text(); })
