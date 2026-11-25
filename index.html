@@ -73,27 +73,26 @@
 </div>
 
 <div id="overlay">
-  <div class="panel" id="menuPanel">
-    <h1>第七世界</h1>
-    <p class="sub">THE SEVENTH WORLD · 第一人称 PVP / PVE 原型（GDD v1.0 底层）</p>
-
-    <div class="row">
-      <label>模式</label>
-      <div class="toggle" id="modeToggle">
-        <button data-mode="pve" class="on">PVE 副本</button>
-        <button data-mode="pvp">PVP 对决</button>
-        <button data-mode="online">局域网对战</button>
-      </div>
+  <!-- ① 开始页：只留标题与一个入口，其余全部后置 -->
+  <div class="panel stage title" id="titlePanel">
+    <div class="title-mark">
+      <h1>第七世界</h1>
+      <p class="sub">THE SEVENTH WORLD</p>
     </div>
-
-    <div class="row hidden" id="onlineRow">
-      <label>房间</label>
-      <div class="fields">
-        <input id="roomInput" maxlength="6" placeholder="房间号，如 A1B2" autocomplete="off" spellcheck="false" />
-        <input id="nameInput" maxlength="10" placeholder="你的昵称" autocomplete="off" spellcheck="false" />
-      </div>
+    <button id="enterBtn" class="primary big">进入游戏</button>
+    <div class="title-meta">
+      <span id="titleLv">Lv 1</span>
+      <span id="titleChar">未创建角色</span>
+      <span id="titleArch">职业 10/24</span>
     </div>
+    <p class="tiny">WASD 移动 · 鼠标转向 · 左键攻击 · Q / E / R 技能 · Esc 暂停</p>
+  </div>
 
+  <!-- ② 世界：进入游戏先落世界，副本/PVP 都留到世界内部再选 -->
+  <div class="panel stage hidden" id="worldPanel">
+    <p class="stage-tag">第一步 · 世界</p>
+    <h2>选择要进入的世界</h2>
+    <p class="sub">世界决定场景、难度与掉落；副本与对战都在世界内部发起</p>
     <div class="row" id="worldRow">
       <label>世界</label>
       <div class="toggle six" id="worldToggle">
@@ -106,18 +105,15 @@
       </div>
     </div>
     <p class="world-desc" id="worldDesc">石村回廊 · 教学任务与第一个普通副本</p>
+    <button id="worldNext" class="primary">进入<b id="worldNextName">新手村</b></button>
+    <button id="worldBack" class="ghost small">返回开始页</button>
+  </div>
 
-    <div class="row" id="dungeonRow">
-      <label>副本</label>
-      <div class="toggle" id="dungeonToggle">
-        <button data-dungeon="normal" class="on">普通<small>5 人</small></button>
-        <button data-dungeon="elite">精英<small>5 人</small></button>
-        <button data-dungeon="raid">团队<small>25 人</small></button>
-        <button data-dungeon="abyss">深渊<small>5 人</small></button>
-      </div>
-    </div>
-    <p class="world-desc" id="dungeonDesc">普通副本 · 5 人 · 每日 1 次 · 5–8 分钟 · 日常练手与经验</p>
-
+  <!-- ③ 角色：一经确认不可更换 -->
+  <div class="panel stage hidden" id="charPanel">
+    <p class="stage-tag">第二步 · 角色（一经确认，不可更换）</p>
+    <h2>选择你的角色</h2>
+    <p class="sub">职业决定武器、资源与 Q/E/R，进入世界后不再提供更换</p>
     <div class="row">
       <label>职业</label>
       <div class="toggle six" id="classToggle">
@@ -134,7 +130,6 @@
       </div>
     </div>
     <p class="world-desc" id="classDesc">剑客 · 剑士系 · 中距离持续输出 · 法力</p>
-
     <div class="row" id="skillRow">
       <label>技能</label>
       <div class="skills-panel" id="skillPanel"></div>
@@ -147,13 +142,51 @@
       <span id="menuGold">金币 0</span>
       <span id="menuSp">技能点 2 / 2</span>
       <span id="menuBadge">徽记 0/3</span>
-      <span id="menuArch">职业 6/24</span>
+      <span id="menuArch">职业 10/24</span>
     </div>
+    <button id="charNext" class="primary">确认角色 · 进入世界</button>
+    <p class="tiny">确认后本存档的角色固定，想换只能清档重开</p>
+  </div>
 
-    <p class="hint">WASD 移动 · Shift 疾跑 · 空格跳跃 · 鼠标转向 · 左键攻击 · Q / E / R 技能 · Esc 暂停</p>
+  <!-- ④ 世界内部：副本 / PVP / 局域网都在这里发起 -->
+  <div class="panel stage hub hidden" id="hubPanel">
+    <p class="stage-tag">世界内部</p>
+    <div class="hub-head">
+      <h2 id="hubWorld">新手村</h2>
+      <span class="hub-char" id="hubChar">剑客 · Lv 1</span>
+    </div>
+    <div class="row">
+      <label>玩法</label>
+      <div class="toggle" id="modeToggle">
+        <button data-mode="pve" class="on">副本</button>
+        <button data-mode="pvp">PVP 对决</button>
+        <button data-mode="online">局域网对战</button>
+      </div>
+    </div>
+    <div class="row hidden" id="onlineRow">
+      <label>房间</label>
+      <div class="fields">
+        <input id="roomInput" maxlength="6" placeholder="房间号，如 A1B2" autocomplete="off" spellcheck="false" />
+        <input id="nameInput" maxlength="10" placeholder="你的昵称" autocomplete="off" spellcheck="false" />
+      </div>
+    </div>
+    <div class="row" id="dungeonRow">
+      <label>副本</label>
+      <div class="toggle" id="dungeonToggle">
+        <button data-dungeon="normal" class="on">普通<small>5 人</small></button>
+        <button data-dungeon="elite">精英<small>5 人</small></button>
+        <button data-dungeon="raid">团队<small>25 人</small></button>
+        <button data-dungeon="abyss">深渊<small>5 人</small></button>
+      </div>
+    </div>
+    <p class="world-desc" id="dungeonDesc">普通副本 · 5 人 · 每日 1 次 · 5–8 分钟 · 日常练手与经验</p>
     <div class="menu-lv">玩家等级 <b id="menuLv">Lv 1</b><span id="menuXp">0 / 100</span></div>
-    <button id="startBtn" class="primary">进入竞技场</button>
-    <p class="tiny">建议使用 Chrome / Edge，进入后鼠标会被锁定，按 Esc 退出</p>
+    <button id="startBtn" class="primary">进入</button>
+    <div class="hub-foot">
+      <button id="hubSwitchWorld" class="ghost small">更换世界</button>
+      <button id="hubTitle" class="ghost small">回到开始页</button>
+    </div>
+    <p class="tiny">进入后鼠标会被锁定，按 Esc 打开暂停并回到世界内部</p>
   </div>
 
   <div class="panel hidden" id="onlinePanel">
@@ -168,7 +201,7 @@
     <h2>已暂停</h2>
     <p class="sub">鼠标已释放</p>
     <button id="resumeBtn" class="primary">继续战斗</button>
-    <button id="quitBtn" class="ghost">返回主菜单</button>
+    <button id="quitBtn" class="ghost">返回世界</button>
   </div>
 
   <div class="panel hidden" id="resultPanel">
@@ -176,7 +209,7 @@
     <p class="sub" id="resultSub"></p>
     <div id="resultStats"></div>
     <button id="againBtn" class="primary">再来一局</button>
-    <button id="backBtn" class="ghost">返回主菜单</button>
+    <button id="backBtn" class="ghost">返回世界</button>
   </div>
 </div>
 

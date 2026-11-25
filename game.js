@@ -104,9 +104,16 @@ let dungeonToggleEl, dungeonDescEl, dungeonRowEl;
 let menuGoldEl, menuSpEl, menuBadgeEl, menuArchEl;
 // HUD 顶部战斗读数 + 菜单里的技能面板与职业说明
 let statChipsEl, skillPanelEl, respecBtnEl, classDescEl;
+// 三段式入口：开始页 / 世界 / 角色 / 世界内部
+let titlePanelEl, worldPanelEl, charPanelEl, hubPanelEl;
+let titleLvEl, titleCharEl, titleArchEl, worldNextNameEl, hubWorldEl, hubCharEl;
 
 const state = {
   mode: 'pve', cls: 'blade', phase: 'menu',
+  // 入口阶段：title 开始页 → world 选世界 → char 选角色 → hub 世界内部
+  stage: 'title',
+  // 角色一经确认即锁定：存档里带 clsLocked，之后不再出现角色选择
+  clsLocked: false,
   time: 0, elapsed: 0,
   wave: 1, kills: 0, scoreP: 0, scoreE: 0,
   spawnQueue: [], spawnTimer: 0, waveRest: null,
@@ -166,7 +173,17 @@ function init() {
   canvas = document.getElementById('gl');
   hudEl = document.getElementById('hud');
   overlayEl = document.getElementById('overlay');
-  menuPanel = document.getElementById('menuPanel');
+  menuPanel = document.getElementById('hubPanel');
+  titlePanelEl = document.getElementById('titlePanel');
+  worldPanelEl = document.getElementById('worldPanel');
+  charPanelEl = document.getElementById('charPanel');
+  hubPanelEl = document.getElementById('hubPanel');
+  titleLvEl = document.getElementById('titleLv');
+  titleCharEl = document.getElementById('titleChar');
+  titleArchEl = document.getElementById('titleArch');
+  worldNextNameEl = document.getElementById('worldNextName');
+  hubWorldEl = document.getElementById('hubWorld');
+  hubCharEl = document.getElementById('hubChar');
   pausePanel = document.getElementById('pausePanel');
   resultPanel = document.getElementById('resultPanel');
   resultTitleEl = document.getElementById('resultTitle');
@@ -244,6 +261,12 @@ function init() {
   refreshBattleChip();
   bindUI();
   bindInput();
+  // 启动一律落在开始页：已建角色的存档会在开始页直接显示角色，并跳过角色选择
+  // 调试：?ui=world|char|hub 直接落在指定一段，无头截图与回归用
+  const uq = /[?&]ui=(world|char|hub)/.exec(location.search);
+  if (uq && uq[1] === 'hub') goHub();
+  else if (uq) showStage(uq[1]);
+  else showStage('title');
 
   window.addEventListener('resize', onResize);
   animate();
@@ -671,6 +694,12 @@ function loadProgress() {
     if (typeof p.gold === 'number' && isFinite(p.gold)) state.gold = Math.max(0, Math.floor(p.gold));
     if (typeof p.badges === 'number' && isFinite(p.badges)) state.badges = clamp(Math.floor(p.badges), 0, 3);
     if (typeof p.dungeon === 'string' && Rules.dungeonFor(p.dungeon).key === p.dungeon) state.dungeon = p.dungeon;
+    // 已锁定的角色读回：这是"不可更换"的唯一来源
+    if (p.clsLocked === true && typeof p.cls === 'string' && CLASSES[p.cls]) {
+      state.cls = p.cls;
+      state.clsLocked = true;
+      state.clsName = CLASSES[p.cls].name;
+    }
     state.skillLv = [1, 1, 1];
     if (Array.isArray(p.skillLv)) {
       for (let i = 0; i < 3; i++) {
@@ -692,7 +721,8 @@ function saveProgress() {
   try {
     localStorage.setItem(PROGRESS_KEY, JSON.stringify({
       lv: state.lv, xp: state.xp, world: state.world,
-      gold: state.gold, badges: state.badges, dungeon: state.dungeon, skillLv: state.skillLv
+      gold: state.gold, badges: state.badges, dungeon: state.dungeon, skillLv: state.skillLv,
+      cls: state.cls, clsLocked: state.clsLocked
     }));
   } catch (err) { /* 忽略配额与隐私模式错误 */ }
   refreshMenuLevel();
@@ -758,6 +788,9 @@ function refreshWorldUI() {
     worldDescEl.textContent = d + ' · 难度 ×' + W.hpMul.toFixed(2) + ' · 装等 +' + W.ilvlBonus;
   }
   if (worldRowEl) worldRowEl.classList.toggle('disabled', state.mode !== 'pve');
+  // 世界页的主按钮与 hub 头部跟着当前世界走
+  if (worldNextNameEl) worldNextNameEl.textContent = worldFor(state.world).name;
+  if (hubWorldEl) hubWorldEl.textContent = worldFor(state.world).name;
 }
 
 function refreshDungeonUI() {
@@ -977,8 +1010,22 @@ function resetPlayer() {
   // 竞技场（PVP）：出生点从台面十字光槽移到斜角空地上并朝向台心（能看到十字与台面全貌）；
   // 对手点取镜像位置，保证双方到台心距离与视野对称
   const pvp = state.mode !== 'pve';
-  const spawnX = pvp ? 10 : 0;
-  const spawnZ = pvp ? 16 : 14;
+  // 圆台世界（主城 / 神之巅 / 野外 / 断崖）：台面半径只有 24m 左右，固定 z=14 会掉到台外，
+  // 相机贴地仰视水槽。这里按场景实际 deckRadius 收出生点，保证站在台面内、朝向台心。
+  let spawnX = pvp ? 10 : 0;
+  let spawnZ = pvp ? 16 : 14;
+  // 场景实现把元信息暴露成 getter（对象），程序化场景是方法：两种都要吃得下
+  const sg = sceneImpl();
+  let sfit = null;
+  try {
+    const inf = sg ? ((typeof sg.info === 'function') ? sg.info() : sg.info) : null;
+    sfit = inf ? inf.fit : null;
+  } catch (e) { sfit = null; }
+  if (!pvp && sfit && sfit.deckRadius) {
+    const r = sfit.deckRadius;
+    spawnX = 0;
+    spawnZ = Math.min(14, Math.max(3.0, r * 0.55));
+  }
   yawObj.position.set(spawnX, PLAYER_H, spawnZ);
   yawObj.rotation.y = pvp ? Math.atan2(spawnX, spawnZ) : 0;
   pitchObj.rotation.x = 0;
@@ -3305,6 +3352,71 @@ function updateSkills(dt, cdDt) {
   }
 }
 
+/* ---------------- 入口三段 ----------------
+   开始页只留标题与一个入口 → 选世界 → 选角色（一经确认锁定）→ 世界内部
+   hub。副本档位、PVP、局域网全部下沉到 hub，进入战斗后不再出现职业更换。 */
+function showStage(name) {
+  state.stage = name;
+  const map = { title: titlePanelEl, world: worldPanelEl, char: charPanelEl, hub: hubPanelEl };
+  ['title', 'world', 'char', 'hub'].forEach(function (k) {
+    const el = map[k];
+    if (el) el.classList.toggle('hidden', k !== name);
+  });
+  pausePanel.classList.add('hidden');
+  resultPanel.classList.add('hidden');
+  overlayEl.classList.remove('hidden');
+  // hub 靠着世界缩略做背景，其它阶段压暗场景
+  overlayEl.classList.toggle('hub', name === 'hub');
+  hudEl.classList.add('hidden');
+  state.phase = 'menu';
+  syncSkillPoints();
+  refreshEntryHeads();
+  if (name === 'char') { refreshClassPreview(); refreshSkillPanel(); refreshProgressChips(); }
+  if (name === 'hub') { refreshDungeonUI(); refreshBattleChip(); refreshProgressChips(); }
+}
+
+// 三段页面的标题读数：等级 / 角色绑定状态 / 职业开放进度
+function refreshEntryHeads() {
+  const C = CLASSES[state.cls];
+  if (titleLvEl) titleLvEl.textContent = 'Lv ' + state.lv;
+  if (titleCharEl) titleCharEl.textContent = state.clsLocked ? (C.name + ' · 已绑定') : '未创建角色';
+  if (titleArchEl) titleArchEl.textContent = '职业 ' + Rules.classMenu().length + '/24';
+  if (worldNextNameEl) worldNextNameEl.textContent = worldFor(state.world).name;
+  if (hubWorldEl) hubWorldEl.textContent = worldFor(state.world).name;
+  if (hubCharEl) hubCharEl.textContent = C.name + ' · Lv ' + state.lv + ' · ' + worldFor(state.world).name;
+}
+
+function goTitle() { showStage('title'); }
+
+function goWorld() {
+  showStage('world');
+  syncScene();
+}
+
+function goChar() { showStage('char'); }
+
+function goHub() {
+  showStage('hub');
+  syncScene();
+  refreshStartLabel();
+}
+
+// 世界内部的主按钮跟着玩法走：副本 / PVP / 局域网
+function refreshStartLabel() {
+  const el = document.getElementById('startBtn');
+  if (!el) return;
+  if (state.mode === 'pvp') el.textContent = '进入 PVP 对决';
+  else if (state.mode === 'online') el.textContent = '连接并进入房间';
+  else el.textContent = '进入' + Rules.dungeonFor(state.dungeon).name + '副本';
+}
+
+// 角色确认：写进存档，此后不再开放更换
+function lockClass() {
+  state.clsLocked = true;
+  state.clsName = CLASSES[state.cls].name;
+  saveProgress();
+}
+
 /* ---------------- 对局流程 ---------------- */
 function startGame() {
   // 1) 等级先落定：调试参数与存档都在这里合并，世界门槛要用到最终等级
@@ -3538,14 +3650,12 @@ function resumeGame() {
 }
 
 function backToMenu() {
-  state.phase = 'menu';
+  // 结算 / 暂停的"返回世界"落到世界内部，而不是整屏的主菜单
   resetWorld();
   hudEl.classList.add('hidden');
-  overlayEl.classList.remove('hidden');
-  pausePanel.classList.add('hidden');
-  resultPanel.classList.add('hidden');
-  menuPanel.classList.remove('hidden');
   if (document.exitPointerLock) document.exitPointerLock();
+  goHub();
+  refreshWorldUI();
 }
 
 function requestLock() {
@@ -3653,6 +3763,10 @@ function bindUI() {
       }
       // 世界只对 PVE 有效：切到 PVP / 联机时整行变灰
       refreshWorldUI();
+      // 秘境档位同样只在 PVE 下可选
+      refreshDungeonUI();
+      refreshEntryHeads();
+      refreshStartLabel();
     });
   });
 
@@ -3693,6 +3807,7 @@ function bindUI() {
       saveProgress();
       refreshDungeonUI();
       refreshBattleChip();
+      refreshStartLabel();
     });
   });
 
@@ -3735,18 +3850,19 @@ function bindUI() {
       if (n) n.close();
       removeRemoteMesh();
       document.getElementById('onlinePanel').classList.add('hidden');
-      menuPanel.classList.remove('hidden');
-      state.phase = 'menu';
-      if (state.mode === 'online') state.mode = 'pve';
+      state.mode = 'pve';
       modeBtns.forEach(x => x.classList.toggle('on', x.dataset.mode === 'pve'));
       const row = document.getElementById('onlineRow');
       if (row) row.classList.add('hidden');
+      showStage('hub');
     });
   }
 
   const clsBtns = document.querySelectorAll('#classToggle button');
   clsBtns.forEach((b) => {
     b.addEventListener('click', () => {
+      // 角色已锁定：任何点击都只提示，不换职业
+      if (state.clsLocked) { toast('角色已绑定 · 不可更换', 1200); return; }
       clsBtns.forEach(x => x.classList.remove('on'));
       b.classList.add('on');
       state.cls = b.dataset.cls;
@@ -3757,6 +3873,34 @@ function bindUI() {
       refreshClassPreview();
     });
   });
+
+  // ① 开始页 → 世界
+  const enterBtn = document.getElementById('enterBtn');
+  if (enterBtn) enterBtn.addEventListener('click', () => { initAudio(); goWorld(); });
+  // ② 世界 → 角色（已锁定则直接进世界内部）
+  const worldNext = document.getElementById('worldNext');
+  if (worldNext) {
+    worldNext.addEventListener('click', () => {
+      if (state.clsLocked) goHub();
+      else goChar();
+    });
+  }
+  const worldBack = document.getElementById('worldBack');
+  if (worldBack) worldBack.addEventListener('click', goTitle);
+  // ③ 角色确认：写入存档并锁定
+  const charNext = document.getElementById('charNext');
+  if (charNext) {
+    charNext.addEventListener('click', () => {
+      lockClass();
+      toast('角色已绑定 · ' + CLASSES[state.cls].name, 1400);
+      goHub();
+    });
+  }
+  // ④ 世界内部：换世界 / 回开始页
+  const hubSwitchWorld = document.getElementById('hubSwitchWorld');
+  if (hubSwitchWorld) hubSwitchWorld.addEventListener('click', goWorld);
+  const hubTitle = document.getElementById('hubTitle');
+  if (hubTitle) hubTitle.addEventListener('click', goTitle);
 
   document.getElementById('startBtn').addEventListener('click', () => {
     initAudio();
@@ -3920,6 +4064,9 @@ function animate() {
       updateOnlineTimers(raw);
       netPump();
     }
+  } else if (state.phase === 'menu' && (state.stage === 'world' || state.stage === 'hub')) {
+    // 世界页 / 世界内部：让镜头在世界里慢转，背景是活的而不是一张定格图
+    yawObj.rotation.y += raw * 0.05;
   }
 
   updateEffects(dt);

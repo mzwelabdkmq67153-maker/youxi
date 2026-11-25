@@ -640,6 +640,78 @@ button.ghost:hover { color: #cfe8f7; border-color: rgba(110, 227, 255, 0.4); }
 #bagPanel .bi-cmp.down { color: #8b9aa8; }
 #bagPanel .bi-stats { margin-top: 3px; color: #93b3c6; font-size: 10.8px; }
 
+/* 三段式入口：开始页 / 世界 / 角色 / 世界内部 ---- */
+.panel.stage {
+  max-width: 560px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(110, 227, 255, 0.28) transparent;
+}
+/* 角色页内容最长：按钮与信息行收紧一档，尽量一屏放下 */
+#charPanel .row { margin-top: 12px; }
+#charPanel .skills-panel { gap: 5px; }
+#charPanel .menu-chips { margin-top: 12px; }
+.panel.stage.title {
+  max-width: 460px;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  padding: 0;
+  animation: stageIn 0.5s ease both;
+}
+.title-mark h1 { font-size: 52px; letter-spacing: 14px; }
+.title-mark .sub { margin-top: 12px; letter-spacing: 6px; font-size: 10.5px; color: #7d95ac; }
+.title-meta {
+  display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+  margin-top: 20px; font-size: 11px; color: #8ea5bd;
+}
+.title-meta span {
+  padding: 5px 12px;
+  border: 1px solid rgba(110, 227, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(10, 18, 30, 0.6);
+}
+button.primary.big {
+  width: 100%;
+  margin-top: 34px;
+  padding: 16px;
+  font-size: 16px;
+  letter-spacing: 8px;
+}
+.stage-tag {
+  font-size: 10.5px;
+  letter-spacing: 3px;
+  color: #d9b169;
+}
+.panel.stage h2 { margin-top: 10px; }
+.hub-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  margin-top: 6px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(110, 227, 255, 0.10);
+}
+.hub-head h2 { text-align: left; letter-spacing: 2px; }
+.hub-char { font-size: 11.5px; letter-spacing: 1px; color: #9fe6ff; white-space: nowrap; }
+.hub-foot { display: flex; gap: 8px; justify-content: center; margin-top: 14px; }
+.panel.stage .tiny { margin-top: 14px; }
+@keyframes stageIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+/* 世界内部：面板靠右，左侧留出世界景观，副本与对战在这里发起 */
+#overlay.hub {
+  background: linear-gradient(90deg, rgba(4, 7, 13, 0.10) 0%, rgba(4, 7, 13, 0.45) 48%, rgba(4, 7, 13, 0.80) 100%);
+  backdrop-filter: none;
+  justify-content: flex-end;
+  padding: 24px 36px;
+}
+#overlay.hub .panel { max-width: 430px; animation: stageIn 0.28s ease both; }
+@media (max-width: 720px) {
+  #overlay.hub { justify-content: center; padding: 16px; background: rgba(4, 7, 13, 0.62); }
+  #overlay.hub .panel { max-width: 100%; }
+}
+
 @media (max-width: 620px) {
   .panel { padding: 26px 20px; }
   .panel h1 { font-size: 26px; letter-spacing: 5px; }
