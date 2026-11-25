@@ -17,11 +17,12 @@
 <script>
 (function () {
   var q = new URLSearchParams(location.search);
-  var kind = q.get('k') === 'arena' ? 'arena' : 'dungeon';
+  var kind = q.get('k') || 'dungeon';
   var view = q.get('v') || 'in';
 
+  var W = window.innerWidth, H = window.innerHeight;
   var renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(1280, 720);
+  renderer.setSize(W, H);
   renderer.setPixelRatio(1);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.9;
@@ -29,10 +30,11 @@
   document.body.appendChild(renderer.domElement);
 
   var scene = new THREE.Scene();
-  var camera = new THREE.PerspectiveCamera(55, 1280 / 720, 0.1, 400);
+  var camera = new THREE.PerspectiveCamera(55, W / H, 0.1, 600);
   if (view === 'out') {
-    camera.position.set(0, kind === 'arena' ? 46 : 60, kind === 'arena' ? 62 : 52);
-    camera.lookAt(0, kind === 'arena' ? 2 : 8, 0);
+    var disc = kind === 'arena';
+    camera.position.set(disc ? 6 : 10, disc ? 30 : 74, disc ? 44 : 96);
+    camera.lookAt(0, disc ? -3 : 8, 0);
   } else {
     camera.position.set(0, 1.7, kind === 'arena' ? 8 : -10);
     camera.lookAt(0, 2.2, kind === 'arena' ? -10 : 12);

@@ -213,6 +213,32 @@
     }
   };
 
+  /* ---------- Tripo 版场景档（?set=tripo） ----------
+     七份由 Tripo 重建、Blender 减面的 LOD（tripo_*_lod.glb，15–24 万面）。
+     尺寸按 Blender 量体结果定标：Tripo 输出最大边归一化到 1，圆台直径 0.979、
+     宫体 0.965×0.985、台面顶 0.153 / 地面 0.004（模型单位）。
+     缺省档（无参数）仍是原来的双资产 + 换气质做法。 */
+  if (q.get('set') === 'tripo') {
+    var TRIPO_SET = {
+      arena: { f: 'tripo_arena_lod.glb', autoFit: 48, autoGround: 'top' },
+      dungeon: { f: 'tripo_dungeon_lod.glb', autoFit: 44, autoGround: 'bottom' },
+      village: { f: 'tripo_wild_lod.glb', autoFit: 44, autoGround: 'bottom' },
+      city: { f: 'tripo_city_lod.glb', autoFit: 44, autoGround: 'bottom' },
+      peak: { f: 'tripo_peak_lod.glb', autoFit: 44, autoGround: 'bottom' },
+      wild: { f: 'tripo_wild_lod.glb', autoFit: 44, autoGround: 'bottom' },
+      cliff: { f: 'tripo_cliff_lod.glb', autoFit: 44, autoGround: 'bottom' },
+      throne: { f: 'tripo_throne_lod.glb', autoFit: 44, autoGround: 'bottom' }
+    };
+    for (var tk in TRIPO_SET) {
+      if (!CFG[tk]) continue;
+      CFG[tk].file = 'art/模型/场景/' + TRIPO_SET[tk].f;
+      CFG[tk].src = tk;
+      CFG[tk].autoFit = TRIPO_SET[tk].autoFit;
+      CFG[tk].autoGround = TRIPO_SET[tk].autoGround;
+    }
+    console.log('[SceneGlb] tripo set on');
+  }
+
   var group = null;
   var kind = null;
   var root = null;
@@ -547,23 +573,30 @@
       var obj = gltf.scene;
       var box0 = boxOf(obj);
       var size0 = box0.getSize(new THREE.Vector3());
-      var scale = cfg.mode === 'disc'
-        ? cfg.targetRadius / cfg.deckR
-        : cfg.targetSpan / Math.max(size0.x, size0.z);
+      var scale = cfg.autoFit
+        ? cfg.autoFit / Math.max(size0.x, size0.z)
+        : (cfg.fixedScale || (cfg.mode === 'disc'
+          ? cfg.targetRadius / cfg.deckR
+          : cfg.targetSpan / Math.max(size0.x, size0.z)));
       obj.scale.multiplyScalar(scale);
       obj.updateMatrixWorld(true);
       var box = boxOf(obj);
       var c = box.getCenter(new THREE.Vector3());
       /* 以模型自带的“台面/地面”为准落到 y=0：
          disc（竞技场）用圆台面，rect（副本）用室内地面；下方台基沉到地面以下 */
-      var deckY = (cfg.mode === 'disc' ? cfg.deckZ : cfg.floorZ) * scale;
+      var deckY;
+      if (cfg.autoGround === 'top') deckY = box.max.y;
+      else if (cfg.autoGround === 'bottom') deckY = box.min.y;
+      else deckY = (cfg.mode === 'disc' ? cfg.deckZ : cfg.floorZ) * scale;
       obj.position.x -= c.x;
       obj.position.z -= c.z;
       obj.position.y -= deckY;
       var box2 = boxOf(obj);
       var f = {
         scale: scale,
-        deckRadius: cfg.mode === 'disc' ? cfg.deckR * scale : 0,
+        deckRadius: cfg.mode === 'disc'
+          ? (cfg.autoFit ? Math.min(box2.max.x, box2.max.z) : cfg.deckR * scale)
+          : 0,
         deckTop: 0,
         floor: deckY,
         size: box2.getSize(new THREE.Vector3())
