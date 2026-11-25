@@ -21,31 +21,46 @@
   var T = THREE;
   var PI = Math.PI;
 
-  /* ---------- kind → 模型映射（冻结） ---------- */
+  /* ---------- kind → 模型映射 ----------
+     写实档（默认）十职业各用一张专属 Tripo 单网格英雄模型（*_hero，无骨骼无 clip，
+     走 staticMotion 程序化动作 + 自动身高归一 + 朝向修正）。
+     ?hero=idle 回退到旧的三张骨骼 Idle 资产（带手臂动画），用作对比与降级。 */
   var KIND_MAP = {
-    swordsman: 'swordsman_idle', blade: 'swordsman_idle', grunt: 'grunt_stone', elite: 'elite_stone',
-    /* 拳师：重装近战，暂借剑客模型；刺客借枪手（轻装细身），牧师借术士（长袍） */
-    boxer: 'swordsman_idle', assassin: 'gunner_idle', priest: 'mage_idle',
-    gunner: 'gunner_idle', shooter: 'shooter_stone',
-    warlock: 'mage_idle', mage: 'mage_idle', boss: 'boss_king',
-    /* 地宫副本新增：重甲近战借刀客模型，法系借术士模型（体型差异全交给 game.js 根 scale） */
+    swordsman: 'swordsman_idle', blade: 'blade_hero', grunt: 'grunt_stone', elite: 'elite_stone',
+    boxer: 'boxer_hero', assassin: 'shadow_hero', priest: 'priest_hero',
+    gunner: 'cannon_hero', shooter: 'shooter_stone',
+    warlock: 'mage_idle', mage: 'arcane_hero', boss: 'boss_king',
+    /* 地宫副本：重甲近战借刀客模型，法系借术士模型（体型差异全交给 game.js 根 scale） */
     golem: 'golem_lava', swarm: 'swarm_bug', warden: 'boss_stone',
     hexer: 'hexer_stone', oracle: 'oracle_hex',
     duelist: 'duelist_stone',
-    /* P1 · S1：重剑士仍借剑客（体型靠根 scale 拉高），武僧借剑客轻装版 */
-    greatsword: 'swordsman_idle', monk: 'swordsman_idle',
-    /* P1 · S2：狙击手借枪手细长身，冰霜法师借术士长袍 */
+    greatsword: 'greatsword_hero', monk: 'monk_hero',
+    sniper: 'sniper_hero', frost: 'frost_hero'
+  };
+  /* ?hero=idle 降级表：职业 → 原骨骼 Idle 资产 */
+  var KIND_MAP_IDLE = {
+    blade: 'swordsman_idle', boxer: 'swordsman_idle', assassin: 'gunner_idle', priest: 'mage_idle',
+    mage: 'mage_idle', gunner: 'gunner_idle', greatsword: 'swordsman_idle', monk: 'swordsman_idle',
     sniper: 'gunner_idle', frost: 'mage_idle'
   };
   /* 独立 Tripo 静态模型（无骨骼、无 clip）：保留自身的程序化动作 */
-  var STATIC_MODEL = { grunt_stone: 1, golem_lava: 1, boss_stone: 1, shooter_stone: 1, elite_stone: 1, hexer_stone: 1, boss_king: 1, swarm_bug: 1, duelist_stone: 1, oracle_hex: 1, boxer_hero: 1, blade_hero: 1, priest_hero: 1 };
-  /* GLB 自带名义身高（m） */
+  var STATIC_MODEL = { grunt_stone: 1, golem_lava: 1, boss_stone: 1, shooter_stone: 1, elite_stone: 1, hexer_stone: 1, boss_king: 1, swarm_bug: 1, duelist_stone: 1, oracle_hex: 1 };
+  var HERO_STATIC_RE = /_hero$/;
+  function isStaticModel(m) { return !!STATIC_MODEL[m] || HERO_STATIC_RE.test(m); }
+  /* GLB 自带名义身高（m）——*_hero 的数值由加载时实测覆盖 */
   var GLB_H = {
     swordsman_idle: 1.84, gunner_idle: 1.89, mage_idle: 1.96,
     grunt_stone: 2.05, golem_lava: 2.60, boss_stone: 3.00, shooter_stone: 1.70, elite_stone: 1.95,
     hexer_stone: 1.85, boss_king: 3.20, swarm_bug: 0.95, duelist_stone: 2.00, oracle_hex: 2.60,
     boxer_hero: 1.90, blade_hero: 1.80, priest_hero: 1.86
   };
+  /* 十职业目标身高：Tripo 出模比例不统一，加载后按实测包围盒缩到这里，全队视线一致 */
+  var HERO_TARGET_H = {
+    blade: 1.82, boxer: 1.84, gunner: 1.88, mage: 1.94, assassin: 1.80,
+    priest: 1.86, greatsword: 1.92, monk: 1.84, sniper: 1.86, frost: 1.94
+  };
+  /* 朝向修正（度）：Tripo 生成的正面对齐不一致，按模型名单独校，0 = 资产原始正面朝 +Z */
+  var HERO_YAW = {};
   /* fit 只做「敌人基准 1.800m / GLB 名义身高」归一；类型差异（elite/boss 放大）全部交给
      game.js 根 scale，禁止把根 scale 再算进 FIT（否则重复放大）。玩家/远端 fit=1。 */
   var FIT = {
@@ -82,8 +97,8 @@
 
   function tierForKind(kind) {
     if (urlOverride) return urlOverride;
-    /* Tripo 静态怪只有 2K 一份，不走 _1024 命名，避免 404 回退 */
-    if (STATIC_MODEL[resolveModel(kind)]) return '2k';
+    /* Tripo 单网格（怪与 *_hero 英雄）只有 2K 一份，不走 _1024 命名，避免 404 回退 */
+    if (isStaticModel(resolveModel(kind))) return '2k';
     var grp = HERO_KINDS[kind] ? 'hero' : 'enemy';
     return policy[grp] || '2k';
   }
@@ -113,7 +128,12 @@
     return cache[url];
   }
 
-  function resolveModel(kind) { return KIND_MAP[kind] || 'swordsman_idle'; }
+  /* ?hero=idle：十职业退回旧骨骼 Idle 资产，做对比与最坏情况降级 */
+  var heroMode = qs.get('hero') === 'idle' ? 'idle' : 'tripo';
+  function resolveModel(kind) {
+    if (heroMode === 'idle' && KIND_MAP_IDLE[kind]) return KIND_MAP_IDLE[kind];
+    return KIND_MAP[kind] || 'swordsman_idle';
+  }
   function bn(name) { return String(name).replace('.', ''); }
 
   /* ---------- 兜底：Real3D ---------- */
@@ -189,11 +209,28 @@
   function mount(root, kind, model, gltf, t0, tier, url) {
     var fit = root.userData.fit != null ? root.userData.fit : 1;
     var inner = new T.Group();
-    inner.scale.setScalar(fit);
 
     var clone = T.SkeletonUtils.clone(gltf.scene);
 
-    var isStatic = !!STATIC_MODEL[model];
+    var isHero = HERO_STATIC_RE.test(model);
+    var isStatic = isStaticModel(model);
+
+    if (isHero) {
+      /* 朝向先校到正面朝 +Z；Tripo 出模比例不统一，按职业目标身高重算 fit，
+         这样十职业在同一个取景/同一个 HUD 里视线高度一致 */
+      var yaw = HERO_YAW[model] || 0;
+      if (yaw) clone.rotation.y = yaw * Math.PI / 180;
+      clone.updateMatrixWorld(true);
+      var rawBox = meshBox3(clone);
+      var rawH = rawBox.max.y - rawBox.min.y;
+      if (isFinite(rawH) && rawH > 0.05) {
+        GLB_H[model] = +rawH.toFixed(3);
+        var target = HERO_TARGET_H[kind] != null ? HERO_TARGET_H[kind] : 1.85;
+        fit = target / rawH;
+      }
+    }
+    inner.scale.setScalar(fit);
+    root.userData.fit = fit;
 
     /* 材质按实例 clone（贴图共享引用）；几何/材质守卫 */
     clone.traverse(function (o) {
@@ -202,9 +239,14 @@
       var fix = function (m) {
         if (!m) return m;
         var c = m.clone(); c.userData.shared = true;
-        /* Tripo 导出的金属度常写成 1（specular 工作流），无 metalnessMap 时压到 0.08，
-           否则在无 HDR 环境里会整片发黑；双面渲染兜住个别法线朝内的小碎面。 */
-        if (isStatic) {
+        /* 英雄走原味 PBR：albedo / roughness 贴图全留，只处理 Tripo 惯犯 metalness=1
+           （无 metalnessMap 时布料皮革会在无 HDR 环境整片发黑）。不染色、不加 emissive。 */
+        if (isHero) {
+          if (!c.metalnessMap && (c.metalness == null || c.metalness > 0.28)) c.metalness = 0.28;
+          if (c.roughness != null && c.roughness < 0.35) c.roughness = 0.35;
+          c.side = T.DoubleSide;
+          c.envMapIntensity = 0.55;
+        } else if (isStatic) {
           if (!c.metalnessMap && (c.metalness == null || c.metalness > 0.2)) c.metalness = 0.08;
           c.side = T.DoubleSide;
           /* Tripo 的 MR 贴图里 roughness 偏低，配上强环境光会在每块石面上炸出白高光，
@@ -252,7 +294,10 @@
     var hipsRest = hips ? { x: hips.position.x, z: hips.position.z } : null;
 
     var minY = sampleGround(clone, mixer, clip);
-    inner.position.y = -minY;
+    /* 贴地偏移：hero 的 fit 是「目标身高/实测身高」，必须跟着缩，否则脚会陷进台面；
+       敌人沿用旧口径（fit 差异小，改了反而会和现有演出对不上） */
+    var groundY = isHero ? -minY * fit : -minY;
+    inner.position.y = groundY;
 
     inner.add(clone);
     root.add(inner);
@@ -260,25 +305,27 @@
     var mi = collectMatInfo(clone);
     var rig = {
       inner: inner, clone: clone, mixer: mixer, action: action, clip: clip,
-      static: isStatic, groundY: -minY,
+      static: isStatic, hero: isHero, groundY: groundY,
       bones: bones, rest: rest, model: model, fit: fit,
       tier: tier, url: url,
       hips: hips, hipsRest: hipsRest,
       attack: null, aim: 0, walk: 0, t: 0,
-      groundMinY: minY, mats: mi.mats, textures: mi.textures
+      groundMinY: groundY, mats: mi.mats, textures: mi.textures
     };
     root.userData.glb = rig;
     root.userData.glbPending = false;
     root.userData.glbFallback = false;
-    root.userData.groundMinY = minY;
+    root.userData.groundMinY = isHero ? minY * fit : minY;
     root.userData.matSlots = mi.mats.map(function (m) { return m.name; });
 
     infoState.entries[kind] = {
       kind: kind, tier: tier, url: url, model: model,
-      arm: model === 'mage_idle' ? 'off' : 'on',
+      arm: (isHero ? 'static' : (model === 'mage_idle' ? 'off' : 'on')),
+      heroMode: heroMode,
+      rawH: GLB_H[model] || null,
       mats: mi.mats, textures: mi.textures,
       bones: Object.keys(bones).length,
-      height: GLB_H[model] || 1.8
+      height: isHero ? (HERO_TARGET_H[kind] || 1.85) : (GLB_H[model] || 1.8)
     };
     if (t0 != null) {
       infoState.mountMs[kind] = Math.round(performance.now() - t0);

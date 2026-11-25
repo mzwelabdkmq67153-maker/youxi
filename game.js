@@ -3386,7 +3386,7 @@ function updateSkills(dt, cdDt) {
    独立小舞台（单独 renderer），只在角色页可见时渲染：模型自转、地台环取职业色。
    模型走 window.Hero3D，所以 ?art=real / ink 也会各用各的资产。 */
 let pvRenderer = null, pvScene = null, pvCamera = null, pvRoot = null, pvModel = null, pvKind = '', pvClock = null;
-let pvFitted = false, pvChildCount = -1;
+let pvFitted = false, pvChildCount = -1, pvDbgInfo = '-';
 
 function initPreview() {
   const cv = document.getElementById('clsCanvas');
@@ -3396,21 +3396,25 @@ function initPreview() {
   if (THREE.sRGBEncoding) pvRenderer.outputEncoding = THREE.sRGBEncoding;
   if (THREE.ACESFilmicToneMapping) {
     pvRenderer.toneMapping = THREE.ACESFilmicToneMapping;
-    pvRenderer.toneMappingExposure = 0.92;
+    pvRenderer.toneMappingExposure = 1.14;
   }
   pvScene = new THREE.Scene();
   pvCamera = new THREE.PerspectiveCamera(34, 1, 0.1, 40);
   pvCamera.position.set(0, 1.28, 3.12);
   pvCamera.lookAt(0, 0.98, 0);
 
-  const hemi = new THREE.HemisphereLight(0xcfeaff, 0x0a1220, 0.9);
+  const hemi = new THREE.HemisphereLight(0xcfeaff, 0x223040, 1.15);
   pvScene.add(hemi);
-  const keyLight = new THREE.DirectionalLight(0xfff2da, 1.2);
+  const keyLight = new THREE.DirectionalLight(0xfff2da, 1.85);
   keyLight.position.set(2.2, 3.4, 2.6);
   pvScene.add(keyLight);
-  const rimLight = new THREE.DirectionalLight(0x7ed6ff, 0.95);
+  const rimLight = new THREE.DirectionalLight(0x7ed6ff, 1.15);
   rimLight.position.set(-2.4, 1.8, -2.2);
   pvScene.add(rimLight);
+  // 正面补一盏很弱的相机光：Tripo 单网格把细节全烘进贴图，缺正面光时暗甲会糊成一团
+  const frontLight = new THREE.DirectionalLight(0xdfe9ff, 0.55);
+  frontLight.position.set(0.4, 1.6, 3.6);
+  pvScene.add(frontLight);
 
   // 地台：暗盘 + 职业色光环，让脚踩得住
   const disc = new THREE.Mesh(
@@ -3481,6 +3485,8 @@ function setPreviewClass(cls) {
 
 function animatePreview() {
   requestAnimationFrame(animatePreview);
+  const dbg = /[?&]pvdbg=1/.test(location.search);
+  if (dbg) document.title = 'a1 rend=' + !!pvRenderer + ' hid=' + (charPanelEl ? charPanelEl.classList.contains('hidden') : 'nf') + ' m=' + (pvModel ? pvModel.type : 'nf');
   if (!pvRenderer) return;
   // 只在角色页可见时渲染，避免和其它阶段的 WebGL 抢帧
   if (!charPanelEl || charPanelEl.classList.contains('hidden')) return;
@@ -3492,6 +3498,10 @@ function animatePreview() {
   if (pvModel && window.Hero3D && Hero3D.update) Hero3D.update(pvModel, dt, { speed: 0 });
   pvRoot.rotation.y += dt * 0.42;
   pvRenderer.render(pvScene, pvCamera);
+  if (/[?&]pvdbg=1/.test(location.search)) {
+    document.title = 'pan=' + charPanelEl.className + ' cv=' + pvRenderer.domElement.width + 'x' +
+      pvRenderer.domElement.height + ' ' + pvDbgInfo + ' tris=' + pvRenderer.info.render.triangles;
+  }
 }
 
 // 不同职业模型身高 1.8–2.0 不等，按包围盒统一取景，谁都不裁头也不悬空
@@ -3514,6 +3524,10 @@ function fitPreview() {
   pvCamera.lookAt(0, cy, 0);
   pvCamera.updateProjectionMatrix();
   pvFitted = true;
+  pvDbgInfo = 'h=' + h.toFixed(2) + ' cy=' + cy.toFixed(2) +
+    ' cam=' + pvCamera.position.toArray().map(function (n) { return n.toFixed(2); }).join(',') +
+    ' asp=' + pvCamera.aspect.toFixed(2) +
+    ' full=' + (pvModel ? 'y' : 'n') + ' pos=' + (pvModel ? pvModel.position.toArray().map(function (n) { return n.toFixed(2); }).join(',') : '-');
 }
 
 /* ---------------- 入口三段 ----------------

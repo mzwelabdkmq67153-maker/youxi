@@ -182,7 +182,7 @@ PVE 全额；PVP 伤害 ×0.55、控制时长 ×0.6、硬直 ×0.75、治疗 ×0
 ├─ core.js             GDD 规则层（window.Rules）：等级/属性/六职业/世界/副本/稀有度/分轨
 ├─ loot.js             装备层（window.Loot + window.Gear）：五档稀有度、12 槽、强化、评分
 ├─ game.js             全部游戏逻辑（战斗、波次、技能、掉落接线、存档）
-├─ glb3d.js            写实 GLB 舞台（六职业与敌人 kind 映射、贴图档位）
+├─ glb3d.js            写实 GLB 舞台（十职业专属 hero 模型 + 敌人 kind 映射、材质分层、身高归一、贴图档位）
 ├─ scene_glb.js        GLB 场景（六世界同资产换光换天）
 ├─ art.js              程序化角色美术（水墨/低模回退档）
 ├─ fx.js               战斗特效模块（ArenaFX）
@@ -348,7 +348,37 @@ node serve.js
 - 高低差地形与可跳跃掩体
 - 移动端触屏适配（第一人称在手机上需要双摇杆，建议先做桌面端）
 
-## 写实档 · GLB
+## 十职业专属模型（2026-11-25）
+
+十职业在写实档不再共用三张骨骼 Idle 资产，改为各一张 Tripo 单网格 hero 模型（`art/模型/glb/*_hero.glb`，21 张，已用的 10 张如下，其余留给后续 14 个职业）。
+
+| 职业 | kind | 模型 | 目标身高 |
+|---|---|---|---|
+| 剑客 | blade | blade_hero | 1.82 |
+| 拳师 | boxer | boxer_hero | 1.84 |
+| 枪炮师 | gunner | cannon_hero | 1.88 |
+| 元素法师 | mage | arcane_hero | 1.94 |
+| 刺客 | assassin | shadow_hero | 1.80 |
+| 牧师 | priest | priest_hero | 1.86 |
+| 重剑士 | greatsword | greatsword_hero | 1.92 |
+| 武僧 | monk | monk_hero | 1.84 |
+| 狙击手 | sniper | sniper_hero | 1.86 |
+| 冰霜法师 | frost | frost_hero | 1.94 |
+
+四条与"渲染"直接相关的约定：
+
+1. **材质分两支**。`*_hero` 走原味 PBR：albedo / roughness / normal 贴图全留，只把 Tripo 惯犯的 `metalness=1` 压到 0.28（无 `metalnessMap` 时不压会在无 HDR 环境里整片发黑），`envMapIntensity 0.55`，不染色、不加 emissive。石头怪仍走原来的"粗石面"（金属 0、粗糙 0.92、冷灰染色、albedo 兼自发光），两套互不污染。
+2. **身高归一**。Tripo 出模比例不统一，加载后按实测包围盒缩到 `HERO_TARGET_H`，全队视线高度一致；实测原始身高回写 `GLB_H` 便于 `Glb3D.info()` 核对。
+3. **贴地跟 fit 走**。hero 的 `minY` 偏移乘 `fit` 再落到 `inner.position.y`，脚不会陷进台面或悬空。敌人沿用旧口径，避免和现有演出对不上。
+4. **朝向表**。`HERO_YAW`（度）按模型名单校，0 = 资产原始正面朝 +Z；本轮十张实测均已是正面，表为空但接口留着，新模型歪了直接填。
+
+**动作代价**：hero 是单网格（1 node / 1 mesh，0 skin / 0 clip），没有骨骼动画，靠 `staticMotion` 做程序化动作——待机呼吸 1cm、移动踏步 3cm/5.2Hz、移动前倾、受击后仰、挥击/射击的蓄力后仰+前冲（`swing` 的 name 只区分 shoot 的冲量）。
+
+**降级**：`?hero=idle` 把十职业退回旧的骨骼 Idle 资产（swordsman/gunner/mage_idle，带手臂动画），用于对比与最坏情况。切换只改 `KIND_MAP_IDLE` 的解析，不动其它逻辑。
+
+**预览光照**：角色页预览在原三光基础上加了正面弱补光、`toneMappingExposure` 提到 1.14（Tripo 把细节全烘进贴图，暗甲缺正面光会糊成一团）。
+
+
 
 GLB 写实档已接入局内，与旧程序化写实档、水墨低模共用同一签名（`build/update/swing/cast`），`art.js / game.js` 不改，只切换 `window.Hero3D` 引用。
 
@@ -364,7 +394,7 @@ GLB 写实档已接入局内，与旧程序化写实档、水墨低模共用同�
 
 **目录**：
 
-- 资产：`art/模型/glb/`（三职业 2K 与 `*_1024.glb`、`inventory.json`）；预算口径见 `art/模型/GLB_资产预算_v1.md`。
+- 资产：`art/模型/glb/`（三张骨骼 Idle（2K + `*_1024.glb`）、21 张 `*_hero.glb` 单网格、以及敌人/装备各一份）；预算口径见 `art/模型/GLB_资产预算_v1.md`。
 - 加载器：`glb3d.js`（工程根，与 `real3d.js` 同级）；依赖 `vendor/GLTFLoader.js`、`vendor/SkeletonUtils.js`。
 - 局内验收页：`_ingame_glb.html`（自动开局 + 性能 HUD + 调试钩子 `window.__glbDbg`，调试逻辑不进 `index.html`）。
 - 实机截图与采集数据：`_shots/glb_ingame_*.png`、`_shots/glb_ingame_metrics.json`；验收清单与实测明细见 `art/模型/GLB_实机验收_v1.md`。
@@ -572,5 +602,8 @@ PVE 里获得经验、累积等级，**等级跨局保留**，写在 `localStora
 | `?bestiary=1` / `?loottest=1` / `?bag=1` | 怪物图鉴 / 12 槽五档掉落测试 / 自动打开背包 |
 | `?skillauto=0\|1\|2` | 每 1.4 秒自动放 Q/E/R（不传槽位则轮换），无头截图核对技能特效用 |
 | `?tex=1024\|2k` / `?art=real\|ink` | 贴图档位 / 写实 GLB 或水墨低模 |
+| `?hero=idle` | 十职业退回旧骨骼 Idle 资产（对比静态 hero 用） |
+| `?ui=title\|world\|char\|hub` | 入口直接落在某一段（无头截图用） |
+| `?pvdbg=1` | 把角色预览的取景参数（h / 机位 / canvas 尺寸 / 三角形数）写到 `document.title` |
 
 **边界**：三、四、五段世界已有专属地貌件（见上一节），但仍是"同一份 GLB + 道具层"，不是独立建模的新地图；装备掉落的副本档位权重已接 `Rules.DUNGEONS.drop`，但团队/深渊仍需联机房间才可开；P1 的 18 个职业只有配置与排期，还没有各自的技能实现。
