@@ -10,6 +10,9 @@
 const HALF = 22;
 const WALL_H = 9;
 const PLAYER_H = 1.68;
+/* 场景台面额外高度：圆台世界（主城 / 神之巅 / 野外 / 断崖）的模型台面抬在 y=0 之上，
+   落地判定与出生高度都要带上它，否则玩家被压在台脚，相机贴着台面仰视。 */
+let groundBase = 0;
 
 /* ---------------- 规则层 ----------------
    GDD v1.0 的数值与数据全部在 core.js（window.Rules），本文件只消费不定义。
@@ -254,6 +257,12 @@ function init() {
   buildArena();
   buildLights();
   loadProgress();
+  // ?cls= 在入口阶段也认：没有锁定存档时，角色页开局就停在指定职业（预览/截图用）
+  const cq0 = /[?&]cls=([a-z]+)/.exec(location.search);
+  if (cq0 && CLASSES[cq0[1]] && !state.clsLocked) {
+    state.cls = cq0[1];
+    state.clsName = CLASSES[cq0[1]].name;
+  }
   refreshMenuLevel();
   resetPlayer();
   refreshClassPreview();
@@ -261,6 +270,7 @@ function init() {
   refreshBattleChip();
   bindUI();
   bindInput();
+  initPreview();
   // 启动一律落在开始页：已建角色的存档会在开始页直接显示角色，并跳过角色选择
   // 调试：?ui=world|char|hub 直接落在指定一段，无头截图与回归用
   const uq = /[?&]ui=(world|char|hub)/.exec(location.search);
@@ -861,6 +871,8 @@ function refreshClassPreview() {
     classDescEl.textContent = C.name + ' · ' + C.family + '系 · ' + RES_NAME[C.res] +
       ' · 生命 ' + st.maxHp + ' · 攻击 ' + st.atk + ' · 秒伤 ' + st.dps + p1;
   }
+  // 预览模型跟着职业走（预览未初始化时安全跳过）
+  setPreviewClass(state.cls);
   refreshBattleChip();
 }
 
@@ -1014,6 +1026,7 @@ function resetPlayer() {
   // 相机贴地仰视水槽。这里按场景实际 deckRadius 收出生点，保证站在台面内、朝向台心。
   let spawnX = pvp ? 10 : 0;
   let spawnZ = pvp ? 16 : 14;
+  let spawnY = PLAYER_H;
   // 场景实现把元信息暴露成 getter（对象），程序化场景是方法：两种都要吃得下
   const sg = sceneImpl();
   let sfit = null;
@@ -1023,11 +1036,18 @@ function resetPlayer() {
   } catch (e) { sfit = null; }
   if (!pvp && sfit && sfit.deckRadius) {
     const r = sfit.deckRadius;
-    spawnX = 0;
-    spawnZ = Math.min(14, Math.max(3.0, r * 0.55));
+    /* 台面正中是十字下沉水槽，正轴方向落点会掉进槽里（相机贴槽底仰视）。
+       斜 45° 方向是最大净空，同样半径内又不撞链条柱；朝向台心。 */
+    const d = Math.min(14, Math.max(4.0, r * 0.62));
+    spawnX = d * 0.707;
+    spawnZ = d * 0.707;
+    /* 台面抬在 y=0 之上时（圆台模型自带台基），玩家要站到量出来的台面高度 */
+    if (typeof sfit.deckTop === 'number') { groundBase = sfit.deckTop; spawnY = PLAYER_H + groundBase; }
+  } else if (!pvp) {
+    groundBase = 0;
   }
-  yawObj.position.set(spawnX, PLAYER_H, spawnZ);
-  yawObj.rotation.y = pvp ? Math.atan2(spawnX, spawnZ) : 0;
+  yawObj.position.set(spawnX, spawnY, spawnZ);
+  yawObj.rotation.y = (pvp || (sfit && sfit.deckRadius)) ? Math.atan2(spawnX, spawnZ) : 0;
   pitchObj.rotation.x = 0;
   camera.position.set(0, 0, 0);
 
@@ -1052,6 +1072,16 @@ function updatePlayer(dt) {
   }
 
   let fwd = ((input.keys['w'] || input.keys['arrowup']) ? 1 : 0) - ((input.keys['s'] || input.keys['arrowdown']) ? 1 : 0);
+  /* 场景加载晚于开局：台面高度一旦量出来就立刻把玩家抬上去（只抬不降） */
+  const impl0 = sceneImpl();
+  const ft0 = impl0 && impl0.info ? ((typeof impl0.info === 'function') ? impl0.info() : impl0.info) : null;
+  const dtop0 = ft0 && ft0.fit ? ft0.fit.deckTop : null;
+  if (typeof dtop0 === 'number' && Math.abs(dtop0 - groundBase) > 0.02) {
+    const up = dtop0 - groundBase;
+    groundBase = dtop0;
+    player.y += up;
+    yawObj.position.y = player.y;
+  }
   let rgt = ((input.keys['d'] || input.keys['arrowright']) ? 1 : 0) - ((input.keys['a'] || input.keys['arrowleft']) ? 1 : 0);
   const mag = hyp(fwd, rgt);
   if (mag > 0) { fwd /= mag; rgt /= mag; }
@@ -1095,8 +1125,8 @@ function updatePlayer(dt) {
   if (!player.grounded) {
     player.vy -= 42 * dt;
     player.y += player.vy * dt;
-    if (player.y <= PLAYER_H) {
-      player.y = PLAYER_H;
+    if (player.y <= PLAYER_H + groundBase) {
+      player.y = PLAYER_H + groundBase;
       player.vy = 0;
       player.grounded = true;
       landEffect();
@@ -3352,6 +3382,140 @@ function updateSkills(dt, cdDt) {
   }
 }
 
+/* ---------------- 角色选择 · 3D 预览 ----------------
+   独立小舞台（单独 renderer），只在角色页可见时渲染：模型自转、地台环取职业色。
+   模型走 window.Hero3D，所以 ?art=real / ink 也会各用各的资产。 */
+let pvRenderer = null, pvScene = null, pvCamera = null, pvRoot = null, pvModel = null, pvKind = '', pvClock = null;
+let pvFitted = false, pvChildCount = -1;
+
+function initPreview() {
+  const cv = document.getElementById('clsCanvas');
+  if (!cv || !window.THREE) return;
+  pvRenderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: true });
+  pvRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  if (THREE.sRGBEncoding) pvRenderer.outputEncoding = THREE.sRGBEncoding;
+  if (THREE.ACESFilmicToneMapping) {
+    pvRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+    pvRenderer.toneMappingExposure = 0.92;
+  }
+  pvScene = new THREE.Scene();
+  pvCamera = new THREE.PerspectiveCamera(34, 1, 0.1, 40);
+  pvCamera.position.set(0, 1.28, 3.12);
+  pvCamera.lookAt(0, 0.98, 0);
+
+  const hemi = new THREE.HemisphereLight(0xcfeaff, 0x0a1220, 0.9);
+  pvScene.add(hemi);
+  const keyLight = new THREE.DirectionalLight(0xfff2da, 1.2);
+  keyLight.position.set(2.2, 3.4, 2.6);
+  pvScene.add(keyLight);
+  const rimLight = new THREE.DirectionalLight(0x7ed6ff, 0.95);
+  rimLight.position.set(-2.4, 1.8, -2.2);
+  pvScene.add(rimLight);
+
+  // 地台：暗盘 + 职业色光环，让脚踩得住
+  const disc = new THREE.Mesh(
+    new THREE.CircleGeometry(0.95, 40),
+    new THREE.MeshStandardMaterial({ color: 0x0d1826, roughness: 0.72, metalness: 0.32 })
+  );
+  disc.rotation.x = -Math.PI / 2;
+  disc.position.y = 0.001;
+  pvScene.add(disc);
+  const pvRing = new THREE.Mesh(
+    new THREE.RingGeometry(0.93, 1.0, 56),
+    new THREE.MeshBasicMaterial({ color: 0x6ee3ff, transparent: true, opacity: 0.55 })
+  );
+  pvRing.rotation.x = -Math.PI / 2;
+  pvRing.position.y = 0.004;
+  pvScene.add(pvRing);
+  pvScene.userData.ring = pvRing;
+
+  pvRoot = new THREE.Group();
+  pvScene.add(pvRoot);
+  pvClock = new THREE.Clock();
+
+  const fit = function () {
+    if (!pvRenderer) return;
+    const w = cv.clientWidth || 320;
+    const h = cv.clientHeight || 196;
+    pvRenderer.setSize(w, h, false);
+    pvCamera.aspect = w / h;
+    pvCamera.updateProjectionMatrix();
+  };
+  fit();
+  window.addEventListener('resize', fit);
+
+  setPreviewClass(state.cls);
+  animatePreview();
+}
+
+// 切职业时重建预览模型；名字与副标始终刷新
+function setPreviewClass(cls) {
+  if (!pvScene) return;
+  const C = CLASSES[cls];
+  const nameEl = document.getElementById('pvName');
+  const subEl = document.getElementById('pvSub');
+  if (nameEl) nameEl.textContent = C.name;
+  if (subEl) subEl.textContent = C.family + '系 · ' + (RES_NAME[C.res] || '');
+  const pvRing = pvScene.userData.ring;
+  if (pvRing && typeof C.color === 'number') pvRing.material.color.setHex(C.color);
+  if (pvKind === cls) return;
+  pvKind = cls;
+  if (pvModel) {
+    pvRoot.remove(pvModel);
+    disposeGroup(pvModel);
+    pvModel = null;
+  }
+  const impl = window.Hero3D;
+  pvModel = (impl && impl.build) ? impl.build(cls) : null;
+  pvFitted = false;
+  if (!pvModel) {
+    // 兜底：Asset 缺失时至少有个能转的色柱
+    pvModel = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.30, 0.34, 1.66, 12),
+      new THREE.MeshStandardMaterial({ color: typeof C.color === 'number' ? C.color : 0x6fe3ff, roughness: 0.45, metalness: 0.4 })
+    );
+    pvModel.position.y = 0.83;
+  }
+  pvRoot.add(pvModel);
+}
+
+function animatePreview() {
+  requestAnimationFrame(animatePreview);
+  if (!pvRenderer) return;
+  // 只在角色页可见时渲染，避免和其它阶段的 WebGL 抢帧
+  if (!charPanelEl || charPanelEl.classList.contains('hidden')) return;
+  const dt = Math.min(pvClock.getDelta(), 0.05);
+  // GLB 是异步挂载的：节点数一变就重新按实际身高取一次景
+  const kids = pvModel ? pvModel.children.length : 0;
+  if (kids !== pvChildCount) { pvChildCount = kids; pvFitted = false; }
+  if (!pvFitted) fitPreview();
+  if (pvModel && window.Hero3D && Hero3D.update) Hero3D.update(pvModel, dt, { speed: 0 });
+  pvRoot.rotation.y += dt * 0.42;
+  pvRenderer.render(pvScene, pvCamera);
+}
+
+// 不同职业模型身高 1.8–2.0 不等，按包围盒统一取景，谁都不裁头也不悬空
+function fitPreview() {
+  if (!pvModel) return;
+  // 取景时先把自转归零：以模型自身正前方算包围盒，顺便把水平偏移校到转轴上
+  pvRoot.rotation.y = 0;
+  pvRoot.updateMatrixWorld(true);
+  let box = new THREE.Box3().setFromObject(pvModel);
+  let h = box.max.y - box.min.y;
+  if (!isFinite(h) || h < 0.6 || h > 4) return;     // 还没挂上 / 数据异常，下一帧再试
+  const mx = (box.min.x + box.max.x) / 2;
+  const mz = (box.min.z + box.max.z) / 2;
+  if (Math.abs(mx) > 0.005) pvModel.position.x -= mx;
+  if (Math.abs(mz) > 0.005) pvModel.position.z -= mz;
+  box = new THREE.Box3().setFromObject(pvModel);
+  h = box.max.y - box.min.y;
+  const cy = (box.max.y + box.min.y) / 2;
+  pvCamera.position.set(0, cy + h * 0.05, h * 1.62 + 0.42);
+  pvCamera.lookAt(0, cy, 0);
+  pvCamera.updateProjectionMatrix();
+  pvFitted = true;
+}
+
 /* ---------------- 入口三段 ----------------
    开始页只留标题与一个入口 → 选世界 → 选角色（一经确认锁定）→ 世界内部
    hub。副本档位、PVP、局域网全部下沉到 hub，进入战斗后不再出现职业更换。 */
@@ -3384,6 +3548,11 @@ function refreshEntryHeads() {
   if (worldNextNameEl) worldNextNameEl.textContent = worldFor(state.world).name;
   if (hubWorldEl) hubWorldEl.textContent = worldFor(state.world).name;
   if (hubCharEl) hubCharEl.textContent = C.name + ' · Lv ' + state.lv + ' · ' + worldFor(state.world).name;
+  // 职业格高亮跟当前职业对齐（已锁定存档进调试页时也不会两处不一致）
+  const clsBtns = document.querySelectorAll('#classToggle button');
+  for (let i = 0; i < clsBtns.length; i++) {
+    clsBtns[i].classList.toggle('on', clsBtns[i].dataset.cls === state.cls);
+  }
 }
 
 function goTitle() { showStage('title'); }

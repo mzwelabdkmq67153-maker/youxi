@@ -113,6 +113,12 @@
   <div class="panel stage hidden" id="charPanel">
     <p class="stage-tag">第二步 · 角色（一经确认，不可更换）</p>
     <h2>选择你的角色</h2>
+
+    <div class="hero-preview" id="heroPreview">
+      <canvas id="clsCanvas"></canvas>
+      <div class="pv-tag"><b id="pvName">剑客</b><span id="pvSub">剑士系 · 法力</span></div>
+    </div>
+
     <p class="sub">职业决定武器、资源与 Q/E/R，进入世界后不再提供更换</p>
     <div class="row">
       <label>职业</label>
@@ -130,14 +136,6 @@
       </div>
     </div>
     <p class="world-desc" id="classDesc">剑客 · 剑士系 · 中距离持续输出 · 法力</p>
-    <div class="row" id="skillRow">
-      <label>技能</label>
-      <div class="skills-panel" id="skillPanel"></div>
-    </div>
-    <div class="row">
-      <label>洗点</label>
-      <button id="respecBtn" class="ghost small">洗点（300 金币）</button>
-    </div>
     <div class="menu-chips">
       <span id="menuGold">金币 0</span>
       <span id="menuSp">技能点 2 / 2</span>
@@ -180,6 +178,14 @@
       </div>
     </div>
     <p class="world-desc" id="dungeonDesc">普通副本 · 5 人 · 每日 1 次 · 5–8 分钟 · 日常练手与经验</p>
+    <div class="row" id="skillRow">
+      <label>技能</label>
+      <div class="skills-panel" id="skillPanel"></div>
+    </div>
+    <div class="row">
+      <label>洗点</label>
+      <button id="respecBtn" class="ghost small">洗点（300 金币）</button>
+    </div>
     <div class="menu-lv">玩家等级 <b id="menuLv">Lv 1</b><span id="menuXp">0 / 100</span></div>
     <button id="startBtn" class="primary">进入</button>
     <div class="hub-foot">
