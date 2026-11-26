@@ -111,6 +111,40 @@ let statChipsEl, skillPanelEl, respecBtnEl, classDescEl;
 let titlePanelEl, worldPanelEl, charPanelEl, hubPanelEl;
 let titleLvEl, titleCharEl, titleArchEl, worldNextNameEl, hubWorldEl, hubCharEl;
 
+/* ---------------- 舒适度 / 防晕 ----------------
+   第一人称晕动症主要来自四处：冲刺拉 FOV、转身滚转、震屏滚转、受击后推。
+   默认开启（首装即生效），暂停面板可关，也可用 ?comfort=1|0 覆盖；设置存 localStorage。
+   灵敏度同理，基础值防晕档略低，再乘用户倍率。 */
+const Comfort = (function () {
+  const q = /[?&]comfort=([01])/.exec(location.search);
+  const KEY = 'dsy.comfort', SKEY = 'dsy.sens';
+  let on;
+  if (q) on = q[1] === '1';
+  else {
+    const ls = localStorage.getItem(KEY);
+    on = (ls === '1' || ls === '0') ? ls === '1' : true;
+  }
+  let mul = parseFloat(localStorage.getItem(SKEY) || '1');
+  const qs = /[?&]sens=(\d+)/.exec(location.search);
+  if (qs) mul = (+qs[1]) / 100;
+  if (!(mul >= 0.4 && mul <= 2.5)) mul = 1;
+  return {
+    isOn() { return on; },
+    set(v) {
+      on = !!v;
+      try { localStorage.setItem(KEY, on ? '1' : '0'); } catch (e) {}
+    },
+    sensMul() { return mul; },
+    setSens(v) {
+      mul = clamp(+v || 1, 0.5, 2.0);
+      try { localStorage.setItem(SKEY, String(mul)); } catch (e) {}
+    },
+    baseSens() { return (on ? 0.0018 : 0.0022) * mul; }
+  };
+})();
+// 跨文件可见（animsys.js 的调试标题要读它；顶层 const 不会自动挂到 window 上）
+window.Comfort = Comfort;
+
 const state = {
   mode: 'pve', cls: 'blade', phase: 'menu',
   // 入口阶段：title 开始页 → world 选世界 → char 选角色 → hub 世界内部
@@ -1109,8 +1143,9 @@ function updatePlayer(dt) {
   const runMul = wantsRun ? 1.45 : 1;
   const speed = player.speed * (player.sprintT > 0 ? 1.7 : 1) * runMul * (player.moveMul || 1);
 
-  // 疾跑拉 FOV：+6°，冲刺再叠 +4°；插值过渡，不跳变
-  const targetFov = 72 + (wantsRun ? 6 : 0) + (player.sprintT > 0 ? 4 : 0);
+  // 疾跑拉 FOV：+6°，冲刺再叠 +4°；插值过渡，不跳变。防晕档固定不动（FOV 变化是最强的晕动来源）
+  const targetFov = Comfort.isOn() ? 72
+    : 72 + (wantsRun ? 6 : 0) + (player.sprintT > 0 ? 4 : 0);
   camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 8);
   camera.updateProjectionMatrix();
 
@@ -2934,7 +2969,7 @@ function spawnSlashArc(color) {
     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
     p.addScaledVector(right, 0.26);
     p.y -= 0.22;
-    ArenaFX.slash(p, camera.rotation.y);
+    ArenaFX.slash(p, yawObj.rotation.y);
     return;
   }
   const geo = new THREE.RingGeometry(0.85, 3.05, 24, 1, -0.95, 1.9);
@@ -2959,7 +2994,7 @@ function spawnMuzzleFlash() {
   }
   // fx.js 的击发：墨花 + 弹道，枪口之外不占准心
   if (window.ArenaFX) {
-    ArenaFX.muzzle(muzzle, camera.rotation.y);
+    ArenaFX.muzzle(muzzle, yawObj.rotation.y);
     return;
   }
   const mesh = new THREE.Mesh(sparkGeo, new THREE.MeshBasicMaterial({
@@ -4206,6 +4241,27 @@ function bindUI() {
   });
   document.getElementById('resumeBtn').addEventListener('click', resumeGame);
   document.getElementById('quitBtn').addEventListener('click', backToMenu);
+
+  // 舒适度设置：读写 Comfort，切换立即生效（不用重开）
+  const optComfort = document.getElementById('optComfort');
+  const optSens = document.getElementById('optSens');
+  const optSensVal = document.getElementById('optSensVal');
+  if (optComfort) {
+    optComfort.checked = Comfort.isOn();
+    optComfort.addEventListener('change', () => {
+      Comfort.set(optComfort.checked);
+      toast(optComfort.checked ? '防晕视角：开' : '防晕视角：关', 900);
+    });
+  }
+  if (optSens) {
+    const pct = Math.round(Comfort.sensMul() * 100);
+    optSens.value = String(pct);
+    if (optSensVal) optSensVal.textContent = pct + '%';
+    optSens.addEventListener('input', () => {
+      Comfort.setSens(+optSens.value / 100);
+      if (optSensVal) optSensVal.textContent = optSens.value + '%';
+    });
+  }
   document.getElementById('againBtn').addEventListener('click', () => {
     initAudio();
     // 联机：请服务器把房间重置成新一局，双方一起回到出生点
@@ -4257,9 +4313,13 @@ function bindInput() {
 
   document.addEventListener('mousemove', (e) => {
     if (state.phase !== 'playing' || !lockActive) return;
-    yawObj.rotation.y -= (e.movementX || 0) * 0.0022;
-    pitchObj.rotation.x -= (e.movementY || 0) * 0.0022;
-    pitchObj.rotation.x = clamp(pitchObj.rotation.x, -1.45, 1.45);
+    const mx = e.movementX || 0, my = e.movementY || 0;
+    /* pointer lock 下浏览器偶发巨型 movementX（切缩放/高刷屏/窗口失焦回来那一下），
+       一次性吃进去会让视角瞬移到天上，直接丢弃这种跳变 */
+    if (Math.abs(mx) > 320 || Math.abs(my) > 320) return;
+    const s = Comfort.baseSens();
+    yawObj.rotation.y -= mx * s;
+    pitchObj.rotation.x = clamp(pitchObj.rotation.x - my * s, -1.42, 1.42);
   });
 
   canvas.addEventListener('mousedown', (e) => {
@@ -4316,7 +4376,8 @@ function updateWeaponVisual(dt) {
     return;
   }
   const runK = Math.min(1, player.runT * 4);
-  const sway = Math.sin(state.time * 9.5) * 0.02 * runK;
+  // 疾跑武器摆头在防晕档关掉（视线基准不动，只留武器自身的手感曲线）
+  const sway = Comfort.isOn() ? 0 : Math.sin(state.time * 9.5) * 0.02 * runK;
   weaponObj.position.set(
     weaponBase.x + A.x + sway,
     weaponBase.y + A.y + Math.abs(sway) * 0.35,
@@ -4332,28 +4393,36 @@ function updateWeaponVisual(dt) {
 
 function applyShake(dt) {
   let ox = 0, oy = 0, oz = 0;
+  /* 相机自身的旋转每帧必须归零：朝向由 yawObj/pitchObj 决定，camera 只承担本帧扰动。
+     以前 HitFeel 和 A 档都写 `camera.rotation.z +=` 却从不回零 —— 挨一次打画面就永久歪一点，
+     打十分钟后地平线是斜的、转头方向都不对。这是视角异常的根因，别改回去。 */
+  camera.rotation.set(0, 0, 0);
+  const comfort = Comfort.isOn();
   // 旧式爆炸震动仍然保留（环境震），命中震动改由 HitFeel 的方向性震屏承担
   if (shake > 0) {
     shake = Math.max(0, shake - dt * 1.6);
-    const s = shake * 0.018;
+    const s = shake * 0.018 * (comfort ? 0.55 : 1);
     ox += rand(-s, s); oy += rand(-s, s); oz += rand(-s, s) * 0.4;
   }
   // A 档：受击仰角/后推 + 转身侧倾（S3/S5），叠加在震屏之后
   const A = state.animLast;
   if (window.HitFeel) {
     HitFeel.applyCamera(camera, dt);
+    if (comfort) { camera.rotation.z *= 0.3; camera.rotation.x *= 0.4; }
     camera.position.x += ox; camera.position.y += oy; camera.position.z += oz;
   } else {
     camera.position.set(ox, oy, oz);
   }
   if (A) {
-    camera.position.y += A.camRx * 0.18;
+    const cm = comfort ? 0.5 : 1;
+    camera.position.y += A.camRx * 0.18 * cm;
     if (A.camPush) {
       const f = camera.getWorldDirection(_v2);
-      camera.position.x -= f.x * A.camPush;
-      camera.position.z -= f.z * A.camPush;
+      camera.position.x -= f.x * A.camPush * cm;
+      camera.position.z -= f.z * A.camPush * cm;
     }
-    if (A.roll) camera.rotation.z += A.roll;
+    // 转身侧倾（S3）在防晕档直接关掉：转过头时地平线跟着转是最典型的晕动诱因
+    if (A.roll && !comfort) camera.rotation.z += A.roll;
   }
 }
 
@@ -4404,6 +4473,8 @@ function animate() {
   } else if (state.phase === 'menu' && (state.stage === 'world' || state.stage === 'hub')) {
     // 世界页 / 世界内部：让镜头在世界里慢转，背景是活的而不是一张定格图
     yawObj.rotation.y += raw * 0.05;
+    // 从战斗退回菜单时俯仰角要平滑归零，否则会带着"抬头/低头"的角度进菜单
+    pitchObj.rotation.x *= 0.88;
   }
 
   updateEffects(dt);

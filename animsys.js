@@ -205,7 +205,8 @@
       document.title = 'anim t=' + Math.round(S.attackT * 100) / 100 + '/' + S.attackDur.toFixed(2) +
         ' ' + S.tier + ' ph=' + off.phase.toFixed(2) + ' f=' + freq.toFixed(2) +
         ' combo=' + S.comboN + 'x' + S.comboMul + ' hurt=' + S.hurtT.toFixed(2) +
-        ' roll=' + S.roll.toFixed(3) + ' air=' + off.air + ' sp=' + sp.id;
+        ' roll=' + S.roll.toFixed(3) + ' air=' + off.air + ' sp=' + sp.id +
+        ' cf=' + (window.Comfort && Comfort.isOn() ? 1 : 0);
     }
     return off;
   }

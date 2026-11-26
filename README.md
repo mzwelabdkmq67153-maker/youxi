@@ -651,6 +651,8 @@ PVE 里获得经验、累积等级，**等级跨局保留**，写在 `localStora
 | `?mode=pvp\|pve\|online` | 越过菜单直接进某模式（无头截图复现 PVP / 联机用） |
 | `?ydbg=1` | 每帧把 `px/pz/py/gb/deckTop/deckR/scene` 与首个敌人的 `y/my/sc/包围盒高/脚底相对 y` 写到 `document.title`，用来查"分层" |
 | `?animdbg=1` | 每帧把动作档位/相位/步频/连段/受击/侧倾写到 `document.title`，并自动轮播 轻→重→技能 三档前摇 |
+| `?comfort=1\|0` | 强制开/关防晕视角（默认开，设置存在 `localStorage.dsy.comfort`） |
+| `?sens=50..200` | 视角灵敏度百分比，等价暂停面板里的滑块（`localStorage.dsy.sens`） |
 
 ## hero 绑骨（2026-11-26）
 

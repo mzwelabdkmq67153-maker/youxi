@@ -337,6 +337,29 @@ html, body {
   color: #6f8aa5;
 }
 
+/* 暂停面板里的舒适度设置：防晕开关 + 灵敏度滑块（一行一个，不挤成按钮堆） */
+.optRow {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-top: 16px;
+  padding: 9px 12px;
+  font-size: 13px; letter-spacing: 1px; color: #a8c2d8;
+  background: rgba(10, 18, 30, 0.82);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.optRow label { display: flex; align-items: center; gap: 9px; cursor: pointer; flex: 1; }
+.optRow input[type="checkbox"] {
+  width: 15px; height: 15px; accent-color: #55d8ff; cursor: pointer; flex: none;
+}
+.optRow input[type="range"] {
+  width: 118px; flex: none; accent-color: #55d8ff; cursor: pointer;
+}
+.optRow b { width: 44px; flex: none; text-align: right; color: #cfe8f7; font-weight: 600; }
+.optHint {
+  margin-top: 6px;
+  font-size: 11px; line-height: 1.5; letter-spacing: 1px; color: #5d7387;
+}
+
 .row {
   display: flex; align-items: center; gap: 14px;
   margin-top: 20px;
