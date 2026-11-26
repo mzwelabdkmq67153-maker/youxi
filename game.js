@@ -795,8 +795,8 @@ function refreshWorldUI() {
     if (state.lv > W.max && idx >= 0 && idx < WORLD_ORDER.length - 1) {
       d += ' · 已超出本区（Lv ' + W.max + '），建议前往 ' + WORLDS[WORLD_ORDER[idx + 1]].name;
     }
-    const lore = W.lore ? '「' + W.lore + '」 ' : '';
-    worldDescEl.textContent = lore + d + ' · 难度 ×' + W.hpMul.toFixed(2) + ' · 装等 +' + W.ilvlBonus;
+    const lore = W.lore ? '<span class="world-lore">「' + W.lore + '」</span><br>' : '';
+    worldDescEl.innerHTML = lore + d + ' · 难度 ×' + W.hpMul.toFixed(2) + ' · 装等 +' + W.ilvlBonus;
   }
   if (worldRowEl) worldRowEl.classList.toggle('disabled', state.mode !== 'pve');
   // 世界页的主按钮与 hub 头部跟着当前世界走
@@ -4145,6 +4145,45 @@ function bindUI() {
   }
   const worldBack = document.getElementById('worldBack');
   if (worldBack) worldBack.addEventListener('click', goTitle);
+
+  // 世界志：七界设定陈列（数据来自 Rules.LORE，只展示不改流程）
+  const loreBtn = document.getElementById('loreBtn');
+  const loreOverlay = document.getElementById('loreOverlay');
+  const loreGrid = document.getElementById('loreGrid');
+  const loreClose = document.getElementById('loreClose');
+  function buildLoreGrid() {
+    if (!loreGrid || !Rules.LORE) return;
+    const cards = Rules.LORE.map((L) => {
+      const rules = L.rules.map((r) => '<li>' + r + '</li>').join('');
+      return '<article class="lore-card" style="--accent:' + L.accent + '">'
+        + '<div class="lore-title"><span class="lore-name">' + L.name + '</span>'
+        + '<span class="lore-alias">' + L.alias + '</span></div>'
+        + '<div class="lore-faction">' + L.faction + '</div>'
+        + '<p class="lore-line">「' + L.line + '」</p>'
+        + '<ol class="lore-rules">' + rules + '</ol>'
+        + '<div class="lore-meta"><div><b>地标</b>' + L.place + '</div>'
+        + '<div><b>敌人</b>' + L.foes + '</div>'
+        + '<div><b>BOSS</b>' + L.boss + '</div>'
+        + '<div><b>钩子</b>' + L.hook + '</div></div>'
+        + '</article>';
+    });
+    loreGrid.innerHTML = cards.join('');
+  }
+  function toggleLore(open) {
+    if (!loreOverlay) return;
+    if (open) buildLoreGrid();
+    loreOverlay.classList.toggle('hidden', !open);
+  }
+  if (loreBtn) loreBtn.addEventListener('click', () => toggleLore(true));
+  if (loreClose) loreClose.addEventListener('click', () => toggleLore(false));
+  if (loreOverlay) {
+    loreOverlay.addEventListener('click', (e) => { if (e.target === loreOverlay) toggleLore(false); });
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && loreOverlay && !loreOverlay.classList.contains('hidden')) toggleLore(false);
+  });
+  // 调试：?lore=1 直接展开世界志（无头截图与回归用）
+  if (/[?&]lore=1/i.test(location.search)) toggleLore(true);
   // ③ 角色确认：写入存档并锁定
   const charNext = document.getElementById('charNext');
   if (charNext) {

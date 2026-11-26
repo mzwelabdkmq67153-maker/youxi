@@ -106,7 +106,24 @@
     </div>
     <p class="world-desc" id="worldDesc">石村回廊 · 教学任务与第一个普通副本</p>
     <button id="worldNext" class="primary">进入<b id="worldNextName">新手村</b></button>
-    <button id="worldBack" class="ghost small">返回开始页</button>
+    <div class="btn-row">
+      <button id="worldBack" class="ghost small">返回开始页</button>
+      <button id="loreBtn" class="ghost small">世界志</button>
+    </div>
+  </div>
+
+  <!-- 世界志：七界的设定陈列（数据在 core.js 的 LORE） -->
+  <div class="lore-overlay hidden" id="loreOverlay">
+    <div class="lore-sheet">
+      <header class="lore-head">
+        <div>
+          <h2>七界世界志</h2>
+          <p class="sub">一场选拔的七道赛程 · 输的人留在原地，成了那界的地貌</p>
+        </div>
+        <button id="loreClose" class="ghost small">关闭</button>
+      </header>
+      <div class="lore-grid" id="loreGrid"></div>
+    </div>
   </div>
 
   <!-- ③ 角色：一经确认不可更换 -->
