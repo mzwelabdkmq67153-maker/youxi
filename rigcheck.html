@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>hero rig check</title>
+<style>
+  body { margin:0; background:#0d1620; color:#cfe3f2; font:12px/1.5 "Microsoft YaHei", system-ui; overflow:hidden; }
+  canvas { display:block; }
+  #tips { position:fixed; left:12px; top:10px; background:rgba(10,22,32,.72); padding:8px 12px; border-radius:8px; }
+  #tips b { color:#7fe3ff; }
+</style>
+</head>
+<body>
+<script src="vendor/three.min.js"></script>
+<script src="vendor/GLTFLoader.js"></script>
+<script src="vendor/SkeletonUtils.js"></script>
+<script src="glb3d.js"></script>
+<script>
+(function () {
+  const q = new URLSearchParams(location.search);
+  const ALL = ['blade','boxer','gunner','mage','assassin','priest','greatsword','monk','sniper','frost'];
+  const ONLY = q.get('only');
+  const KINDS = ONLY ? ONLY.split(',') : ALL;
+  const SINGLE = KINDS.length <= 2;
+
+  window.Hero3D = window.Glb3D;
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(1);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  document.body.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x16232f);
+  const cam = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 80);
+  if (SINGLE) { cam.fov = 30; cam.position.set(0, 1.38, 2.9); cam.lookAt(0, 1.30, 0); }
+  else { cam.position.set(0, 1.34, 8.2); cam.lookAt(0, 0.92, 0); }
+  cam.updateProjectionMatrix();
+  scene.add(new THREE.HemisphereLight(0xbfd8ff, 0x2a3540, 1.55));
+  const key = new THREE.DirectionalLight(0xffffff, 2.2); key.position.set(3.5, 6, 6.5); scene.add(key);
+  const rim = new THREE.DirectionalLight(0x9fd0ff, 1.15); rim.position.set(-4.5, 3.5, -5); scene.add(rim);
+  scene.add(new THREE.GridHelper(18, 18, 0x33475e, 0x22303f));
+
+  const items = [];
+  let spawned = 0;
+
+  function addOne(k, i) {
+    const col = SINGLE ? 0 : (i % 5), row = SINGLE ? 0 : Math.floor(i / 5);
+    const root = window.Hero3D.build(k, { tier: '2k' });
+    if (SINGLE) root.position.set((i - (KINDS.length - 1) / 2) * 1.0, 0, 0);
+    else root.position.set((col - 2) * 1.45, 0, row === 0 ? 0 : -3.10);
+    scene.add(root);
+    items.push({ kind: k, root });
+  }
+
+  /* 串行加载：单线程静态服务一次只读一个大 glb，比十个并发稳定得多 */
+  function pump() {
+    if (spawned >= KINDS.length) return;
+    if (spawned > 0) {
+      const prev = items[items.length - 1];
+      const ok = prev && prev.root.userData.glb && !prev.root.userData.glbPending;
+      if (!ok) return;
+    }
+    addOne(KINDS[spawned], spawned); spawned++;
+  }
+
+  const tip = document.createElement('div');
+  tip.id = 'tips';
+  document.body.appendChild(tip);
+
+  const PT = q.get('pt');
+  const FREEZE_AT = PT != null ? parseFloat(PT) : null;
+  const SWING_AT = 0.55;
+  const NOOV = q.get('noov') === '1';
+  let clockT = 0, started = false, frozen = false, swung = false;
+
+  function ready() {
+    return spawned >= KINDS.length &&
+      items.every((it) => it.root.userData && it.root.userData.glb && !it.root.userData.glbPending);
+  }
+
+  function dbgText() {
+    const bad = items.filter((it) => !(it.root.userData && it.root.userData.glb && !it.root.userData.glbPending));
+    if (!bad.length) return 'all-ok';
+    return bad.map((it) => it.kind + (it.root.userData.glbPending ? 'P' : '-')).join(',');
+  }
+
+  function tick() {
+    requestAnimationFrame(tick);
+    pump();
+
+    if (!started && ready()) started = true;
+
+    if (started && !frozen) {
+      const STEP = 1 / 60;
+      const limit = FREEZE_AT != null ? Math.ceil((SWING_AT + FREEZE_AT) / STEP) + 4 : 40;
+      for (let f = 0; f < limit; f++) {
+        clockT += STEP;
+        if (!swung && clockT >= SWING_AT) {
+          swung = true;
+          if (!NOOV) items.forEach((it) => window.Hero3D.swing(it.root, 'slash', 0.42));
+        }
+        items.forEach((it) => window.Hero3D.update(it.root, STEP, { speed: 0, onGround: true, aim: false, hitT: 0 }));
+        if (FREEZE_AT != null && clockT >= SWING_AT + FREEZE_AT) break;
+      }
+      frozen = true;
+    }
+
+    if (frozen) window.__ready = true;
+
+    const n = items.filter((it) => it.root.userData && it.root.userData.glb).length;
+    const bones = items.map((it) => (it.root.userData.glb && it.root.userData.glb.bones ? Object.keys(it.root.userData.glb.bones).length : 0));
+    tip.innerHTML = '<b>rigcheck</b>　就绪 ' + n + '/' + KINDS.length + '　骨架 ' + bones.join('/') +
+      '　t=' + clockT.toFixed(2) + (frozen ? '　<b style="color:#ffcf6b">frozen</b>' : '') +
+      (NOOV ? '　<b style="color:#9fd0ff">noov</b>' : '') +
+      '　' + dbgText();
+
+    renderer.render(scene, cam);
+  }
+  tick();
+})();
+</script>
+</body>
+</html>

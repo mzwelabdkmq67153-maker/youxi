@@ -1121,6 +1121,9 @@ function updatePlayer(dt) {
   yawObj.position.x += (fx * fwd + rx * rgt) * speed * dt;
   yawObj.position.z += (fz * fwd + rz * rgt) * speed * dt;
   clampPos(yawObj.position, 0.55);
+  // 供 animsys 读：当前水平速度与"是否在推方向键"（起跑过冲/急停后撤/步频随速都靠它）
+  player.curSpeed = (mag > 0 ? speed : 0);
+  player.movingNow = mag > 0;
 
   // 跳跃：竖直速度 + 重力，落地重置视角高度
   if (!player.grounded) {
@@ -1220,6 +1223,7 @@ function doJump() {
   player.vy = 11.6;
   player.grounded = false;
   player.jumpCd = 0.22;
+  if (window.AnimSys) AnimSys.jump();
   spawnRing(yawObj.position.x, 0.14, yawObj.position.z, 0x9fe8ff, 1.1);
   for (let i = 0; i < 3; i++) {
     spawnParticle(yawObj.position.x + rand(-0.3, 0.3), 0.25, yawObj.position.z + rand(-0.3, 0.3), 0xbfd4e2);
@@ -1230,12 +1234,13 @@ function doJump() {
 function landEffect() {
   const x = yawObj.position.x;
   const z = yawObj.position.z;
+  if (window.AnimSys) AnimSys.land();
   if (window.ArenaFX) {
-    ArenaFX.land(new THREE.Vector3(x, 0.02, z));
+    ArenaFX.land(new THREE.Vector3(x, groundBase + 0.02, z));
     sfx('hit');
     return;
   }
-  spawnRing(x, 0.1, z, 0x9fb8c8, 1.9);
+  spawnRing(x, groundBase + 0.1, z, 0x9fb8c8, 1.9);
   // 落地扬尘：一笔横铺的墨迹 + 两笔短的
   spawnBrush(x, 0.18, z, 0xb6c6d2, 0, 1.6, true);
   spawnBrush(x + 0.5, 0.16, z + 0.3, 0x9fb0bd, 0.9, 1.0, true);
@@ -1270,7 +1275,16 @@ function tryAttack() {
   const dmg = atk * (A.mul || 1) * mul * Rules.tuneOf(state.mode).dmg;
   const interval = A.interval * (player.overdrive > 0 ? 0.5 : 1) * gHaste / haste;
   player.attackCd = interval;
-  player.attackAnim = 0.22;
+  /* 攻击三档（S7）：技能/重击起手更慢，让"读招"成立；时长交给 animsys 按武器表算 */
+  const tier = ((A.mul || 1) >= 1.4 || (((A.arcDeg || 0) >= 70) && CLASSES[state.cls].attackType === 'melee'))
+    ? 'heavy' : 'light';
+  if (window.AnimSys) {
+    AnimSys.attack(tier);
+    player.attackAnim = Math.max(0.22, AnimSys.state.attackDur);
+  } else {
+    player.attackAnim = 0.22;
+  }
+  player.attackTier = tier;
 
   if (CLASSES[state.cls].attackType === 'melee') meleeAttack(dmg, crit);
   else if (CLASSES[state.cls].attackType === 'hitscan') hitscanAttack(dmg, A, crit);
@@ -1289,8 +1303,15 @@ function meleeAttack(dmg, crit) {
   let hitPoint = null;
   let hitTarget = null;
 
-  // 连段：0.75 秒内接续才算同一套（表13 轻、轻、重）
-  comboN = (state.time - comboT < 0.75) ? comboN + 1 : 1;
+  // 连段（S8）：0.5 秒内接续算同一套，接上 ×1.15、断连起手 ×0.85
+  if (window.AnimSys) {
+    const cb = AnimSys.combo(state.time);
+    comboN = cb.n;
+    dmg *= cb.mul;
+  } else {
+    comboN = (state.time - comboT < 0.75) ? comboN + 1 : 1;
+    comboT = state.time;
+  }
   comboT = state.time;
 
   for (let i = 0; i < enemies.length; i++) {
@@ -1476,6 +1497,12 @@ function castSkill(idx) {
   // 技能等级 3 / 5 各减 1 秒 CD，最低 1 秒
   const cd = Math.max(1, S.cd - Rules.SKILL.cdCut(skillLvOf(idx)));
   player.skillCd[idx] = cd;
+  /* 技能档前摇（S7）：0.70s 的 0.28/0.16/0.26 三段，比普攻重击更慢，读招更清楚 */
+  if (window.AnimSys) {
+    AnimSys.attack('skill');
+    player.attackAnim = Math.max(player.attackAnim, AnimSys.state.attackDur);
+    player.attackTier = 'skill';
+  }
   runSkill(S.id, idx);
 }
 
@@ -2593,7 +2620,9 @@ function updateEnemies(dt) {
       e._lastPos.x = e.pos.x; e._lastPos.z = e.pos.z;
       Hero3D.update(e.mesh, dt, {
         speed: Math.min(9, mv),
-        onGround: true,
+        /* 跳跃三段（S4）：贴地判断改为看脚下高度，滞空时 hero 会走腾空/落地缓冲姿态，
+           不再恒为 true（之前所有敌人永远按"站在地上"播 idle+跑步混合） */
+        onGround: (e.pos.y - groundBase) < 0.16,
         aim: e.type === 'shooter',
         hitT: e.flash > 0 ? 1 : 0
       });
@@ -2978,7 +3007,32 @@ function spawnShards(pos, count, color) {
   }
 }
 
+/* S6 死亡倒地：先 0.32 秒后仰倒地，再 0.15 秒沉入地面才移除模型。
+   PVP 台面挡视线，倒地时长压到 0.18 秒。 */
+const deathFX = [];
+function startDeathFx(mesh, short) {
+  deathFX.push({ mesh, t: 0, y0: mesh.position.y, fall: short ? 0.18 : 0.32, sink: 0.15 });
+}
+function updateDeathFx(dt) {
+  for (let i = deathFX.length - 1; i >= 0; i--) {
+    const d = deathFX[i];
+    d.t += dt;
+    const k = Math.min(1, d.t / d.fall);
+    d.mesh.rotation.x = -1.30 * (k * k * (3 - 2 * k));
+    if (d.t > d.fall) {
+      const k2 = Math.min(1, (d.t - d.fall) / d.sink);
+      d.mesh.position.y = d.y0 - 0.62 * k2;
+      if (k2 >= 1) {
+        scene.remove(d.mesh);
+        disposeGroup(d.mesh);
+        deathFX.splice(i, 1);
+      }
+    }
+  }
+}
+
 function updateEffects(dt) {
+  updateDeathFx(dt);
   // 同屏特效上限 48：超了先清最老的；陨星的预警圈（delayed）不参与清理
   if (effects.length > 48) {
     for (let j = 0; j < effects.length && effects.length > 48; j++) {
@@ -3090,8 +3144,7 @@ function killEnemy(e) {
   e.dead = true;
   state.kills++;
   player.en = Math.min(player.maxEn, player.en + 9 * (1 + (player.gEnRegenPct || 0) / 100));
-  scene.remove(e.mesh);
-  disposeGroup(e.mesh);
+  startDeathFx(e.mesh, state.mode === 'pvp');
 
   // 副本掉落：只在 PVE 里生成，PVP/联机不掉装备（那边是比分模式，装备无处结算）
   if (state.mode === 'pve') spawnDropsFor(e);
@@ -3177,6 +3230,8 @@ function damagePlayer(dmg) {
   player.hp -= dmg;
   player.invul = 0.55;
   player.hurtT = 0.2;
+  /* 受击三档（S5）：按伤害占最大生命的比例给 轻/中/重 的镜头仰角与后推 */
+  if (window.AnimSys && player.maxHp > 0) AnimSys.hurt(dmg / player.maxHp);
   if (window.ArenaFX) ArenaFX.vignette();
   else flashEl.classList.add('show');
   if (!window.ArenaFX) window.setTimeout(() => flashEl.classList.remove('show'), 200);
@@ -4205,22 +4260,35 @@ function bindInput() {
 /* ---------------- 主循环 ---------------- */
 function updateWeaponVisual(dt) {
   if (!weaponObj || !weaponBase) return;
-  const k = player.attackAnim > 0 ? Math.sin((1 - player.attackAnim / 0.22) * Math.PI) : 0;
-  const bobX = Math.sin(state.time * 2.1) * 0.006;
-  const bobY = Math.sin(state.time * 4.2) * 0.005;
-  // 疾跑摆动：横向 ±2cm 的节律，配合 FOV 给速度感
+  /* A 档手感层：步频随速 / 起跑过冲 / 急停后撤 / 跳跃三段 / 攻击三档 / 分武器曲线
+     全部由 animsys.js 算增量，这里只负责叠到基座上（?animdbg=1 可看当前相位） */
+  const A = window.AnimSys ? AnimSys.step(dt, {
+    cls: state.cls,
+    speed: player.curSpeed || 0,
+    moving: !!player.movingNow,
+    airborne: !player.grounded,
+    yaw: yawObj.rotation.y
+  }) : null;
+  if (!A) {
+    // 兜底：animsys 缺失时保留旧曲线，避免武器完全不动
+    const k = player.attackAnim > 0 ? Math.sin((1 - player.attackAnim / 0.22) * Math.PI) : 0;
+    weaponObj.position.set(weaponBase.x, weaponBase.y - k * 0.05, weaponBase.z + k * 0.1);
+    weaponObj.rotation.set(weaponBase.rx - k * 0.85, weaponBase.ry + k * 0.2, weaponBase.rz + k * 1.0);
+    return;
+  }
   const runK = Math.min(1, player.runT * 4);
   const sway = Math.sin(state.time * 9.5) * 0.02 * runK;
   weaponObj.position.set(
-    weaponBase.x + bobX + sway,
-    weaponBase.y + bobY - k * 0.05 + Math.abs(sway) * 0.35,
-    weaponBase.z + k * 0.1
+    weaponBase.x + A.x + sway,
+    weaponBase.y + A.y + Math.abs(sway) * 0.35,
+    weaponBase.z + A.z
   );
   weaponObj.rotation.set(
-    weaponBase.rx - k * 0.85,
-    weaponBase.ry + k * 0.2,
-    weaponBase.rz + k * 1.0 + sway * 2.2
+    weaponBase.rx + A.rx,
+    weaponBase.ry + A.ry,
+    weaponBase.rz + A.rz + sway * 2.2
   );
+  state.animLast = A;
 }
 
 function applyShake(dt) {
@@ -4231,11 +4299,22 @@ function applyShake(dt) {
     const s = shake * 0.018;
     ox += rand(-s, s); oy += rand(-s, s); oz += rand(-s, s) * 0.4;
   }
+  // A 档：受击仰角/后推 + 转身侧倾（S3/S5），叠加在震屏之后
+  const A = state.animLast;
   if (window.HitFeel) {
     HitFeel.applyCamera(camera, dt);
     camera.position.x += ox; camera.position.y += oy; camera.position.z += oz;
   } else {
     camera.position.set(ox, oy, oz);
+  }
+  if (A) {
+    camera.position.y += A.camRx * 0.18;
+    if (A.camPush) {
+      const f = camera.getWorldDirection(_v2);
+      camera.position.x -= f.x * A.camPush;
+      camera.position.z -= f.z * A.camPush;
+    }
+    if (A.roll) camera.rotation.z += A.roll;
   }
 }
 

@@ -26,15 +26,21 @@
      走 staticMotion 程序化动作 + 自动身高归一 + 朝向修正）。
      ?hero=idle 回退到旧的三张骨骼 Idle 资产（带手臂动画），用作对比与降级。 */
   var KIND_MAP = {
-    swordsman: 'swordsman_idle', blade: 'blade_hero', grunt: 'grunt_stone', elite: 'elite_stone',
-    boxer: 'boxer_hero', assassin: 'shadow_hero', priest: 'priest_hero',
-    gunner: 'cannon_hero', shooter: 'shooter_stone',
-    warlock: 'mage_idle', mage: 'arcane_hero', boss: 'boss_king',
+    swordsman: 'swordsman_idle', blade: 'blade_hero_rig', grunt: 'grunt_stone', elite: 'elite_stone',
+    boxer: 'boxer_hero_rig', assassin: 'shadow_hero_rig', priest: 'priest_hero_rig',
+    gunner: 'cannon_hero_rig', shooter: 'shooter_stone',
+    warlock: 'mage_idle', mage: 'arcane_hero_rig', boss: 'boss_king',
     /* 地宫副本：重甲近战借刀客模型，法系借术士模型（体型差异全交给 game.js 根 scale） */
     golem: 'golem_lava', swarm: 'swarm_bug', warden: 'boss_stone',
     hexer: 'hexer_stone', oracle: 'oracle_hex',
     duelist: 'duelist_stone',
-    greatsword: 'greatsword_hero', monk: 'monk_hero',
+    greatsword: 'greatsword_hero_rig', monk: 'monk_hero_rig',
+    sniper: 'sniper_hero_rig', frost: 'frost_hero_rig'
+  };
+  /* ?hero=flat 降级表：十职业回到未绑骨的静态 hero（只有根节点程序化动作） */
+  var KIND_MAP_FLAT = {
+    blade: 'blade_hero', boxer: 'boxer_hero', assassin: 'shadow_hero', priest: 'priest_hero',
+    gunner: 'cannon_hero', mage: 'arcane_hero', greatsword: 'greatsword_hero', monk: 'monk_hero',
     sniper: 'sniper_hero', frost: 'frost_hero'
   };
   /* ?hero=idle 降级表：职业 → 原骨骼 Idle 资产 */
@@ -46,6 +52,9 @@
   /* 独立 Tripo 静态模型（无骨骼、无 clip）：保留自身的程序化动作 */
   var STATIC_MODEL = { grunt_stone: 1, golem_lava: 1, boss_stone: 1, shooter_stone: 1, elite_stone: 1, hexer_stone: 1, boss_king: 1, swarm_bug: 1, duelist_stone: 1, oracle_hex: 1 };
   var HERO_STATIC_RE = /_hero$/;
+  /* 绑骨后的 hero（*_hero_rig）仍按英雄口径做身高归一与 PBR 材质，但它有 skin，不能走静态程序化动作 */
+  var HERO_MODEL_RE = /_hero(_rig)?$/;
+  var RIG_MODEL_RE = /_rig$/;
   function isStaticModel(m) { return !!STATIC_MODEL[m] || HERO_STATIC_RE.test(m); }
   /* GLB 自带名义身高（m）——*_hero 的数值由加载时实测覆盖 */
   var GLB_H = {
@@ -97,6 +106,8 @@
 
   function tierForKind(kind) {
     if (urlOverride) return urlOverride;
+    /* 绑骨版 hero 只有 2K 一份，不带 _1024 变体，强制走原文件避免 404 */
+    if (RIG_MODEL_RE.test(resolveModel(kind))) return '2k';
     /* Tripo 单网格（怪与 *_hero 英雄）只有 2K 一份，不走 _1024 命名，避免 404 回退 */
     if (isStaticModel(resolveModel(kind))) return '2k';
     var grp = HERO_KINDS[kind] ? 'hero' : 'enemy';
@@ -128,10 +139,11 @@
     return cache[url];
   }
 
-  /* ?hero=idle：十职业退回旧骨骼 Idle 资产，做对比与最坏情况降级 */
-  var heroMode = qs.get('hero') === 'idle' ? 'idle' : 'tripo';
+  /* ?hero=idle：退回旧骨骼 Idle 资产；?hero=flat：退回未绑骨的静态 hero（对比用最坏情况） */
+  var heroMode = qs.get('hero') === 'idle' ? 'idle' : (qs.get('hero') === 'flat' ? 'flat' : 'tripo');
   function resolveModel(kind) {
     if (heroMode === 'idle' && KIND_MAP_IDLE[kind]) return KIND_MAP_IDLE[kind];
+    if (heroMode === 'flat' && KIND_MAP_FLAT[kind]) return KIND_MAP_FLAT[kind];
     return KIND_MAP[kind] || 'swordsman_idle';
   }
   function bn(name) { return String(name).replace('.', ''); }
@@ -212,7 +224,7 @@
 
     var clone = T.SkeletonUtils.clone(gltf.scene);
 
-    var isHero = HERO_STATIC_RE.test(model);
+    var isHero = HERO_MODEL_RE.test(model);
     var isStatic = isStaticModel(model);
 
     if (isHero) {
@@ -320,7 +332,7 @@
 
     infoState.entries[kind] = {
       kind: kind, tier: tier, url: url, model: model,
-      arm: (isHero ? 'static' : (model === 'mage_idle' ? 'off' : 'on')),
+      arm: (isStatic ? 'static' : 'on'),
       heroMode: heroMode,
       rawH: GLB_H[model] || null,
       mats: mi.mats, textures: mi.textures,
@@ -387,6 +399,10 @@
        局内 boss 走 bossBurst() 弹幕、game.js 不调 swing，远端术士也不露破袍；待 Blender 重绑
        袖/摆权重后再按 0.55–0.75 放开手臂叠加。 */
     var MAGE = rig.model === 'mage_idle';
+    /* 长袍系（法杖/披肩/长摆）在 auto-rig 的距离权重下，大角度抬臂会把下摆拽出斜条；
+       这类模型的手臂叠加统一按 0.62 缩放，动作更克制但看不穿 */
+    var ROBE_RE = /(arcane|frost|priest|seer|paladin|dancer|night|blood)/;
+    var ARM_MUL = (rig.model && ROBE_RE.test(rig.model)) ? 0.62 : 1;
     /* Idle clip 全部骨骼走 .quaternion 轨；mixer 每帧先写四元数。局部增量四元数右乘
        （q' = q·dq，骨骼局部空间）；左乘是父空间旋转会搅乱轴。不碰欧拉角避免陈旧角堆积。 */
     var _q = new T.Quaternion(), _dq = new T.Quaternion(), _eq = new T.Euler();
@@ -418,6 +434,34 @@
     rig.walk = lerp(rig.walk, moving ? 1 : 0, Math.min(1, dt * 9));
     var chest = B('Chest'), spine = B('Spine'), head = B('Head');
     if (chest && rig.walk > 0.01) addTorso(chest, -0.10 * rig.walk, 0, 0);
+
+    /* 跳跃三段（S4）：离地收腿（左腿抬起、右腿后收）、落地 0.10s 屈膝缓冲。
+       第三人称英雄与远端玩家都走这里；第一人称的手感在 animsys.js。 */
+    var airNow = (st.onGround === false) ? 1 : 0;
+    rig.air = lerp(rig.air || 0, airNow, Math.min(1, dt * 12));
+    if (!airNow && rig.wasAir) rig.landT = 0.10;
+    rig.wasAir = !!airNow;
+    rig.landT = Math.max(0, (rig.landT || 0) - dt);
+    if (rig.air > 0.01) {
+      var thL = B('UpperLeg.L'), thR = B('UpperLeg.R');
+      var shL = B('LowerLeg.L'), shR = B('LowerLeg.R');
+      if (thL) addRot(thL, -0.52 * rig.air, 0, 0);
+      if (thR) addRot(thR, -0.30 * rig.air, 0, 0);
+      if (shL) addRot(shL, 0.62 * rig.air, 0, 0);
+      if (shR) addRot(shR, 0.44 * rig.air, 0, 0);
+      if (chest) addTorso(chest, 0.06 * rig.air, 0, 0);
+    }
+    if (rig.landT > 0) {
+      var lk = Math.sin((rig.landT / 0.10) * PI);
+      if (spine) addSpine(spine, 0.14 * lk, 0, 0);
+      if (chest) addTorso(chest, 0.10 * lk, 0, 0);
+      var thL2 = B('UpperLeg.L'), thR2 = B('UpperLeg.R');
+      if (thL2) addRot(thL2, -0.30 * lk, 0, 0);
+      if (thR2) addRot(thR2, -0.30 * lk, 0, 0);
+      var shL2 = B('LowerLeg.L'), shR2 = B('LowerLeg.R');
+      if (shL2) addRot(shL2, 0.40 * lk, 0, 0);
+      if (shR2) addRot(shR2, 0.40 * lk, 0, 0);
+    }
 
     /* 瞄准（枪手举枪待命）；mage 禁手臂叠加 */
     rig.aim = lerp(rig.aim, st.aim ? 1 : 0, Math.min(1, dt * 8));
@@ -451,8 +495,10 @@
         var strike = q > 0.45 ? Math.sin((q - 0.45) / 0.55 * PI) : 0;
         /* 挥砍：肩前摆 ≤1.10、外展 ≤0.70；肘 ≤1.25；胸转 ≤0.26（躯干增量）。mage 禁手臂。 */
         if (!MAGE) {
-          addRot(uaR2, (-1.30 * wind * 0.85) * w, 0, (0.40 + q * 0.30) * w);
-          addRot(laR2, (-0.30 - wind * 0.70 + strike * 0.25) * w, 0, 0);
+          addRot(uaR2, (-1.30 * wind * 0.85 * ARM_MUL) * w, 0, (0.40 + q * 0.30) * ARM_MUL * w);
+          /* 肘部只做小弯（≤0.35rad）：auto-rig 的贴臂布片跨肩到腕，肘一弯就被折成扇形薄片，
+             挥砍的"力量感"交给肩部和胸部转体，肘只做收势的小幅跟随 */
+          addRot(laR2, (-0.08 - wind * 0.22 + strike * 0.10) * w * ARM_MUL, 0, 0);
         }
         if (chest) addTorso(chest, 0, (-0.30 * wind * 0.6) * w + (0.26 * strike) * w, 0);
         if (spine) addSpine(spine, (0.04 + ease(q) * 0.08) * w, 0, 0);
