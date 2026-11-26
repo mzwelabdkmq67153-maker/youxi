@@ -1054,13 +1054,14 @@ function resetPlayer() {
   player.runT = 0;
   player.trailT = 0;
 
-  // 竞技场（PVP）：出生点从台面十字光槽移到斜角空地上并朝向台心（能看到十字与台面全貌）；
-  // 对手点取镜像位置，保证双方到台心距离与视野对称
+  /* 竞技场（PVP）出生点必须落在台面主轴附近：台面的十字光槽与围栏柱是按 x/z 轴排的，
+     以前站在 (10,16)（约 32°）朝台心，槽线与围栏弧全部斜穿画面，玩家第一反应就是"地图怎么是斜的"。
+     现在只沿 +z 轴偏移 2.4m 避开中心水槽，朝向台心 ≈ 6.7°，槽线纵向消失、横向水平。 */
   const pvp = state.mode !== 'pve';
   // 圆台世界（主城 / 神之巅 / 野外 / 断崖）：台面半径只有 24m 左右，固定 z=14 会掉到台外，
   // 相机贴地仰视水槽。这里按场景实际 deckRadius 收出生点，保证站在台面内、朝向台心。
-  let spawnX = pvp ? 10 : 0;
-  let spawnZ = pvp ? 16 : 14;
+  let spawnX = pvp ? 2.4 : 0;
+  let spawnZ = pvp ? 17.0 : 14;
   let spawnY = PLAYER_H;
   // 场景实现把元信息暴露成 getter（对象），程序化场景是方法：两种都要吃得下
   const sg = sceneImpl();
@@ -1071,11 +1072,12 @@ function resetPlayer() {
   } catch (e) { sfit = null; }
   if (!pvp && sfit && sfit.deckRadius) {
     const r = sfit.deckRadius;
-    /* 台面正中是十字下沉水槽，正轴方向落点会掉进槽里（相机贴槽底仰视）。
-       斜 45° 方向是最大净空，同样半径内又不撞链条柱；朝向台心。 */
-    const d = Math.min(14, Math.max(4.0, r * 0.62));
-    spawnX = d * 0.707;
-    spawnZ = d * 0.707;
+    /* 出生点统一落在 +z 主轴偏 2.4m 处：台面的十字光槽与围栏柱都按 x/z 轴排，
+       以前走 45° 斜轴，槽线和围栏弧会斜穿整个画面（玩家反馈「地图怎么是斜的」）。
+       侧移 2.4m 是为了避开中心那条下沉水槽，同时朝向台心的偏角只有几度。 */
+    const d = Math.min(17, Math.max(4.0, r * 0.68));
+    spawnX = 2.4;
+    spawnZ = d;
     /* 台面抬在 y=0 之上时（圆台模型自带台基），玩家要站到量出来的台面高度 */
     if (typeof sfit.deckTop === 'number') { groundBase = sfit.deckTop; spawnY = PLAYER_H + groundBase; }
   } else if (!pvp) {
@@ -1116,6 +1118,16 @@ function updatePlayer(dt) {
     groundBase = dtop0;
     player.y += up;
     yawObj.position.y = player.y;
+    /* 场景是异步量体的，出生点算的时候 deckRadius 往往还没到，落点退回默认 (0,14)。
+       量到台面后如果开局还没动，就把落点挪到主轴偏 2.4m 处，和结算/开场保持同一套"正对十字"机位 */
+    const dr0 = ft0.fit.deckRadius;
+    if (state.elapsed < 1.2 && dr0 && state.mode === 'pve') {
+      const d0 = Math.min(17, Math.max(4.0, dr0 * 0.68));
+      yawObj.position.x = 2.4;
+      yawObj.position.z = d0;
+      yawObj.rotation.y = Math.atan2(2.4, d0);
+      clampPos(yawObj.position, 0.55);
+    }
   }
   let rgt = ((input.keys['d'] || input.keys['arrowright']) ? 1 : 0) - ((input.keys['a'] || input.keys['arrowleft']) ? 1 : 0);
   const mag = hyp(fwd, rgt);
@@ -4435,6 +4447,8 @@ function animate() {
     const e0 = enemies.length ? enemies[0] : null;
     document.title = 'px=' + yawObj.position.x.toFixed(1) + ' pz=' + yawObj.position.z.toFixed(1) +
       ' py=' + yawObj.position.y.toFixed(2) + ' gb=' + groundBase.toFixed(2) +
+      ' cr=' + camera.rotation.z.toFixed(3) + ' pr=' + pitchObj.rotation.x.toFixed(3) +
+      ' yr=' + yawObj.rotation.z.toFixed(3) +
       ' deckTop=' + (fit && typeof fit.deckTop === 'number' ? fit.deckTop.toFixed(2) : '-') +
       ' deckR=' + (fit && fit.deckRadius ? fit.deckRadius.toFixed(1) : '-') +
       ' scene=' + (impl && impl.kind) +

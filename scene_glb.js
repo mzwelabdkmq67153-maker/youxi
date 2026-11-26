@@ -903,10 +903,11 @@
       out.push({ x: x, z: z, r: rect ? 0.8 : 0.86 });
     }
 
-    /* 掩体：方形世界 8 处 r15.6，圆台世界 6 处 r17（偏到出生环内侧之外，不挡住出生视野） */
+    /* 掩体：方形世界 8 处 r15.6，圆台世界 6 处 r17（偏到出生环内侧之外，不挡住出生视野）。
+       圆台相位取 15° 而不是 30°：30° 时正好有一块掩体落在 z 主轴尽头，玩家出生就正对着一块方砖 */
     var cov = rect ? 8 : 6;
     var covR = rect ? 15.6 : 17.0;
-    var covPhase = rect ? 0.18 : Math.PI / 6;
+    var covPhase = rect ? 0.18 : Math.PI / 12;
     for (var c = 0; c < cov; c++) {
       var ca = (c / cov) * TAU + covPhase;
       var cx = Math.cos(ca) * covR, cz = Math.sin(ca) * covR;
