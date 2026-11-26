@@ -795,7 +795,8 @@ function refreshWorldUI() {
     if (state.lv > W.max && idx >= 0 && idx < WORLD_ORDER.length - 1) {
       d += ' · 已超出本区（Lv ' + W.max + '），建议前往 ' + WORLDS[WORLD_ORDER[idx + 1]].name;
     }
-    worldDescEl.textContent = d + ' · 难度 ×' + W.hpMul.toFixed(2) + ' · 装等 +' + W.ilvlBonus;
+    const lore = W.lore ? '「' + W.lore + '」 ' : '';
+    worldDescEl.textContent = lore + d + ' · 难度 ×' + W.hpMul.toFixed(2) + ' · 装等 +' + W.ilvlBonus;
   }
   if (worldRowEl) worldRowEl.classList.toggle('disabled', state.mode !== 'pve');
   // 世界页的主按钮与 hub 头部跟着当前世界走

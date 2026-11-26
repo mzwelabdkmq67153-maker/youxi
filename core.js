@@ -381,12 +381,18 @@
   /* ---------------------------------------------------------------- 世界六段
      GDD 4.1。场景复用三份 GLB（village / city / peak），差异落在光照、难度与掉落。 */
   var WORLDS = [
-    { key: 'village', name: '新手村', min: 1,  max: 10, scene: 'village', hpMul: 0.90, ilvlBonus: 0, desc: '石村回廊 · 教学任务与第一个普通副本' },
-    { key: 'city',    name: '主城',   min: 10, max: 30, scene: 'city',    hpMul: 1.00, ilvlBonus: 1, desc: '中央广场 · 拍卖行 / 公会 / 竞技场入口' },
-    { key: 'wild',    name: '边境野外', min: 30, max: 50, scene: 'wild',   hpMul: 1.15, ilvlBonus: 2, desc: '开放野外 · 精英点与世界事件' },
-    { key: 'cliff',   name: '断崖战场', min: 50, max: 65, scene: 'cliff',  hpMul: 1.25, ilvlBonus: 3, desc: '团队副本前置 · 公会战战场' },
-    { key: 'throne',  name: '王座回廊', min: 65, max: 75, scene: 'throne', hpMul: 1.35, ilvlBonus: 4, desc: '主线终章 · 最高装等掉落' },
-    { key: 'peak',    name: '神之领域', min: 75, max: 99, scene: 'peak',  hpMul: 1.50, ilvlBonus: 5, desc: '隐藏地图 · 需集齐三枚徽记，只放顶尖装备与称号' }
+    { key: 'village', name: '新手村', min: 1,  max: 10, scene: 'village', hpMul: 0.90, ilvlBonus: 0, desc: '石村回廊 · 教学任务与第一个普通副本',
+      lore: '石村回廊是第一道门，石板上还留着上一届挑战者的刻痕' },
+    { key: 'city',    name: '主城',   min: 10, max: 30, scene: 'city',    hpMul: 1.00, ilvlBonus: 1, desc: '中央广场 · 拍卖行 / 公会 / 竞技场入口',
+      lore: '白石主城每年重砌城墙，垛口上刻着历届冠军的名字' },
+    { key: 'wild',    name: '边境野外', min: 30, max: 50, scene: 'wild',   hpMul: 1.15, ilvlBonus: 2, desc: '开放野外 · 精英点与世界事件',
+      lore: '灰野边境没有路，只有辙痕和没烧完的篝火' },
+    { key: 'cliff',   name: '断崖战场', min: 50, max: 65, scene: 'cliff',  hpMul: 1.25, ilvlBonus: 3, desc: '团队副本前置 · 公会战战场',
+      lore: '裂潮断崖的岩层一层就是一届，坠海者的名字刻在最下面' },
+    { key: 'throne',  name: '王座回廊', min: 65, max: 75, scene: 'throne', hpMul: 1.35, ilvlBonus: 4, desc: '主线终章 · 最高装等掉落',
+      lore: '紫帷神坛的台阶越往上越窄，只容一个人走到最后' },
+    { key: 'peak',    name: '神之领域', min: 75, max: 99, scene: 'peak',  hpMul: 1.50, ilvlBonus: 5, desc: '隐藏地图 · 需集齐三枚徽记，只放顶尖装备与称号',
+      lore: '云脊孤峰终年积雪，守望的哨塔只点一盏灯' }
   ];
 
   function worldFor(key) {
