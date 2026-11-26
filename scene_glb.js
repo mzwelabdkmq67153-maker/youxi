@@ -223,49 +223,49 @@
        默认档不受影响，两档可以并排对比。 */
     var TRIPO_SET = {
       arena: {
-        f: 'tripo_arena_lod.glb', autoFit: 48, autoGround: 'top', groundColor: 0x4c5763,
-        sky: [0x25343f, 0x6d8ba1], bg: 0x2b3a46, fog: [0x2b3a46, 90, 260], exposure: 1.06,
+        f: 'tripo_arena_detail_lod.glb', autoFit: 48, autoGround: 'top', groundColor: 0x4c5763,
+        sky: [0x25343f, 0x6d8ba1], bg: 0x2b3a46, fog: [0x2b3a46, 90, 260], exposure: 1.00,
         lights: { hemiSky: 0xc9dcf0, hemiGround: 0x26313a, hemi: 0.95,
                   keyColor: 0xfff4e4, key: 1.20, fillColor: 0x4a7bd0, fill: 0.52 }
       },
       dungeon: {
-        f: 'tripo_dungeon_lod.glb', autoFit: 44, autoGround: 'bottom', groundColor: 0x1d2628,
-        sky: [0x0c161a, 0x21363e], bg: 0x0f191d, fog: [0x14232a, 55, 150], exposure: 1.22,
+        f: 'tripo_dungeon_detail_lod.glb', autoFit: 44, autoGround: 'bottom', groundColor: 0x1d2628,
+        sky: [0x0c161a, 0x21363e], bg: 0x0f191d, fog: [0x14232a, 55, 150], exposure: 1.34,
         lights: { hemiSky: 0x9ec2cf, hemiGround: 0x223028, hemi: 1.15,
                   keyColor: 0xffdfae, key: 1.24, fillColor: 0x2a6f88, fill: 0.55 }
       },
       village: {
-        f: 'tripo_wild_lod.glb', autoFit: 44, autoGround: 'bottom', groundColor: 0x6f6248,
+        f: 'tripo_wild_detail_lod.glb', autoFit: 44, autoGround: 'bottom', groundColor: 0x6f6248,
         sky: [0x7a5c38, 0xcfa06a], bg: 0x9d7d52, fog: [0xa98a5e, 70, 230], exposure: 1.08,
         lights: { hemiSky: 0xffe0b8, hemiGround: 0x3a3128, hemi: 0.92,
                   keyColor: 0xffd9a8, key: 1.10, fillColor: 0x7f96c8, fill: 0.40 }
       },
       city: {
-        f: 'tripo_city_lod.glb', autoFit: 44, autoGround: 'bottom', groundColor: 0x9c8464,
+        f: 'tripo_city_detail_lod.glb', autoFit: 44, autoGround: 'bottom', groundColor: 0x9c8464,
         sky: [0x8a6b42, 0xd9b884], bg: 0xb29068, fog: [0xc4a276, 80, 240], exposure: 1.08,
         lights: { hemiSky: 0xffdfae, hemiGround: 0x50432f, hemi: 1.10,
                   keyColor: 0xffe0a6, key: 1.20, fillColor: 0x5a8fc0, fill: 0.42 }
       },
       peak: {
-        f: 'tripo_peak_lod.glb', autoFit: 44, autoGround: 'bottom', groundColor: 0xb2c1ce,
-        sky: [0x9db2c6, 0xeef3f6], bg: 0xccd9e2, fog: [0xdbe4ec, 70, 250], exposure: 1.04,
+        f: 'tripo_peak_detail_lod.glb', autoFit: 44, autoGround: 'bottom', groundColor: 0xb2c1ce,
+        sky: [0x9db2c6, 0xeef3f6], bg: 0xccd9e2, fog: [0xdbe4ec, 70, 250], exposure: 0.94,
         lights: { hemiSky: 0xffefd0, hemiGround: 0x777570, hemi: 1.04,
                   keyColor: 0xfff2d4, key: 1.18, fillColor: 0x8fb4de, fill: 0.40 }
       },
       wild: {
-        f: 'tripo_wild_lod.glb', autoFit: 44, autoGround: 'bottom', groundColor: 0x6f6248,
+        f: 'tripo_wild_detail_lod.glb', autoFit: 44, autoGround: 'bottom', groundColor: 0x6f6248,
         sky: [0x7a5c38, 0xcfa06a], bg: 0x9d7d52, fog: [0xa98a5e, 70, 230], exposure: 1.08,
         lights: { hemiSky: 0xffe0b8, hemiGround: 0x3a3128, hemi: 0.92,
                   keyColor: 0xffd9a8, key: 1.10, fillColor: 0x7f96c8, fill: 0.40 }
       },
       cliff: {
-        f: 'tripo_cliff_lod.glb', autoFit: 44, autoGround: 'bottom', groundColor: 0x394b5b,
+        f: 'tripo_cliff_detail_lod.glb', autoFit: 44, autoGround: 'bottom', groundColor: 0x394b5b,
         sky: [0x1a2a38, 0x5c7a92], bg: 0x354a5c, fog: [0x3d5468, 80, 240], exposure: 1.06,
         lights: { hemiSky: 0xb3cddf, hemiGround: 0x1e2a33, hemi: 0.88,
                   keyColor: 0xe6f2ff, key: 1.16, fillColor: 0x3d6fa8, fill: 0.52 }
       },
       throne: {
-        f: 'tripo_throne_lod.glb', autoFit: 44, autoGround: 'bottom', groundColor: 0x362a3e,
+        f: 'tripo_throne_detail_lod.glb', autoFit: 44, autoGround: 'bottom', groundColor: 0x362a3e,
         sky: [0x2b1f3b, 0x8d6c5c], bg: 0x3c2b46, fog: [0x46324e, 80, 240], exposure: 1.06,
         lights: { hemiSky: 0xe2c78e, hemiGround: 0x241c2e, hemi: 1.00,
                   keyColor: 0xffcf8e, key: 1.22, fillColor: 0x7a5fd0, fill: 0.52 }
@@ -279,6 +279,7 @@
       CFG[tk].autoFit = ts.autoFit;
       CFG[tk].autoGround = ts.autoGround;
       if (ts.groundColor !== undefined) CFG[tk].groundColor = ts.groundColor;
+      CFG[tk].paintOn = false;
       if (ts.sky) CFG[tk].sky = ts.sky;
       if (ts.bg !== undefined) CFG[tk].bg = ts.bg;
       if (ts.fog) CFG[tk].fog = ts.fog;
@@ -487,7 +488,9 @@
         /* Tripo 材质的金属度默认是 1，游戏里没有环境贴图时金属会全反射成黑；
            场景是石头/铁件，压到低金属度，靠漫反射出体积 */
         /* 配色：?paint=0 可关掉，回到原白模 */
-        var pp = (q.get('paint') !== '0' && PAINT[k]) ? PAINT[k] : null;
+        /* 带贴图细节的档不需要再乘色：贴图本身就是最终色，染色只会压掉它 */
+        var painted = CFG[k] && CFG[k].paintOn === false;
+        var pp = (q.get('paint') !== '0' && PAINT[k] && !painted) ? PAINT[k] : null;
         mm.metalness = pp ? pp.metal : 0.08;
         if (typeof mm.roughness === 'number') {
           mm.roughness = pp ? pp.rough : Math.max(mm.roughness, 0.72);
@@ -498,7 +501,7 @@
         if (mm.map) {
           mm.emissiveMap = mm.map;
           mm.emissive = pp ? new THREE.Color(Math.pow(pp.acc[0], 2.2), Math.pow(pp.acc[1], 2.2), Math.pow(pp.acc[2], 2.2)) : new THREE.Color(0xffffff);
-          mm.emissiveIntensity = pp ? (pp.emi * 0.62) : (k === 'arena' ? 0.15 : 0.26);
+          mm.emissiveIntensity = pp ? (pp.emi * 0.62) : (painted ? 0.10 : (k === 'arena' ? 0.15 : 0.26));
           mm.userData._lift = true;
         }
         /* 单面材质从场内看会被背面剔除，场景一律双面 */
